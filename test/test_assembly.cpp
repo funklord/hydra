@@ -15,6 +15,7 @@
 // a fixture fast enough to complete before the dialog closes would pass with
 // the defect present.
 #include "download_manager.h"
+#include "fake_sources.h"
 #include "hls_assembler.h"
 #include "local_proxy.h"
 #include "media_detector.h"
@@ -23,6 +24,7 @@
 #include "player_launcher.h"
 #include "stream_assembly.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -297,6 +299,105 @@ int main(int argc, char **argv) {
 		check(offer(&empty, "nothing.invalid") == "fired=1 accepted=1",
 		       QString("and with nothing detected at all (%1)")
 		           .arg(offer(&empty, "nothing.invalid")));
+	}
+
+	// **One Save for what yt-dlp found**, asked each time by the holder's
+	// choice, the picture capped at 1080p: the 2160p of an hour-long set is
+	// 4.2 GB.
+	section("one Save picks the sound, the picture up to 1080p, or both");
+	{
+		media_detector det;
+		const QUrl best_sound("https://cdn.invalid/a-best.m4a");
+		auto add = [&](const QString &url, bool v, bool a, int h, int rank,
+		               const QUrl &audio = QUrl()) {
+			media_item m;
+			m.kind        = media_kind::direct;
+			m.url         = QUrl(url);
+			m.label       = url;
+			m.file_name   = QUrl(url).fileName();
+			m.known_media = true;
+			m.has_video   = v;
+			m.has_audio   = a;
+			m.height      = h;
+			m.rank        = rank;
+			m.audio       = audio;
+			if (!audio.isEmpty())
+				m.audio_file_name = audio.fileName();
+			det.add_item("yt.invalid", m);
+		};
+		add("https://cdn.invalid/a-low.m4a", false, true, 0, 100001);
+		add(best_sound.toString(), false, true, 0, 100002);
+		add("https://cdn.invalid/v2160.mp4", true, false, 2160, 300000, best_sound);
+		add("https://cdn.invalid/v1080.mp4", true, false, 1080, 290000, best_sound);
+		add("https://cdn.invalid/v720.mp4", true, false, 720, 280000, best_sound);
+		add("https://cdn.invalid/both360.mp4", true, true, 360, 270000);
+
+		const QList<media_item> items = det.items_for("yt.invalid");
+		const int s = media_detector::best_sound(items);
+		const int p = media_detector::best_picture(items, 1080);
+		check(s >= 0 && items[s].url == best_sound, "the best sound alone");
+		check(p >= 0 && items[p].url.fileName() == "v1080.mp4",
+		      QString("the tallest heard picture at or below the cap (%1)")
+		          .arg(p >= 0 ? items[p].url.fileName() : QString("none")));
+		const int over = media_detector::best_picture(items, 240);
+		check(over >= 0 && items[over].url.fileName() == "both360.mp4",
+		      "and the smallest there is when nothing fits under it");
+
+		download_manager dm;
+		auto *src = new fake_plain_source;
+		dm.add_source(src);
+		media_dialog dlg(&det, &players, &dm, &proxy, &tap, &assembly, nullptr);
+		dlg.set_site("yt.invalid", "n1", stream_context{});
+		auto *save = dlg.findChild<QPushButton *>("media_save");
+		check(save && !save->isHidden(), "the Save button is offered on yt-dlp's rows");
+		auto choose = [&](const char *name) {
+			for (QAction *a : dlg.findChildren<QAction *>())
+				if (a->objectName() == name)
+					a->trigger();
+		};
+		auto urls = [&] {
+			QStringList out;
+			for (const download_job &j : dm.jobs())
+				out << j.url.fileName() + (j.sound_job ? "+pair" : "");
+			return out;
+		};
+
+		choose("media_save_sound");
+		check(urls() == QStringList{ "a-best.m4a" },
+		      QString("Sound only saves the best sound (%1)").arg(urls().join(", ")));
+		choose("media_save_picture");
+		check(urls().size() == 3 && urls().contains("v1080.mp4+pair") &&
+		      urls().count("a-best.m4a") == 2,
+		      QString("Picture and sound pairs 1080p with its own sound, leaving "
+		               "the sound already saving alone (%1)").arg(urls().join(", ")));
+		choose("media_save_picture");
+		check(urls().size() == 3, "and asked again is the pair already running");
+
+		download_manager dm2;
+		dm2.add_source(new fake_plain_source);
+		media_dialog dlg2(&det, &players, &dm2, &proxy, &tap, &assembly, nullptr);
+		dlg2.set_site("yt.invalid", "n1", stream_context{});
+		for (QAction *a : dlg2.findChildren<QAction *>())
+			if (a->objectName() == "media_save_both")
+				a->trigger();
+		QStringList both;
+		for (const download_job &j : dm2.jobs())
+			both << j.url.fileName() + (j.sound_job ? "+pair" : "");
+		check(both.size() == 3 && both.contains("v1080.mp4+pair") &&
+		      both.count("a-best.m4a") == 2,
+		      QString("Both is the pair and the sound alone, as two files (%1)")
+		          .arg(both.join(", ")));
+
+		media_detector plain;
+		media_item seen;
+		seen.kind = media_kind::hls;
+		seen.url  = QUrl("https://cdn.invalid/seen.m3u8");
+		plain.add_item("plain.invalid", seen);
+		media_dialog dlg3(&plain, &players, &dm2, &proxy, &tap, &assembly, nullptr);
+		dlg3.set_site("plain.invalid", "n1", stream_context{});
+		auto *save3 = dlg3.findChild<QPushButton *>("media_save");
+		check(save3 && save3->isHidden(),
+		      "and not where nothing was vouched for, where it could not choose");
 	}
 
 	section("an assembly outlives the dialog that started it");

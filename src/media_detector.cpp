@@ -4,6 +4,9 @@
 #include <QFileInfo>
 #include <QMutexLocker>
 
+#include <tuple>
+#include <utility>
+
 namespace {
 
 const char *k_direct_ext[] = {
@@ -173,6 +176,43 @@ QList<media_item> media_detector::items_for(const QString &site_host) const {
 		return a.label < b.label;
 	});
 	return list;
+}
+
+int media_detector::best_sound(const QList<media_item> &items) {
+	int best = -1;
+	auto key = [](const media_item &m) {
+		return std::make_pair(m.kind == media_kind::direct ? 1 : 0, m.rank);
+	};
+	for (int i = 0; i < items.size(); ++i) {
+		const media_item &m = items[i];
+		if (!m.known_media || m.has_video || !m.has_audio)
+			continue;
+		if (best < 0 || key(m) > key(items[best]))
+			best = i;
+	}
+	return best;
+}
+
+int media_detector::best_picture(const QList<media_item> &items, int max_height) {
+	int fits = -1, over = -1;
+	auto direct = [](const media_item &m) { return m.kind == media_kind::direct ? 1 : 0; };
+	for (int i = 0; i < items.size(); ++i) {
+		const media_item &m = items[i];
+		if (!m.known_media || !m.has_video || (!m.has_audio && m.audio.isEmpty()))
+			continue;
+		if (m.height <= max_height) {
+			const auto k = std::make_tuple(direct(m), m.height, m.rank);
+			if (fits < 0 || k > std::make_tuple(direct(items[fits]), items[fits].height,
+			                                    items[fits].rank))
+				fits = i;
+		} else {
+			const auto k = std::make_tuple(direct(m), -m.height, m.rank);
+			if (over < 0 || k > std::make_tuple(direct(items[over]), -items[over].height,
+			                                    items[over].rank))
+				over = i;
+		}
+	}
+	return fits >= 0 ? fits : over;
 }
 
 int media_detector::count_for(const QString &site_host) const {

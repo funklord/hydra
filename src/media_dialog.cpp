@@ -8,12 +8,15 @@
 #include "local_proxy.h"
 #include "stream_assembly.h"
 
+#include <algorithm>
+
 #include <QDialogButtonBox>
 #include <QHeaderView>
 #include <QLocale>
 #include <QEvent>
 #include <QFileInfo>
 #include <QLabel>
+#include <QMenu>
 #include <QPushButton>
 
 namespace {
@@ -173,8 +176,58 @@ media_dialog::media_dialog(media_detector *detector, player_launcher *players,
 		emit ytdlp_requested();
 		accept();
 	});
+	// **One Save for what yt-dlp found**, so a person does not have to read
+	// 45 rows to get the sound of a set. It asks every time which of the
+	// three, by the holder's choice, and picks the row; the rows below stay
+	// for anything else.
+	m_save = buttons->addButton("⬇ &Save…", QDialogButtonBox::ActionRole);
+	m_save->setObjectName("media_save");
+	auto *menu = new QMenu(m_save);
+	QAction *sound   = menu->addAction("&Sound only");
+	QAction *picture = menu->addAction(QString("&Picture and sound (up to %1p)")
+	                                       .arg(k_save_max_height));
+	QAction *both    = menu->addAction("&Both, as two files");
+	sound->setObjectName("media_save_sound");
+	picture->setObjectName("media_save_picture");
+	both->setObjectName("media_save_both");
+	connect(menu, &QMenu::aboutToShow, this, [this, sound, picture, both] {
+		const QList<media_item> items = m_detector->items_for(m_site);
+		const bool s = media_detector::best_sound(items) >= 0;
+		const bool p = media_detector::best_picture(items, k_save_max_height) >= 0;
+		sound->setEnabled(s);
+		picture->setEnabled(p);
+		both->setEnabled(s && p);
+	});
+	connect(sound, &QAction::triggered, this, [this] { save_as(save_choice::sound); });
+	connect(picture, &QAction::triggered, this,
+	         [this] { save_as(save_choice::picture); });
+	connect(both, &QAction::triggered, this, [this] { save_as(save_choice::both); });
+	m_save->setMenu(menu);
+	m_save->setVisible(false);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 	outer->addWidget(buttons);
+}
+
+void media_dialog::save_as(save_choice choice) {
+	const QList<media_item> items = m_detector->items_for(m_site);
+	const int s = media_detector::best_sound(items);
+	const int p = media_detector::best_picture(items, k_save_max_height);
+	QStringList said;
+	if (choice != save_choice::sound && p >= 0) {
+		save(items[p]);
+		said << "the picture and sound, " + QString::number(items[p].height) + "p";
+	}
+	// The sound alone, fetched again when its picture is fetching it too:
+	// the pair's copy goes into the combined file.
+	if (choice != save_choice::picture && s >= 0) {
+		save(items[s], choice == save_choice::both);
+		said << "the sound";
+	}
+	if (said.isEmpty())
+		m_status->setText("<b>Nothing here to save that way.</b>");
+	else if (!m_status->text().startsWith("<b>"))
+		m_status->setText(QString("Saving %1 to %2.")
+		                      .arg(said.join(" and "), m_downloads->directory()));
 }
 
 void media_dialog::set_site(const QString &site_host, const QString &node_id,
@@ -188,6 +241,9 @@ void media_dialog::set_site(const QString &site_host, const QString &node_id,
 void media_dialog::repopulate() {
 	m_list->clear();
 	const QList<media_item> items = m_detector->items_for(m_site);
+	if (m_save)
+		m_save->setVisible(std::any_of(items.cbegin(), items.cend(),
+		                                [](const media_item &m) { return m.known_media; }));
 
 	for (const media_item &item : items) {
 		auto *row = new QTreeWidgetItem(m_list);
@@ -357,7 +413,7 @@ void media_dialog::watch(const media_item &item) {
 	                      : "<b>Warning:</b> " + warn.toHtmlEscaped());
 }
 
-void media_dialog::save(const media_item &item) {
+void media_dialog::save(const media_item &item, bool separate) {
 	QString refused;
 	if (!media_saving_allowed(m_site, item.url, &refused)) {
 		m_status->setText("<b>" + refused.toHtmlEscaped() + "</b>");
@@ -382,17 +438,18 @@ void media_dialog::save(const media_item &item) {
 	                             : item.file_name,
 	    item.audio_file_name.isEmpty() ? QFileInfo(item.audio.path()).fileName()
 	                                   : item.audio_file_name);
+	const download_hints hints{ item.known_media, item.chunk_size, item.chapters,
+	                            separate };
+	const download_hints sound_hints{ item.known_media, item.audio_chunk_size, {},
+	                                  separate };
 	// A learned stream carries the headers its CDN checks; without them the
 	// download is refused where Watch would have succeeded.
 	const int id = pair
 	  ? m_downloads->enqueue_pair(item.url, item.audio, m_node_id, &error,
 	                              item.headers, names.picture, names.sound,
-	                              names.combined,
-	                              { item.known_media, item.chunk_size, item.chapters },
-	                              { item.known_media, item.audio_chunk_size, {} })
+	                              names.combined, hints, sound_hints)
 	  : m_downloads->enqueue(item.url, m_node_id, &error, item.headers,
-	                         item.file_name,
-	                         { item.known_media, item.chunk_size, item.chapters });
+	                         item.file_name, hints);
 	// Where it lands, as the user will actually find it.
 	//
 	// On Android naming the directory is worse than useless: Qt downloads into

@@ -155,6 +155,10 @@ struct download_hints {
 	// A tracklist to write into the saved file as chapters, in ffmpeg's
 	// metadata format (`media_remux::ffmetadata`); empty for none.
 	QString chapters;
+	// A second job for an address already being fetched. The same address
+	// twice is otherwise one download; "Both, as two files" fetches a sound
+	// once alone and once for its picture, and wants both.
+	bool    separate = false;
 };
 
 // A source's report on a job. Fields left at their defaults mean "unchanged",

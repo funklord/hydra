@@ -65,6 +65,7 @@ struct media_item {
 	// The tracklist the reading chose, as chapters for the saved file
 	// (`media_remux::ffmetadata`); empty for none.
 	QString chapters;
+	int height = 0;            // the picture's, where something knows it; 0 if not
 	// Where an authoritative answer places it, highest first; 0 for anything
 	// detected, which keeps the hit-count order below the ranked rows.
 	int rank = 0;
@@ -165,6 +166,14 @@ public:
 	void add_item(const QString &site_host, const media_item &item);
 
 	static media_kind classify(const QUrl &url, bool *saveable);
+
+	// **What one Save picks**, from the rows yt-dlp vouched for, as an index
+	// into `items` or -1. The best sound alone: a direct file over a
+	// manifest, then the highest rank. The best picture that is heard --
+	// carrying its sound or paired with one -- no taller than `max_height`,
+	// a direct file first; where none is that small, the smallest there is.
+	static int best_sound(const QList<media_item> &items);
+	static int best_picture(const QList<media_item> &items, int max_height);
 
 signals:
 	// Queued to the UI thread by Qt because the emit happens off it.

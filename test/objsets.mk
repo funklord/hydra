@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build 77bc0f22, mtime 2026-10-11 18:19)
+#     /home/claude/src/fmake/fmake  (build 77bc0f22, mtime 2026-10-12 09:57)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -166,10 +166,11 @@ OBJS_test_assembly = \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
+	$(BUILD_DIR)/tmoc/moc_fake_sources.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/policy_engine.o \
 	$(BUILD_DIR)/app/policy.o \

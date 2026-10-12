@@ -4,6 +4,7 @@
 //
 //     QT_QPA_PLATFORM=offscreen ./test/build-make/try_media_reading [url]
 //
+// HYDRA_TRY_SAVE=sound chooses Save, Sound only, from the button's menu.
 // HYDRA_TRY_SAVE=1 presses Download on the smallest picture-only file row
 // instead, which fetches its sound too, and waits up to ten minutes for the
 // two to be combined into one file under the scratch HOME.
@@ -20,6 +21,7 @@
 //
 // The profile is a temporary directory; the settings select the local model
 // at its default address, so a running Ollama is used and nothing else.
+#include "download_manager.h"
 #include "main_window.h"
 #include "policy_engine.h"
 #include "qtwebengine_factory.h"
@@ -149,7 +151,14 @@ int main(int argc, char *argv[]) {
 					for (int i = 0; i < qMin(3, list->topLevelItemCount()); ++i)
 						std::printf("  row %d: %s\n", i,
 						            qPrintable(list->topLevelItem(i)->text(1)));
-				if (qEnvironmentVariableIsSet("HYDRA_TRY_SAVE"))
+				// =sound chooses Save, Sound only, from the button's menu.
+				if (qEnvironmentVariable("HYDRA_TRY_SAVE") == "sound") {
+					for (QAction *a : dlg->findChildren<QAction *>())
+						if (a->objectName() == "media_save_sound") {
+							std::printf("  choosing Save, Sound only\n");
+							a->trigger();
+						}
+				} else if (qEnvironmentVariableIsSet("HYDRA_TRY_SAVE"))
 					if (auto *list = dlg->findChild<QTreeWidget *>()) {
 						QPushButton *last = nullptr;
 						QString label;
@@ -233,37 +242,50 @@ int main(int argc, char *argv[]) {
 		       "and the file name carries the video's id");
 	}
 	if (qEnvironmentVariableIsSet("HYDRA_TRY_SAVE")) {
-		// Done when one file is there and nothing else: the combined file
-		// appears as ffmpeg starts writing it, and the halves and the
-		// chapters go only once it has finished. Waiting for its first
-		// appearance probed a file still being written, under load.
+		// **Done when the download list says so**: every job ended, and one
+		// file left. Reading the folder instead was wrong three times -- the
+		// combined file appears as ffmpeg starts writing it, the sound half
+		// can be the only file before the picture starts, and a single file
+		// has its final name from its first byte, before its chapters go in.
 		const QDir dl(QString::fromLocal8Bit(base) + "/Downloads");
-		QString combined;
-		// Thirty seconds with no Downloads folder is a download that never
-		// started, and not worth waiting ten minutes to report.
-		for (int i = 0; i < 6000 && combined.isEmpty() && (i < 300 || dl.exists());
-		     ++i) {
+		auto *dm = w.findChild<download_manager *>();
+		auto ended = [dm] {
+			if (!dm || dm->jobs().isEmpty())
+				return false;
+			for (const download_job &j : dm->jobs())
+				if (!j.terminal())
+					return false;
+			return true;
+		};
+		// Thirty seconds with no job is a download that never started, and
+		// not worth waiting ten minutes to report.
+		for (int i = 0; i < 6000 && !ended() && (i < 300 || (dm && !dm->jobs().isEmpty()));
+		     ++i)
 			spin(100);
-			// One file, and not a half: the sound alone can be the only file
-			// before the picture has started.
-			const QFileInfoList files = dl.entryInfoList(QDir::Files);
-			const QString name = files.size() == 1 ? files.first().fileName() : QString();
-			if (!name.isEmpty() && !name.contains(".picture.") &&
-			    !name.contains(".sound.") && files.first().size() > 0)
-				combined = files.first().absoluteFilePath();
-		}
+		if (dm)
+			for (const download_job &j : dm->jobs())
+				std::printf("  job: %s -- %s\n", qPrintable(QFileInfo(j.path).fileName()),
+				            qPrintable(j.error.isEmpty() ? j.detail : j.error));
+		QString combined;
+		const QFileInfoList files = dl.entryInfoList(QDir::Files);
+		if (ended() && files.size() == 1 && files.first().size() > 0)
+			combined = files.first().absoluteFilePath();
 		for (const QFileInfo &fi : dl.entryInfoList(QDir::Files))
 			std::printf("  in Downloads: %s (%lld bytes)\n",
 			            qPrintable(fi.fileName()), qint64(fi.size()));
-		check(!combined.isEmpty(), "the pair is combined into one file");
+		check(!combined.isEmpty(), "every download ended, leaving one file");
 		if (!combined.isEmpty()) {
 			QProcess probe;
 			probe.start(QStandardPaths::findExecutable("ffmpeg"),
 			            { "-hide_banner", "-i", combined });
 			probe.waitForFinished(10000);
 			const QString said = QString::fromLocal8Bit(probe.readAllStandardError());
-			check(said.contains("Video:") && said.contains("Audio:"),
-			      "holding a picture and a sound");
+			if (qEnvironmentVariable("HYDRA_TRY_SAVE") == "sound")
+				check(!said.contains("Video:") && said.contains("Audio:"),
+				      "holding the sound alone");
+			else
+				check(said.contains("Video:") && said.contains("Audio:"),
+				      "holding a picture and a sound");
 			// Whole, not the first range of each: the first version combined
 			// 10 MB of each half and passed both checks above.
 			const int at = said.indexOf("Duration: ");

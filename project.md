@@ -38378,3 +38378,43 @@ nothing in hydra depends on it.
 **Passed to the pinned copy only.** Debian's yt-dlp 2025.04.30 predates the
 option and refuses the whole command with a usage error (exit 2), so
 passing it to a PATH copy would break the fallback outright.
+
+**quickjs installed 2026-10-12** by the holder. yt-dlp now lists
+`quickjs-2025-04-26` among its runtimes and quickjs among the active
+challenge providers, and gives no warnings. hydra needed no change.
+
+## One Save for what yt-dlp found, asked each time
+
+The holder's question from 2026-10-10: a set could be wanted as the video,
+the music or both, and the browser cannot know which. **Settled
+2026-10-12: ask every time.** No per-kind memory and no fixed default,
+because which one a person wants is not something the kind decides. A
+**Save…** button above the stream list, shown only when yt-dlp's rows are
+listed, opens a menu:
+
+- **Sound only**: the best sound stream, a direct file first.
+- **Picture and sound (up to 1080p)**: the tallest picture that carries its
+  sound or is paired with one, at or below 1080p, where 2160p of an
+  hour-long set is 4.2 GB. If nothing is that small, the smallest there
+  is. The 1080p cap is the holder's choice; the rows below still offer
+  everything.
+- **Both, as two files**: the pair and the sound alone.
+
+Each goes through the row's own Download, so pairing, chunking and chapters
+apply unchanged. The choices are made by `media_detector::best_sound` and
+`best_picture`, which are pure and tested.
+
+**A fault found by writing the test.** The same address is one download,
+so a pair asked for while its sound was already saving alone took over
+that job, and the combine then removed the file the person had asked for.
+A pair now always fetches its own sound (`download_hints::separate`), and
+asking for the same pair twice returns the one running. With the fix
+removed, two checks fail.
+
+**Measured live**: Save, Sound only on the Groovix set saved one WebM of
+1:01:40 with the tracklist as 20 chapters, and nothing else was left. This
+was the first live run of chapters added to a single file afterwards. The
+live driver now waits on the download list rather than the folder. Reading
+the folder declared the job done too early three times: when the combined
+file first appeared, when the sound half was alone, and when a single file
+was already under its final name before its chapters went in.

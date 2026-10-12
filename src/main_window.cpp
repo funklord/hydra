@@ -7447,6 +7447,7 @@ void main_window::list_resolved_media(const QString &host,
 			                    !f.protocol.startsWith("http_dash");
 			media_item item;
 			item.known_media = true;
+			item.height      = f.height;
 			item.chapters    = chapters;
 			item.chunk_size  = f.chunk_size;
 			item.has_video = f.has_video;

@@ -104,8 +104,17 @@ int download_manager::enqueue_pair(const QUrl &picture, const QUrl &sound,
                                    const QString &combined_name,
                                    const download_hints &picture_hints,
                                    const download_hints &sound_hints) {
-	const int sound_id = enqueue(sound, node_id, error, headers, sound_name,
-	                             sound_hints);
+	// The same pair asked for again is the one already running.
+	if (!picture_hints.separate)
+		for (const download_job &j : m_jobs)
+			if (j.url == picture && j.sound_job && !j.terminal())
+				return j.id;
+	// **Its own sound, always.** The same address is otherwise one download,
+	// so a pair asked for while that sound was saving alone took over that
+	// job -- and the combine then removed the file the person had asked for.
+	download_hints own = sound_hints;
+	own.separate = true;
+	const int sound_id = enqueue(sound, node_id, error, headers, sound_name, own);
 	if (!sound_id)
 		return 0;
 	const int picture_id = enqueue(picture, node_id, error, headers, picture_name,
@@ -260,9 +269,10 @@ int download_manager::enqueue(const QUrl &url, const QString &node_id,
 	// value and the caller turns it into "Nothing here can download that".
 	// A second click is not an error -- it is a request to see the download
 	// that is already running, which is what the caller does with an id.
-	for (const download_job &j : m_jobs)
-		if (j.url == url && !j.terminal())
-			return j.id;
+	if (!hints.separate)
+		for (const download_job &j : m_jobs)
+			if (j.url == url && !j.terminal())
+				return j.id;
 
 	// First source that accepts wins. If none does, report the most specific
 	// reason offered rather than a generic refusal -- the sources know why.

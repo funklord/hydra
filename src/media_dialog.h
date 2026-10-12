@@ -6,6 +6,7 @@
 #include <QDialog>
 
 class QLabel;
+class QPushButton;
 class empty_state;
 class QEvent;
 class QTreeWidget;
@@ -53,7 +54,18 @@ signals:
 private:
 	void repopulate();
 	void watch(const media_item &item);
-	void save(const media_item &item);
+	// `separate`: a second job even when the address is already being
+	// fetched (`download_hints::separate`).
+	void save(const media_item &item, bool separate = false);
+	// What the Save button's menu chose. Asked each time, by the holder's
+	// choice: whether a person wants the sound, the picture or both is not
+	// something a kind decides.
+	enum class save_choice { sound, picture, both };
+	// The tallest picture one Save takes, by the holder's choice 2026-10-12:
+	// 2160p of an hour-long set is 4.2 GB, 1080p about one. The rows still
+	// offer everything.
+	static constexpr int k_save_max_height = 1080;
+	void save_as(save_choice choice);
 
 	media_detector   *m_detector  = nullptr;
 	player_launcher  *m_players   = nullptr;
@@ -69,6 +81,7 @@ private:
 
 	QTreeWidget *m_list   = nullptr;
 	QLabel      *m_status = nullptr;
+	QPushButton *m_save   = nullptr;   // shown when yt-dlp's rows are listed
 	// The "nothing here" message, over the empty rows area rather than under
 	// it. `m_status` cannot carry this: it is the dialog's status line and
 	// also reports assembling, progress and errors.
