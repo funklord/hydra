@@ -62,6 +62,9 @@ struct media_item {
 	// request. See `download_request::chunk_size`.
 	qint64 chunk_size       = 0;
 	qint64 audio_chunk_size = 0;
+	// The tracklist the reading chose, as chapters for the saved file
+	// (`media_remux::ffmetadata`); empty for none.
+	QString chapters;
 	// Where an authoritative answer places it, highest first; 0 for anything
 	// detected, which keeps the hit-count order below the ranked rows.
 	int rank = 0;

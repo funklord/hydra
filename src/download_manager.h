@@ -21,6 +21,7 @@ struct download_job {
 	QMap<QString, QString> headers;   // what this address needs sent with it
 	QString     file_name;            // what to save as; empty: from the url
 	qint64      chunk_size = 0;       // as `download_request::chunk_size`
+	QString     chapters;             // as `download_hints::chapters`
 	QString     error;
 	download_state status = download_state::queued;
 
@@ -184,6 +185,10 @@ private:
 	void persist_history();
 	// Both halves of a pair are on disk: combine them. Either failed: say so.
 	void settle_pair(int picture_id);
+	// A finished file with a tracklist: write it in as chapters.
+	void add_chapters(int id);
+	// The chapters beside `path`, for ffmpeg to read; empty if not written.
+	static QString write_chapters(const QString &path, const QString &chapters);
 
 	QList<download_source *> m_sources;
 	QList<download_job>      m_jobs;

@@ -233,7 +233,10 @@ int main(int argc, char *argv[]) {
 		       "and the file name carries the video's id");
 	}
 	if (qEnvironmentVariableIsSet("HYDRA_TRY_SAVE")) {
-		// Done when one file is there that is neither half.
+		// Done when one file is there and nothing else: the combined file
+		// appears as ffmpeg starts writing it, and the halves and the
+		// chapters go only once it has finished. Waiting for its first
+		// appearance probed a file still being written, under load.
 		const QDir dl(QString::fromLocal8Bit(base) + "/Downloads");
 		QString combined;
 		// Thirty seconds with no Downloads folder is a download that never
@@ -241,17 +244,19 @@ int main(int argc, char *argv[]) {
 		for (int i = 0; i < 6000 && combined.isEmpty() && (i < 300 || dl.exists());
 		     ++i) {
 			spin(100);
-			for (const QFileInfo &fi : dl.entryInfoList(QDir::Files))
-				if (!fi.fileName().contains(".picture.") &&
-				    !fi.fileName().contains(".sound.") && fi.size() > 0)
-					combined = fi.absoluteFilePath();
+			// One file, and not a half: the sound alone can be the only file
+			// before the picture has started.
+			const QFileInfoList files = dl.entryInfoList(QDir::Files);
+			const QString name = files.size() == 1 ? files.first().fileName() : QString();
+			if (!name.isEmpty() && !name.contains(".picture.") &&
+			    !name.contains(".sound.") && files.first().size() > 0)
+				combined = files.first().absoluteFilePath();
 		}
 		for (const QFileInfo &fi : dl.entryInfoList(QDir::Files))
 			std::printf("  in Downloads: %s (%lld bytes)\n",
 			            qPrintable(fi.fileName()), qint64(fi.size()));
 		check(!combined.isEmpty(), "the pair is combined into one file");
 		if (!combined.isEmpty()) {
-			spin(2000);   // the halves are removed after the file appears
 			QProcess probe;
 			probe.start(QStandardPaths::findExecutable("ffmpeg"),
 			            { "-hide_banner", "-i", combined });
@@ -265,6 +270,16 @@ int main(int argc, char *argv[]) {
 			std::printf("  %s\n", qPrintable(said.mid(at, 22)));
 			check(at >= 0 && !said.mid(at + 10, 8).startsWith("00:0"),
 			      "and runs longer than a few minutes, so neither half stopped short");
+			// A set with a tracklist carries it as chapters.
+			const int marks = said.count("Chapter #");
+			std::printf("  chapters: %d\n", marks);
+			{
+				reading_log readings;
+				readings.load(profile + "/readings.ini");
+				if (readings.size() && !readings.all().first().tracklist.isEmpty())
+					check(marks >= 3, "and the tracklist the reading chose is in it "
+					                   "as chapters");
+			}
 			for (const QFileInfo &fi : dl.entryInfoList(QDir::Files))
 				std::printf("  left: %s\n", qPrintable(fi.fileName()));
 			check(dl.entryList(QDir::Files).size() == 1, "and nothing else is left");

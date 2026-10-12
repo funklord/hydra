@@ -50,6 +50,7 @@
 #include "model_tally.h"
 #include "media_interpretation.h"
 #include "media_evidence.h"
+#include "media_remux.h"
 #include "tab_investigation.h"
 #include "investigation.h"
 #include "ai_provider.h"
@@ -7351,7 +7352,7 @@ void main_window::list_resolved_media(const QString &host,
 		const QString id = model_id(ai);
 		// Kept and not flagged: a title the check could not reject but saw
 		// something wrong with counts against the model too.
-		for (const QString &task : { "kind", "artist", "title", "tracklist" })
+		for (const char *task : { "kind", "artist", "title", "tracklist" })
 			tally.record(id, task, r.clean(task));
 		settings_store::save_tally(tally);
 		warnings = tally.warnings(id);
@@ -7422,6 +7423,20 @@ void main_window::list_resolved_media(const QString &host,
 		// a manifest at the same height; sound alone after them -- or before
 		// them, for something read as music, where the sound is the point.
 		const bool music = r.what == media_reading::kind::music;
+		// **The tracklist, saved with the file**, as chapters: the one the
+		// reading chose, from the evidence that holds its entries.
+		QString chapters;
+		if (!r.tracklist.isEmpty()) {
+			const media_evidence ev = media_evidence::from_json(m.json);
+			for (const media_evidence::tracklist &t : ev.tracklists) {
+				if (t.source != r.tracklist)
+					continue;
+				QList<chapter_mark> marks;
+				for (const media_evidence::entry &e : t.entries)
+					marks << chapter_mark{ e.start, e.text };
+				chapters = media_remux::ffmetadata(marks, ev.duration);
+			}
+		}
 		int added = 0;
 		int order = 0;
 		for (const media_format &f : m.formats) {
@@ -7432,6 +7447,7 @@ void main_window::list_resolved_media(const QString &host,
 			                    !f.protocol.startsWith("http_dash");
 			media_item item;
 			item.known_media = true;
+			item.chapters    = chapters;
 			item.chunk_size  = f.chunk_size;
 			item.has_video = f.has_video;
 			item.has_audio = f.has_audio;

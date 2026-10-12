@@ -242,6 +242,28 @@ int main(int argc, char **argv) {
 		       "and dropping neither side, which a stray -an would do "
 		       "silently");
 
+		// **A set's tracklist, saved as chapters.**
+		const QString meta = media_remux::ffmetadata(
+		    { { 0, "Intro" }, { 90.5, "A = B; C #2 \\ D" }, { 300, "Last" } }, 400);
+		check(meta.startsWith(";FFMETADATA1\n") && meta.count("[CHAPTER]") == 3,
+		      "one chapter per mark, in ffmpeg's metadata format");
+		check(meta.contains("START=0\nEND=90500\ntitle=Intro\n") &&
+		      meta.contains("START=300000\nEND=400000\ntitle=Last\n"),
+		      QString("each ends where the next starts, the last at the "
+		               "duration (%1)").arg(meta));
+		check(meta.contains("title=A \\= B\\; C \\#2 \\\\ D\n"),
+		      "and the format's own syntax in a title is escaped");
+		check(media_remux::ffmetadata({ { 0, "Only" } }, 60).isEmpty(),
+		      "one mark is no chapters");
+		const QStringList cm = media_remux::arguments("/tmp/v.mp4", "/tmp/a.m4a",
+		                                               "/tmp/m.txt", "/tmp/out.mp4");
+		check(cm.count("-i") == 3 && cm.at(cm.indexOf("/tmp/m.txt") - 1) == "-i" &&
+		      cm.contains("-map_chapters") &&
+		      cm.at(cm.indexOf("-map_chapters") + 1) == "2" &&
+		      cm.last() == "/tmp/out.mp4",
+		      QString("the mux takes the chapters as its third input (%1)")
+		          .arg(cm.join(' ')));
+
 		const QStringList a = media_remux::arguments("/tmp/in.ts", "/tmp/out.mp4");
 		check(a.contains("copy") && a.contains("-c"),
 		      "it rewraps rather than re-encodes");

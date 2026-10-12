@@ -38330,3 +38330,30 @@ redirect every request, as YouTube does, or stop sending. With the redirect
 fix removed, the redirect test fails with one range, which is the live
 fault. A real combine runs on one-second media made by ffmpeg. With
 `settle_pair` disabled, six checks fail.
+
+## A set's tracklist is saved in the file, as chapters
+
+The holder's first example of what a download should do, 2026-10-10:
+"since it's a set ... if there's a tracklist in the comments it should also
+be saved". The reading already chooses one tracklist candidate
+(`media_reading::tracklist`, naming a `media_evidence::tracklist`), and its
+timestamped entries become chapters in the saved file. Any player that
+reads chapters (mpv, VLC) can then skip track by track.
+
+- `media_remux::ffmetadata` writes the marks in ffmpeg's metadata format.
+  Each chapter ends where the next starts, and the last at the video's
+  duration. The format's own syntax (`= ; # \` and newline) is escaped in
+  titles. One mark is no chapters.
+- **A picture-and-sound pair** gets them in the same ffmpeg run that
+  combines it, as a third input (`-map_chapters 2`).
+- **A single file**, such as a sound-only download of a set read as music,
+  gets them in a short step after it lands. ffmpeg writes a copy beside it
+  with the chapters, without re-encoding, and the copy then takes the
+  original's name. If ffmpeg fails, the original is kept and the row says
+  it has no chapters. If the rename fails, the copy is kept under its own
+  name, because by then it is the only file.
+- The metadata file is written beside the download and removed afterwards.
+
+**Not done: a `.cue` beside the file.** Chapters cover the players here, and
+a second file per download would be the first sidecar Hydra writes. If a
+tool that reads only `.cue` comes up, it is a small addition.

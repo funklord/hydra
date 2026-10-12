@@ -28,6 +28,23 @@ void media_remux::start_mux(const QString &video, const QString &audio) {
 
 void media_remux::start_mux(const QString &video, const QString &audio,
                             const QString &out) {
+	start_mux(video, audio, out, QString());
+}
+
+void media_remux::start_chapters(const QString &in, const QString &meta,
+                                 const QString &out) {
+	if (tool().isEmpty()) {
+		emit finished(false, in,
+		               QStringLiteral("ffmpeg is not installed, so the tracklist "
+		                               "was not added as chapters."));
+		return;
+	}
+	run(chapter_arguments(in, meta, out), out, QStringList{ in }, in,
+	     QStringLiteral("add chapters to"), QStringLiteral("given chapters"));
+}
+
+void media_remux::start_mux(const QString &video, const QString &audio,
+                            const QString &out, const QString &meta) {
 	// **Not the same degradation as a rewrap.** There, the file that exists
 	// is the programme in the wrong container; here it is the video without
 	// its sound, and calling that "kept as-is" would describe a silent file
@@ -39,7 +56,9 @@ void media_remux::start_mux(const QString &video, const QString &audio,
 		                               "is saved without its sound."));
 		return;
 	}
-	run(arguments(video, audio, out), out, QStringList{ video, audio }, video,
+	run(meta.isEmpty() ? arguments(video, audio, out)
+	                   : arguments(video, audio, meta, out),
+	     out, QStringList{ video, audio }, video,
 	     QStringLiteral("combine"), QStringLiteral("combined"));
 }
 

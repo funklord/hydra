@@ -151,16 +151,22 @@ void download_manager::settle_pair(int picture_id) {
 	                      .filePath(p->combined_name);
 	p->detail = QStringLiteral("Combining picture and sound…");
 	const int sound_id = s->id;
+	// The tracklist rides along in the same ffmpeg run.
+	const QString meta = write_chapters(out, p->chapters);
 	auto *mux = new media_remux(this);
 	connect(mux, &media_remux::finished, this,
-	         [this, mux, picture_id, sound_id](bool ok, const QString &path,
-	                                           const QString &message) {
+	         [this, mux, picture_id, sound_id, meta](bool ok, const QString &path,
+	                                                 const QString &message) {
 		mux->deleteLater();
+		if (!meta.isEmpty())
+			QFile::remove(meta);
 		if (download_job *p = find(picture_id)) {
 			p->status = download_state::done;
 			p->path   = path;
-			p->detail = ok ? QStringLiteral("Picture and sound, combined.")
-			               : message;
+			p->detail = !ok ? message
+			  : meta.isEmpty() ? QStringLiteral("Picture and sound, combined.")
+			  : QStringLiteral("Picture and sound, combined, with the tracklist "
+			                   "as chapters.");
 		}
 		// Its file is inside the combined one now, and a row pointing at a
 		// file that is gone is a row nobody can act on.
@@ -169,8 +175,65 @@ void download_manager::settle_pair(int picture_id) {
 		emit changed();
 		persist_history();
 	});
-	mux->start_mux(p->path, s->path, out);
+	mux->start_mux(p->path, s->path, out, meta);
 	emit changed();
+}
+
+QString download_manager::write_chapters(const QString &path,
+                                         const QString &chapters) {
+	if (chapters.isEmpty())
+		return QString();
+	const QString meta = path + QStringLiteral(".chapters.txt");
+	QFile f(meta);
+	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) ||
+	    f.write(chapters.toUtf8()) < 0 || !f.flush()) {
+		QFile::remove(meta);
+		return QString();
+	}
+	return meta;
+}
+
+void download_manager::add_chapters(int id) {
+	download_job *j = find(id);
+	if (!j)
+		return;
+	const QString in   = j->path;
+	const QString meta = write_chapters(in, j->chapters);
+	if (meta.isEmpty()) {
+		j->status = download_state::done;
+		j->detail = QStringLiteral("Saved; the tracklist could not be written "
+		                            "beside it, so it has no chapters.");
+		return;
+	}
+	// A copy beside it, then put in its place: the name stays the one the
+	// download was given, and a failure leaves the original as it was.
+	const QFileInfo fi(in);
+	const QString out = fi.dir().filePath(fi.completeBaseName() +
+	                                      QStringLiteral(".chaptered.") + fi.suffix());
+	j->detail = QStringLiteral("Adding the tracklist as chapters…");
+	auto *step = new media_remux(this);
+	connect(step, &media_remux::finished, this,
+	         [this, step, id, in, out, meta](bool ok, const QString &,
+	                                         const QString &message) {
+		step->deleteLater();
+		QFile::remove(meta);
+		// `in` is gone on success, so the copy is the only file and takes its
+		// name; where it cannot, it is kept as it is rather than lost.
+		const bool placed = ok && QFile::rename(out, in);
+		if (download_job *j = find(id)) {
+			j->status = download_state::done;
+			j->path   = (ok && !placed) ? out : in;
+			j->detail = placed ? QStringLiteral("Saved, with the tracklist as "
+			                                    "chapters.")
+			          : ok ? QStringLiteral("Saved with chapters, under a "
+			                                "different name: the original name "
+			                                "could not be taken.")
+			               : "Saved without chapters: " + message;
+		}
+		emit changed();
+		persist_history();
+	});
+	step->start_chapters(in, meta, out);
 }
 
 int download_manager::enqueue(const QUrl &url, const QString &node_id,
@@ -235,6 +298,7 @@ int download_manager::enqueue(const QUrl &url, const QString &node_id,
 	job.headers              = headers;
 	job.file_name            = file_name;
 	job.chunk_size           = hints.chunk_size;
+	job.chapters             = hints.chapters;
 
 	m_jobs.push_back(job);
 	emit changed();
@@ -364,6 +428,12 @@ void download_manager::on_finished(int id, bool ok, const QString &message) {
 			// Not done until its sound is with it.
 			j->status = download_state::running;
 			j->detail = QStringLiteral("Waiting for its sound…");
+		} else if (ok && !j->chapters.isEmpty() && !j->picture_job &&
+		           media_remux::available()) {
+			// Not done until its tracklist is in it. A sound fetched for a
+			// picture gets the chapters through the combine instead.
+			j->status = download_state::running;
+			add_chapters(id);
 		} else if (ok) {
 			j->status = download_state::done;
 		} else {

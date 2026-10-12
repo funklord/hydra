@@ -152,6 +152,9 @@ struct download_hints {
 	// `accepts_known_media` rather than judging it by its shape.
 	bool   known_media = false;
 	qint64 chunk_size  = 0;   // as `download_request::chunk_size`
+	// A tracklist to write into the saved file as chapters, in ffmpeg's
+	// metadata format (`media_remux::ffmetadata`); empty for none.
+	QString chapters;
 };
 
 // A source's report on a job. Fields left at their defaults mean "unchanged",

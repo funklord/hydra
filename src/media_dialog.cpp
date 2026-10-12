@@ -388,11 +388,11 @@ void media_dialog::save(const media_item &item) {
 	  ? m_downloads->enqueue_pair(item.url, item.audio, m_node_id, &error,
 	                              item.headers, names.picture, names.sound,
 	                              names.combined,
-	                              { item.known_media, item.chunk_size },
-	                              { item.known_media, item.audio_chunk_size })
+	                              { item.known_media, item.chunk_size, item.chapters },
+	                              { item.known_media, item.audio_chunk_size, {} })
 	  : m_downloads->enqueue(item.url, m_node_id, &error, item.headers,
 	                         item.file_name,
-	                         { item.known_media, item.chunk_size });
+	                         { item.known_media, item.chunk_size, item.chapters });
 	// Where it lands, as the user will actually find it.
 	//
 	// On Android naming the directory is worse than useless: Qt downloads into

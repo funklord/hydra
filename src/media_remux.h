@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QList>
 #include <QStandardPaths>
 #include <QString>
 #include <QStringList>
@@ -24,6 +25,13 @@ class QProcess;
 // a file that plays before this runs, so a missing ffmpeg costs the container
 // and nothing else. That is why the assembler is not made to wait for this and
 // why nothing here can fail the save.
+// One mark of a tracklist, as a chapter: where it starts, in seconds, and
+// what it is called.
+struct chapter_mark {
+	double  start = 0;
+	QString title;
+};
+
 class media_remux : public QObject {
 	Q_OBJECT
 public:
@@ -88,6 +96,62 @@ public:
 			                 out };
 	}
 
+	// **A tracklist as chapters**, in ffmpeg's metadata format, so a set
+	// saved as one file can be skipped through track by track in any player
+	// that reads chapters. Each ends where the next starts and the last at
+	// `duration` (seconds; unknown is <= 0, which gives the last a minute).
+	// Empty for fewer than two marks: one chapter is no chapters.
+	static QString ffmetadata(const QList<chapter_mark> &marks, double duration) {
+		if (marks.size() < 2)
+			return QString();
+		// '=', ';', '#', '\' and a newline are the format's own syntax.
+		auto escaped = [](QString s) {
+			for (const QChar c : { QChar('\\'), QChar('='), QChar(';'), QChar('#') })
+				s.replace(c, QString('\\') + c);
+			return s.replace('\n', QStringLiteral("\\\n"));
+		};
+		QString out = QStringLiteral(";FFMETADATA1\n");
+		for (int i = 0; i < marks.size(); ++i) {
+			const qint64 start = qint64(marks[i].start * 1000);
+			const qint64 end   = i + 1 < marks.size() ? qint64(marks[i + 1].start * 1000)
+			                   : duration > marks[i].start ? qint64(duration * 1000)
+			                                                : start + 60000;
+			out += QString("[CHAPTER]\nTIMEBASE=1/1000\nSTART=%1\nEND=%2\ntitle=%3\n")
+			           .arg(start).arg(qMax(end, start + 1)).arg(escaped(marks[i].title));
+		}
+		return out;
+	}
+
+	// Chapters from `meta` into a copy of `in`, everything else copied as it
+	// is: every stream, the file's own metadata, nothing re-encoded.
+	static QStringList chapter_arguments(const QString &in, const QString &meta,
+	                                     const QString &out) {
+		return QStringList{ QStringLiteral("-y"),
+			                 QStringLiteral("-loglevel"), QStringLiteral("error"),
+			                 QStringLiteral("-i"), in,
+			                 QStringLiteral("-i"), meta,
+			                 QStringLiteral("-map"), QStringLiteral("0"),
+			                 QStringLiteral("-map_metadata"), QStringLiteral("0"),
+			                 QStringLiteral("-map_chapters"), QStringLiteral("1"),
+			                 QStringLiteral("-c"), QStringLiteral("copy"),
+			                 out };
+	}
+
+	// The two-stream mux, with the chapters from `meta` as a third input.
+	static QStringList arguments(const QString &video, const QString &audio,
+	                              const QString &meta, const QString &out) {
+		return QStringList{ QStringLiteral("-y"),
+			                 QStringLiteral("-loglevel"), QStringLiteral("error"),
+			                 QStringLiteral("-i"), video,
+			                 QStringLiteral("-i"), audio,
+			                 QStringLiteral("-i"), meta,
+			                 QStringLiteral("-c"), QStringLiteral("copy"),
+			                 QStringLiteral("-map"), QStringLiteral("0:v:0"),
+			                 QStringLiteral("-map"), QStringLiteral("1:a:0"),
+			                 QStringLiteral("-map_chapters"), QStringLiteral("2"),
+			                 out };
+	}
+
 	// Rewrap `assembled`. Emits exactly once.
 	void start(const QString &assembled);
 
@@ -99,6 +163,12 @@ public:
 	// The same, into `out`: the caller knows the container both halves fit.
 	void start_mux(const QString &video, const QString &audio,
 	               const QString &out);
+	// The same, with chapters from the metadata file `meta` when non-empty.
+	void start_mux(const QString &video, const QString &audio,
+	               const QString &out, const QString &meta);
+	// Chapters from `meta` into `out`, a copy of `in`; removes `in` on
+	// success. Emits exactly once, with `in` as the path on failure.
+	void start_chapters(const QString &in, const QString &meta, const QString &out);
 
 signals:
 	// `path` is the file to keep -- the remuxed one when this worked, and the

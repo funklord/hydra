@@ -1,6 +1,7 @@
 #include "download_manager.h"
 #include "http_download_source.h"
 #include "fake_sources.h"
+#include "media_remux.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -333,6 +334,17 @@ static bool make_media(const QStringList &args) {
 	return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
 }
 
+// What ffmpeg says a file holds: its streams, duration and chapters.
+static QString probe_media(const QString &path) {
+	QProcess probe;
+	probe.start(QStandardPaths::findExecutable("ffmpeg"), { "-hide_banner", "-i", path });
+	if (!probe.waitForFinished(10000)) {
+		probe.kill();
+		probe.waitForFinished(2000);
+	}
+	return QString::fromLocal8Bit(probe.readAllStandardError());
+}
+
 // **A picture and its sound, saved as one.** YouTube serves almost every
 // quality as one or the other, and a Download of a picture-only row saved a
 // silent file.
@@ -355,7 +367,7 @@ static void test_pairs(const QString &dir) {
 		check(m.enqueue(yt, QString(), &why) == 0, "the manager refuses it unvouched");
 		m.set_directory(dir + "/vouched");
 		const int id = m.enqueue(yt, QString(), &why, {}, "x.m4a",
-		                         download_hints{ true, 0 });
+		                         download_hints{ true, 0, {} });
 		check(id != 0, QString("and takes it vouched (%1)").arg(why));
 		m.cancel(id);
 	}
@@ -444,12 +456,59 @@ static void test_pairs(const QString &dir) {
 	check(!QFile::exists(v) && !QFile::exists(a), "the two halves are removed");
 	check(!job_by_id(m, snd), "and the sound's row, whose file is gone, with them");
 
-	QProcess probe;
-	probe.start(QStandardPaths::findExecutable("ffmpeg"), { "-hide_banner", "-i", out });
-	probe.waitForFinished(10000);
-	const QString said = QString::fromLocal8Bit(probe.readAllStandardError());
+	const QString said = probe_media(out);
 	check(said.contains("Video:") && said.contains("Audio:"),
 	      "and it holds a picture and a sound");
+
+	// **With the tracklist**, as a set's download carries it.
+	const QString chapters = media_remux::ffmetadata(
+	    { { 0, "One" }, { 0.4, "Two" }, { 0.7, "Three" } }, 1);
+	const QString v2 = dir + "/z.picture.mp4", a2 = dir + "/z.sound.m4a";
+	const bool made2 =
+	  make_media({ "-f", "lavfi", "-i", "testsrc=duration=1:size=64x64:rate=5",
+	               "-c:v", "mpeg4", v2 }) &&
+	  make_media({ "-f", "lavfi", "-i", "sine=duration=1", "-c:a", "aac", a2 });
+	if (!made2)
+		return;
+	const int pic2 = m.enqueue_pair(QUrl("http://cdn.test/v2"), QUrl("http://cdn.test/a2"),
+	                                QString(), &err, {}, "z.picture.mp4",
+	                                "z.sound.m4a", "z.mp4",
+	                                download_hints{ true, 0, chapters },
+	                                download_hints{ true, 0, {} });
+	const int snd2 = job_by_id(m, pic2)->sound_job;
+	src->set(snd2, download_state::running, 1, 1, a2, QString());
+	src->set(pic2, download_state::running, 1, 1, v2, QString());
+	src->finish(snd2, true, QString());
+	src->finish(pic2, true, QString());
+	t.restart();
+	while (status_of(m, pic2) != download_state::done && t.elapsed() < 20000)
+		spin(50);
+	const QString said2 = probe_media(dir + "/z.mp4");
+	check(said2.contains("Chapter #0:2") && said2.contains("Three"),
+	      QString("a pair combined with its tracklist carries it as chapters (%1)")
+	          .arg(job_by_id(m, pic2) ? job_by_id(m, pic2)->detail : QString()));
+	check(!QFile::exists(dir + "/z.mp4.chapters.txt"), "and the metadata file is gone");
+
+	// A single file: the chapters go in after it lands, under the same name.
+	const QString one = dir + "/set.m4a";
+	if (!make_media({ "-f", "lavfi", "-i", "sine=duration=1", "-c:a", "aac", one }))
+		return;
+	const int single = m.enqueue(QUrl("http://cdn.test/set"), QString(), &err, {},
+	                             "set.m4a", download_hints{ true, 0, chapters });
+	src->set(single, download_state::running, 1, 1, one, QString());
+	src->finish(single, true, QString());
+	t.restart();
+	while (status_of(m, single) != download_state::done && t.elapsed() < 20000)
+		spin(50);
+	const download_job *sj = job_by_id(m, single);
+	const QString said3 = probe_media(one);
+	check(sj && sj->path == one && said3.contains("Chapter #0:2") &&
+	      said3.contains("Audio:"),
+	      QString("a single file gains its chapters and keeps its name (%1)")
+	          .arg(sj ? sj->detail : QString()));
+	check(QDir(dir).entryList({ "set*" }, QDir::Files) == QStringList{ "set.m4a" },
+	      QString("leaving nothing beside it (%1)")
+	          .arg(QDir(dir).entryList({ "set*" }, QDir::Files).join(", ")));
 }
 
 static void test_reentrancy() {
@@ -593,7 +652,7 @@ static void test_chunked(const QString &tmp) {
 		const int id = m.enqueue(
 		    QUrl(QString("http://127.0.0.1:%1/videoplayback?itag=1")
 		             .arg(server.serverPort())),
-		    QString(), &err, {}, name, download_hints{ true, chunk });
+		    QString(), &err, {}, name, download_hints{ true, chunk, {} });
 		QElapsedTimer t;
 		t.start();
 		while (job_by_id(m, id) && !job_by_id(m, id)->terminal() && t.elapsed() < 8000)
