@@ -38418,3 +38418,44 @@ live driver now waits on the download list rather than the folder. Reading
 the folder declared the job done too early three times: when the combined
 file first appeared, when the sound half was alone, and when a single file
 was already under its final name before its chapters went in.
+
+## Corrections teach the channel a rule
+
+**Settled 2026-10-12 by the holder: edit, and learn per channel.** The
+holder's own example, from 2026-10-10: whether the artist is the uploader
+or is in the title is a call a reading can get wrong, and it is usually
+the same call for every video of a channel.
+
+- **Correct…** in Recent Readings edits a reading's artist, title and kind.
+  The record says "your correction" from then on.
+- **The rule the fix implies is said while editing**, and kept for the
+  channel if "Remember" is ticked. It ticks itself only once an edit
+  implies something, because a reading opened and closed unchanged teaches
+  nothing. `channel_rules::infer` finds the source that reproduces each
+  part from the video's own title and uploader:
+  - the artist: the part of the title before or after a separator, the
+    uploader, or a name the channel always uses;
+  - the track: the whole title, or the part before or after the separator;
+  - the kind, where it was changed.
+  A part it cannot explain is left as read. The separators tried are
+  `" - "`, en and em dashes, `" | "`, `": "` and `" ~ "`. Trailing
+  bracketed tags such as "(Official Video)" are ignored when matching and
+  dropped when applying.
+- **A channel's later readings follow its rule**, over the model's answer
+  and the rules' answer. The status line, the record's `rule` and its row
+  say so. A title the rule cannot split, with no separator, is read as
+  usual, and the record says why.
+- Rules are kept in `channel-rules.ini` beside the readings. A file that
+  will not parse is left alone, as with every log here, and the rules are
+  cleared with browsing data, because they name channels the person
+  watched. Records now keep the video's own title (`video_title`), which a
+  rule is learned from.
+
+**Measured live**: with a rule for Groovix seeded the way Correct keeps
+one, reading the set through the real menu took the rule's artist and
+recorded "your rule for Groovix (…)".
+
+**Open: a correction does not yet count against the model's tally.** It is
+exactly the evidence the tally exists for, but the reading's answers were
+already counted as kept when it ran, so counting the correction needs the
+earlier entry undone rather than a second one added.

@@ -32,6 +32,12 @@ struct reading_record {
 	QStringList from_model;   // the tasks the model's answer was kept for
 	QStringList rejected;
 	QStringList flagged;
+	// The video's own title as the site gave it: what a correction's rule
+	// is learned from (`channel_rules::infer`).
+	QString     video_title;
+	// What decided the artist and title where a channel's rule did, in words;
+	// "corrected" where the person corrected this reading itself.
+	QString     rule;
 };
 
 // Newest last, at most `k_max` -- a record of what was read, not an archive
@@ -47,6 +53,8 @@ public:
 	// channel will be checked against.
 	QList<reading_record> for_channel(const QString &channel) const;
 	int  size() const { return int(m_records.size()); }
+	// Puts a corrected reading in place of the one at `index` in `all()`.
+	bool replace(int index, const reading_record &r);
 	// Forgets every reading; how many there were.
 	int  clear_all();
 

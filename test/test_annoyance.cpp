@@ -5,8 +5,15 @@
 #include "annoyed_dialog.h"
 #include "reading_log.h"
 #include "readings_dialog.h"
+#include "channel_rules.h"
 
 #include <QApplication>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDialogButtonBox>
+#include <QLineEdit>
+#include <QTemporaryDir>
+#include <QTimer>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -327,7 +334,7 @@ int main(int argc, char **argv) {
 	section("past readings are listed, newest first, with why in the tooltip");
 	{
 		reading_log log;
-		readings_dialog empty(&log);
+		readings_dialog empty(&log, nullptr);
 		auto *list = empty.findChild<QTreeWidget *>("readings");
 		check(list && list->topLevelItemCount() == 1 &&
 		          list->topLevelItem(0)->text(3).contains("Find Media"),
@@ -348,7 +355,7 @@ int main(int argc, char **argv) {
 		b.file_name = "second";
 		b.rejected = { "artist: \"X\" is not in the metadata" };
 		log.add(b);
-		readings_dialog full(&log);
+		readings_dialog full(&log, nullptr);
 		list = full.findChild<QTreeWidget *>("readings");
 		check(list && list->topLevelItemCount() == 2 &&
 		          list->topLevelItem(0)->text(3) == "Second" &&
@@ -358,6 +365,109 @@ int main(int argc, char **argv) {
 		          list->topLevelItem(0)->toolTip(0).contains("saved as second") &&
 		          list->topLevelItem(0)->toolTip(0).contains("is not in the metadata"),
 		       "and each row says what its checks found, and why, in full");
+	}
+
+	// **A correction teaches the channel.** The holder's case: the artist is
+	// in the title, and the reading took the uploader.
+	section("a correction is learned as a rule for the channel");
+	{
+		const QString vt = "Daft Punk - Around the World (Official Video)";
+		channel_rule r = channel_rules::infer("SomeUploads", vt, "SomeUploads",
+		                                      "Daft Punk", "Around the World",
+		                                      "music", "music");
+		check(r.artist == channel_rule::artist_source::before &&
+		      r.title == channel_rule::title_source::after && r.separator == " - " &&
+		      r.kind.isEmpty(),
+		      QString("artist before \" - \", track after it (%1)").arg(r.describe()));
+		QString artist = "SomeUploads", title = "whatever", kind = "music", why;
+		const bool applied = channel_rules::apply(r, "Justice - D.A.N.C.E. [HD]",
+		                                          "SomeUploads", &artist, &title,
+		                                          &kind, &why);
+		check(applied && artist == "Justice" && title == "D.A.N.C.E.",
+		      QString("and applied to the channel's next title, tags dropped (%1, %2)")
+		          .arg(artist, title));
+		artist = "kept";
+		title  = "kept";
+		const bool split = channel_rules::apply(r, "A title with no separator",
+		                                        "SomeUploads", &artist, &title,
+		                                        &kind, &why);
+		check(!split && artist == "kept" && why.contains("\" - \""),
+		      QString("a title it cannot split is read as usual, and says why (%1)")
+		          .arg(why));
+
+		const channel_rule up = channel_rules::infer("Groovix", "CLASSIC DISCO FUNK",
+		                                             "Groovix", "Groovix",
+		                                             "CLASSIC DISCO FUNK", "music",
+		                                             "misc");
+		check(up.artist == channel_rule::artist_source::uploader &&
+		      up.title == channel_rule::title_source::whole && up.kind == "music",
+		      QString("the uploader as artist, the whole title, and a kind (%1)")
+		          .arg(up.describe()));
+		check(channel_rules::infer("C", "Track - Artist", "C", "Artist", "Track",
+		                           "music", "music").artist ==
+		          channel_rule::artist_source::after,
+		      "and an artist after the separator");
+
+		QTemporaryDir tmp;
+		channel_rules rules;
+		rules.set(r);
+		rules.set(up);
+		check(rules.save(tmp.filePath("rules.ini")), "the rules save");
+		channel_rules again;
+		check(again.load(tmp.filePath("rules.ini")) && again.size() == 2 &&
+		      again.find("SomeUploads") &&
+		      again.find("SomeUploads")->separator == " - " &&
+		      again.find("Groovix")->kind == "music",
+		      "and survive a restart");
+
+		// The window: Correct, with the rule said before it is kept.
+		reading_log log;
+		reading_record rec;
+		rec.when        = QDateTime::currentDateTimeUtc();
+		rec.page        = "https://www.youtube.com/watch?v=x";
+		rec.channel     = "SomeUploads";
+		rec.uploader    = "SomeUploads";
+		rec.kind        = "music";
+		rec.artist      = "SomeUploads";
+		rec.title       = "Daft Punk - Around the World";
+		rec.video_title = vt;
+		log.add(rec);
+		channel_rules kept;
+		readings_dialog dlg(&log, &kept);
+		auto *list = dlg.findChild<QTreeWidget *>("readings");
+		list->setCurrentItem(list->topLevelItem(0));
+		auto *button = dlg.findChild<QPushButton *>("correct_reading");
+		check(button && button->isEnabled(), "Correct is offered on a reading");
+		QString offered, before_edit;
+		bool ticked_before = true;
+		QTimer::singleShot(0, [&] {
+			for (QWidget *t : QApplication::topLevelWidgets()) {
+				if (t->objectName() != "correct_dialog" || !t->isVisible())
+					continue;
+				auto *remember = t->findChild<QCheckBox *>("correct_remember");
+				ticked_before = remember->isChecked();
+				before_edit   = remember->text();
+				t->findChild<QLineEdit *>("correct_artist")->setText("Daft Punk");
+				t->findChild<QLineEdit *>("correct_title")->setText("Around the World");
+				offered = remember->text();
+				t->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->click();
+			}
+		});
+		bool saved = false;
+		QObject::connect(&dlg, &readings_dialog::corrected, [&] { saved = true; });
+		button->click();
+		check(!ticked_before, QString("nothing is ticked before an edit (%1)").arg(before_edit));
+		check(offered.contains("Remember for SomeUploads") && offered.contains("before \" - \""),
+		      QString("the rule is said while editing (%1)").arg(offered));
+		check(saved && log.all().first().artist == "Daft Punk" &&
+		      log.all().first().title == "Around the World" &&
+		      log.all().first().rule == "your correction",
+		      "the reading is corrected, and says so");
+		check(kept.find("SomeUploads") &&
+		      kept.find("SomeUploads")->artist == channel_rule::artist_source::before,
+		      "and the channel's rule is kept");
+		check(list->topLevelItem(0)->text(4).contains("your correction"),
+		      "the row shows it was corrected");
 	}
 
 	section("a log that will not parse is left alone");

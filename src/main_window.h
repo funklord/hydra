@@ -18,6 +18,7 @@
 
 class annoyance_log;
 class reading_log;
+class channel_rules;
 namespace ad_probe { struct findings; }
 struct media_reading;
 struct resolved_media;
@@ -282,8 +283,10 @@ private slots:
 	void open_readings();
 	// yt-dlp's streams listed once what they are has been read: named from
 	// the reading, and the reading and its weaknesses said.
+	// `ruled`: the channel rule that decided the artist and title, in words.
 	void list_resolved_media(const QString &host, const resolved_media &m,
-	                         const media_reading &r, ai_provider *ai);
+	                         const media_reading &r, ai_provider *ai,
+	                         const QString &ruled = QString());
 	// The other half: did the rules just applied break this page? Reachable
 	// only while there is something to confirm. See main_window.cpp.
 	void confirm_rules();
@@ -780,6 +783,9 @@ public:
 	// has been belongs where they can read and clear it.
 	reading_log        *m_readings      = nullptr;
 	QString             m_readings_path;
+	// What corrections taught about channels; beside the readings.
+	channel_rules      *m_channel_rules = nullptr;
+	QString             m_channel_rules_path;
 	QAction            *m_annoyed_action = nullptr;
 	QAction            *m_annoyed_menu_action = nullptr;
 	QAction            *m_confirm_action = nullptr;

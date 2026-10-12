@@ -18,6 +18,13 @@ QList<reading_record> reading_log::for_channel(const QString &channel) const {
 	return out;
 }
 
+bool reading_log::replace(int index, const reading_record &r) {
+	if (index < 0 || index >= m_records.size())
+		return false;
+	m_records[index] = r;
+	return true;
+}
+
 int reading_log::clear_all() {
 	const int n = int(m_records.size());
 	m_records.clear();
@@ -58,6 +65,8 @@ bool reading_log::load(const QString &path) {
 		r.from_model = f.value("from_model").toStringList();
 		r.rejected   = f.value("rejected").toStringList();
 		r.flagged    = f.value("flagged").toStringList();
+		r.video_title = f.value("video_title").toString();
+		r.rule        = f.value("rule").toString();
 		if (r.page.isEmpty() && r.id.isEmpty())
 			continue;   // a reading of nothing is not a reading
 		loaded << r;
@@ -99,6 +108,9 @@ bool reading_log::save(const QString &path) const {
 			f.setValue("rejected", r.rejected);
 		if (!r.flagged.isEmpty())
 			f.setValue("flagged", r.flagged);
+		f.setValue("video_title", r.video_title);
+		if (!r.rule.isEmpty())
+			f.setValue("rule", r.rule);
 	}
 	f.endArray();
 	f.sync();

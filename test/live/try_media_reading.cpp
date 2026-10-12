@@ -4,6 +4,9 @@
 //
 //     QT_QPA_PLATFORM=offscreen ./test/build-make/try_media_reading [url]
 //
+// HYDRA_TRY_RULE=1 seeds a rule for the channel and checks the reading
+// follows it.
+//
 // HYDRA_TRY_SAVE=sound chooses Save, Sound only, from the button's menu.
 // HYDRA_TRY_SAVE=1 presses Download on the smallest picture-only file row
 // instead, which fetches its sound too, and waits up to ten minutes for the
@@ -21,6 +24,7 @@
 //
 // The profile is a temporary directory; the settings select the local model
 // at its default address, so a running Ollama is used and nothing else.
+#include "channel_rules.h"
 #include "download_manager.h"
 #include "main_window.h"
 #include "policy_engine.h"
@@ -116,6 +120,20 @@ int main(int argc, char *argv[]) {
 		tf.write(QString("- [f0] folder | Mine\n  - [a1] unopened | A video | %1 | "
 		                 "created=2026-01-01T00:00:00 | seen=2026-01-01T00:00:00\n")
 		             .arg(url).toUtf8());
+	}
+
+	// HYDRA_TRY_RULE=1 seeds a correction's rule for the channel, as Correct
+	// in Recent Readings would keep it, and checks the reading follows it.
+	const bool try_rule = qEnvironmentVariableIsSet("HYDRA_TRY_RULE");
+	if (try_rule) {
+		channel_rule rule;
+		rule.channel = "Groovix";
+		rule.artist  = channel_rule::artist_source::fixed;
+		rule.fixed_artist = "Groovix (by rule)";
+		rule.title   = channel_rule::title_source::whole;
+		channel_rules rules;
+		rules.set(rule);
+		rules.save(profile + "/channel-rules.ini");
 	}
 
 	policy_engine policy;
@@ -238,6 +256,11 @@ int main(int argc, char *argv[]) {
 		            qPrintable(r.file_name), qPrintable(r.rejected.join("; ")),
 		            qPrintable(r.flagged.join("; ")));
 		check(r.model.startsWith("Ollama "), "read by the local model, not the rules");
+		if (try_rule) {
+			std::printf("  rule: %s\n", qPrintable(r.rule));
+			check(r.artist == "Groovix (by rule)" && r.rule.contains("your rule for Groovix"),
+			      "and the channel's rule decided the artist, and says so");
+		}
 		check(!r.file_name.isEmpty() && r.file_name.contains(r.id),
 		       "and the file name carries the video's id");
 	}

@@ -51,6 +51,7 @@
 #include "media_interpretation.h"
 #include "media_evidence.h"
 #include "media_remux.h"
+#include "channel_rules.h"
 #include "tab_investigation.h"
 #include "investigation.h"
 #include "ai_provider.h"
@@ -330,6 +331,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_signals    = new filter_signals(this);
 	m_annoyances = new annoyance_log();
 	m_readings   = new reading_log();
+	m_channel_rules = new channel_rules();
 	m_ex_signals = new extractor_signals(this);
 	// Constructed before it is registered, which is not a style point: an
 	// observer added while still null was harmless for exactly as long as the
@@ -3083,6 +3085,7 @@ main_window::~main_window() {
 	// lifetime idiom.
 	delete m_annoyances;
 	delete m_readings;
+	delete m_channel_rules;
 	// Leave kiosk while our children still exist: the controller hands the
 	// presented view's widget back to the stack, and doing that after the
 	// stack has been destroyed is a use-after-free. Destructor bodies run
@@ -3306,6 +3309,10 @@ bool main_window::load_tree(const QString &path) {
 	if (m_readings)
 		keep_or_disown(m_readings->load(m_readings_path),
 		                &m_readings_path, "The reading history");
+	m_channel_rules_path = dir + "/channel-rules.ini";
+	if (m_channel_rules)
+		keep_or_disown(m_channel_rules->load(m_channel_rules_path),
+		                &m_channel_rules_path, "The channel rules");
 
 	m_filters_path = dir + "/filters-ai.txt";
 	// **Only the open failure is caught here, and that is the honest limit.**
@@ -6049,6 +6056,14 @@ void main_window::forget_shell_caches() {
 			saved_or_said(m_readings->save(m_readings_path),
 			               "the cleared readings");
 	}
+	// The rules name channels the person watched, so they go too.
+	if (m_channel_rules) {
+		const int n = m_channel_rules->clear_all();
+		records += n;
+		if (n > 0 && !m_channel_rules_path.isEmpty())
+			saved_or_said(m_channel_rules->save(m_channel_rules_path),
+			               "the cleared channel rules");
+	}
 
 	int allowances = 0;
 	for (const QString &host : m_antiadblock_fixed) {
@@ -7302,7 +7317,23 @@ void main_window::find_media_with_ytdlp() {
 		connect(step, &media_interpretation::finished, this,
 		         [this, host, m, step, ai](const media_reading &r) {
 			step->deleteLater();
-			list_resolved_media(host, m, r, ai);
+			// **The person's own rule for this channel**, over the model's
+			// and the rules' reading, where a correction taught one.
+			media_reading read = r;
+			QString ruled;
+			const QString channel = m.channel.isEmpty() ? m.uploader : m.channel;
+			if (const channel_rule *rule =
+			        m_channel_rules ? m_channel_rules->find(channel) : nullptr) {
+				QString kind = media_reading::name_of(read.what), why;
+				const bool whole = channel_rules::apply(*rule, m.title, m.uploader,
+				                                        &read.artist, &read.title,
+				                                        &kind, &why);
+				media_reading::kind_from(kind, &read.what);
+				ruled = QString("your rule for %1 (%2)").arg(channel, rule->describe());
+				if (!whole)
+					ruled += ", but " + why;
+			}
+			list_resolved_media(host, m, read, ai, ruled);
 		});
 		step->start();
 	}, Qt::SingleShotConnection);
@@ -7342,7 +7373,8 @@ static QString model_id(ai_provider *ai) {
 
 void main_window::list_resolved_media(const QString &host,
                                       const resolved_media &m,
-                                      const media_reading &r, ai_provider *ai) {
+                                      const media_reading &r, ai_provider *ai,
+                                      const QString &ruled) {
 	// Counted against the model, task by task, so the browser can say which
 	// tasks it is too weak for rather than leaving the person to notice.
 	QStringList warnings;
@@ -7387,6 +7419,8 @@ void main_window::list_resolved_media(const QString &host,
 		rec.from_model = r.from_model;
 		rec.rejected   = r.rejected;
 		rec.flagged    = r.flagged;
+		rec.video_title = m.title;
+		rec.rule        = ruled;
 		m_readings->add(rec);
 		if (!m_readings_path.isEmpty())
 			saved_or_said(m_readings->save(m_readings_path), "the reading");
@@ -7517,6 +7551,8 @@ void main_window::list_resolved_media(const QString &host,
 			said += " Not kept: " + r.rejected.join("; ") + ".";
 		if (!r.flagged.isEmpty())
 			said += " Looks wrong: " + r.flagged.join("; ") + ".";
+		if (!ruled.isEmpty())
+			said += " Artist and title by " + ruled + ".";
 		for (const QString &w : warnings)
 			said += " " + w;
 		m_status->showMessage(said, 20000);
@@ -8087,11 +8123,19 @@ void main_window::closeEvent(QCloseEvent *event) {
 }
 
 void main_window::open_readings() {
-	readings_dialog dlg(m_readings, this);
+	readings_dialog dlg(m_readings, m_channel_rules, this);
 	connect(&dlg, &readings_dialog::cleared, this, [this] {
 		if (m_readings && !m_readings_path.isEmpty())
 			saved_or_said(m_readings->save(m_readings_path),
 			               "the cleared readings");
+	});
+	// A correction changes the reading and, where kept, the channel's rule.
+	connect(&dlg, &readings_dialog::corrected, this, [this] {
+		if (m_readings && !m_readings_path.isEmpty())
+			saved_or_said(m_readings->save(m_readings_path), "the correction");
+		if (m_channel_rules && !m_channel_rules_path.isEmpty())
+			saved_or_said(m_channel_rules->save(m_channel_rules_path),
+			               "the channel rule");
 	});
 	dlg.exec();
 }
