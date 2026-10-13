@@ -38550,7 +38550,22 @@ page with 0, 1 and 20 frames eight times each and reads the page's
 navigation timing. It runs once with no lists, and once with the holder's
 cached lists copied into a scratch profile (pass `~/.local/share/Hydra`).
 Compare the two medians: that difference is what the script costs a page.
-**Not yet run to completion** when this was written. Its link set needs
+
+**Measured 2026-10-13**, load average about 5. Medians of seven loads:
+
+| Frames | No lists | Holder's lists |
+|---|---|---|
+| 0 | 18 ms | 72 ms |
+| 1 | 21 ms | 71 ms |
+| 20 | 18 ms | 69 ms |
+
+The lists cost a page about 50 ms, **flat in the number of frames**, so the
+feared per-frame parse is not where the time goes: 20 frames cost the same
+as none, which fits the engine reusing one compile of the same script. The
+50 ms is not separated between the scriptlet script and the cosmetic rules
+and network filtering the same lists bring. A run with only the scriptlets
+would split it. Cutting the script per site would save at most part of
+that 50 ms per top-level load, which makes it a low priority. Its link set needs
 `make -C test objsets` with fmake before it builds. If the cost with 20
 frames is small, the open item can close as measured; if not, the design
 question is how to cut the script per site while still having it in place
