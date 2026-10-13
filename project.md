@@ -37798,7 +37798,13 @@ Cutting it per host is not simple: it has to be in place before the
 page's own scripts, and a frame -- Dailymotion's player -- has a host of
 its own. Not measured: what the parse costs a page with many frames.
 
-**Open, the holder's: `!#if`.** uBlock's lists choose rules by engine and
+**~~Open, the holder's: `!#if`.~~ Decided 2026-10-13 by the holder: keep
+both branches.** The conditions stay unread, and both branches apply. A rule
+meant for another engine fails harmlessly, and this is what makes
+Dailymotion work. What follows is the reasoning as it stood before the
+decision.
+
+uBlock's lists choose rules by engine and
 capability -- `env_chromium`, `cap_html_filtering`, `env_mobile` -- and
 this build treats the conditions as comments, applying both branches. For
 Dailymotion that is what makes it work: the branch for Chromium uses
@@ -38571,7 +38577,7 @@ frames is small, the open item can close as measured; if not, the design
 question is how to cut the script per site while still having it in place
 before the page's own scripts, in frames with hosts of their own.
 
-**Open, the holder's: `!#if`** -- unchanged; see its entry. Not asked yet.
+**`!#if`: decided, both branches kept**; see its entry.
 
 **Open, small**: the live drivers' `HYDRA_TRY_*` modes start real players
 and downloads; each is documented in its file's header. The style-gate
