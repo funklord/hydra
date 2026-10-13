@@ -183,6 +183,20 @@ void readings_dialog::correct() {
 	if (dlg.exec() != QDialog::Accepted)
 		return;
 
+	// **What the model answered and the person changed**, once per reading:
+	// only tasks the model's answer was kept for, since a rules answer is not
+	// the model's to be wrong about.
+	QStringList overruled;
+	auto changed = [&](const QString &task, const QString &before, const QString &after) {
+		if (r.from_model.contains(task) && !r.overruled.contains(task) &&
+		    before.simplified() != after.simplified())
+			overruled << task;
+	};
+	changed("artist", r.artist, artist->text());
+	changed("title", r.title, title->text());
+	changed("kind", r.kind, kind->currentText());
+	r.overruled << overruled;
+
 	r.artist = artist->text().simplified();
 	r.title  = title->text().simplified();
 	r.kind   = kind->currentText();
@@ -191,5 +205,5 @@ void readings_dialog::correct() {
 	if (remember->isChecked() && m_rules)
 		m_rules->set(rule);
 	fill();
-	emit corrected();
+	emit corrected(r.model, overruled);
 }

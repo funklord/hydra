@@ -270,6 +270,14 @@ int main(int argc, char **argv) {
 		check(player_launcher::arguments("mpv", QString(), v, QString())
 		        == QStringList({"--force-window=yes", v}),
 		      "and nothing is added when there is no sound to add");
+		const QStringList with_chapters = { "--force-window=yes", "--audio-file=" + a,
+		                                    "--chapters-file=/tmp/c.txt", v };
+		check(player_launcher::arguments("mpv", QString(), v, a, "/tmp/c.txt")
+		        == with_chapters,
+		      "a set's tracklist goes to mpv as chapters");
+		check(!player_launcher::arguments("vlc", QString(), v, a, "/tmp/c.txt")
+		          .join(' ').contains("chapters"),
+		      "and to no player that cannot read them");
 
 		player_launcher p;
 		media_item pic;

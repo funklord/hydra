@@ -24,8 +24,9 @@ signals:
 	// The person cleared the history; the shell saves the empty log.
 	void cleared();
 	// A reading was corrected, and perhaps a channel's rule kept; the shell
-	// saves both.
-	void corrected();
+	// saves both. `overruled`: the tasks whose kept answer from `model` the
+	// correction showed wrong, newly -- the shell counts them against it.
+	void corrected(const QString &model, const QStringList &overruled);
 
 private:
 	void fill();

@@ -15,6 +15,9 @@
 #include <QLocale>
 #include <QEvent>
 #include <QFileInfo>
+#include <QStandardPaths>
+#include <QFile>
+#include <QDir>
 #include <QLabel>
 #include <QMenu>
 #include <QPushButton>
@@ -402,8 +405,22 @@ void media_dialog::watch(const media_item &item) {
 	// it comes from the same answer and the same CDN.
 	const QUrl via_audio = (m_proxy && !item.audio.isEmpty())
 	                         ? m_proxy->publish(item.audio, ctx, item.audio_chunk_size) : QUrl();
+	// **A set's tracklist, as chapters in the player**, as a saved file has
+	// them. One file, overwritten each time: the player reads it as it starts,
+	// so it is needed for a moment, and one name cannot accumulate.
+	QString chapters_file;
+	if (!item.chapters.isEmpty() &&
+	    player_launcher::takes_chapters(m_players->selected())) {
+		const QString dir =
+		  QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+		QDir().mkpath(dir);
+		QFile f(QDir(dir).filePath("watch-chapters.txt"));
+		if (f.open(QIODevice::WriteOnly | QIODevice::Truncate) &&
+		    f.write(item.chapters.toUtf8()) >= 0 && f.flush())
+			chapters_file = f.fileName();
+	}
 	QString error;
-	if (!m_players->play(item, &error, via, via_audio)) {
+	if (!m_players->play(item, &error, via, via_audio, chapters_file)) {
 		m_status->setText("<b>" + error.toHtmlEscaped() + "</b>");
 		return;
 	}

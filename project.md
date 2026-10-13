@@ -38493,3 +38493,20 @@ proven one.
   (`k_backlog`) wait unsent, and reply buffers are capped at 1 MB. With
   that check removed, `test_proxy_chunks` sees all 40 ranges fetched while
   the player reads nothing, instead of 10.
+
+## Corrections count against the model; Watch gives mpv the chapters
+
+**A correction is counted against the model**, the open item above. The
+tally keeps answered and rejected counts per task, so a kept answer later
+corrected becomes a rejected one (`model_tally::overrule`) instead of a
+second answer. Only tasks the model answered and the person changed count,
+and only once per reading (`reading_record::overruled`). An unchanged kind
+is not counted, nor anything the rules answered. This is the one way the
+tally can see an answer that passed its checks and was still wrong.
+
+**Watch gives mpv a set's tracklist as chapters**, as a saved file has
+them: `--chapters-file`, which mpv 0.40 reads in ffmpeg's metadata format
+directly (measured: three chapters, titles intact). The file is one name
+in hydra's cache directory, overwritten on each Watch. The player reads it
+as it starts, so one name cannot accumulate. No other player is given
+it.

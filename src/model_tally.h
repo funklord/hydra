@@ -19,16 +19,21 @@ class QSettings;
 // notice. The counts are per model, since swapping the model is the remedy
 // the signal points at, and they survive restarts in the settings.
 //
-// What this cannot see is an answer that passes its check and is still
-// wrong -- a real name from the metadata, the wrong one. The corpus scoring
-// in `test/media_corpus.h` measures that, against labels, for a model
-// somebody runs it on.
+// What the checks cannot see is an answer that passes them and is still
+// wrong -- a real name from the metadata, the wrong one. A person's
+// correction in Recent Readings sees it, and `overrule` counts it; the corpus
+// scoring in `test/media_corpus.h` measures the rest, against labels, for a
+// model somebody runs it on.
 class model_tally {
 public:
 	static constexpr int    k_min_answers = 5;
 	static constexpr double k_weak_share  = 0.3;
 
 	void record(const QString &model, const QString &task, bool kept);
+	// An answer counted as kept that the person corrected: one kept becomes
+	// one rejected, so the correction is not counted as a second answer.
+	// Nothing where no kept answer was counted.
+	void overrule(const QString &model, const QString &task);
 
 	struct counts {
 		int answered = 0;

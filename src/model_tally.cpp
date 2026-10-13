@@ -13,6 +13,14 @@ void model_tally::record(const QString &model, const QString &task, bool kept) {
 		++c.rejected;
 }
 
+void model_tally::overrule(const QString &model, const QString &task) {
+	if (!m_by_model.contains(model) || !m_by_model[model].contains(task))
+		return;
+	counts &c = m_by_model[model][task];
+	if (c.answered > c.rejected)
+		++c.rejected;
+}
+
 model_tally::counts model_tally::of(const QString &model,
                                    const QString &task) const {
 	return m_by_model.value(model).value(task);

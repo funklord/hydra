@@ -173,7 +173,8 @@ bool player_launcher::takes_audio_beside(const QString &id) {
 
 QStringList player_launcher::arguments(const QString &id, const QString &custom,
                                         const QString &target,
-                                        const QString &audio) {
+                                        const QString &audio,
+                                        const QString &chapters_file) {
 	QStringList args;
 	if (id == QLatin1String(custom_id())) {
 		QStringList parts = custom.split(QRegularExpression("\\s+"),
@@ -196,6 +197,9 @@ QStringList player_launcher::arguments(const QString &id, const QString &custom,
 		args << "--force-window=yes";
 		if (pair)
 			args << "--audio-file=" + audio;
+		// Read as ffmpeg's metadata format, measured with mpv 0.40.
+		if (!chapters_file.isEmpty())
+			args << "--chapters-file=" + chapters_file;
 		args << target;
 	} else if (id == "vlc") {
 		if (pair)
@@ -215,7 +219,8 @@ QStringList player_launcher::arguments(const QString &id, const QString &custom,
 }
 
 bool player_launcher::play(const media_item &item, QString *error,
-                            const QUrl &via, const QUrl &via_audio) const {
+                            const QUrl &via, const QUrl &via_audio,
+                            const QString &chapters_file) const {
 	const player_entry *e = entry(m_selected);
 	if (!e || !e->installed) {
 		if (error)
@@ -234,7 +239,8 @@ bool player_launcher::play(const media_item &item, QString *error,
 	const QString audio = item.audio.isEmpty() ? QString()
 	                    : via_audio.isValid() ? via_audio.toString()
 	                                          : item.audio.toString();
-	const QStringList args = arguments(e->id, m_custom, target, audio);
+	const QStringList args = arguments(e->id, m_custom, target, audio,
+	                                   chapters_file);
 
 	// Detached: a player outliving the browser is normal.
 	const bool ok = QProcess::startDetached(e->path, args);

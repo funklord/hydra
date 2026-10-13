@@ -130,6 +130,7 @@ OBJS_test_address = \
 	$(BUILD_DIR)/app/scheme_rules.o
 
 OBJS_test_annoyance = \
+	$(BUILD_DIR)/app/model_tally.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/channel_rules.o \

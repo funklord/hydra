@@ -38,6 +38,9 @@ struct reading_record {
 	// What decided the artist and title where a channel's rule did, in words;
 	// "corrected" where the person corrected this reading itself.
 	QString     rule;
+	// The model's kept answers the person corrected, already counted against
+	// it: a reading corrected twice counts once.
+	QStringList overruled;
 };
 
 // Newest last, at most `k_max` -- a record of what was read, not an archive

@@ -8130,7 +8130,17 @@ void main_window::open_readings() {
 			               "the cleared readings");
 	});
 	// A correction changes the reading and, where kept, the channel's rule.
-	connect(&dlg, &readings_dialog::corrected, this, [this] {
+	connect(&dlg, &readings_dialog::corrected, this,
+	         [this](const QString &model, const QStringList &overruled) {
+		// The correction is evidence the checks could not see: a kept answer
+		// that was wrong. Counted where the reading was the model's.
+		if (!overruled.isEmpty() && model != QLatin1String("rules")) {
+			model_tally tally;
+			settings_store::load_tally(&tally);
+			for (const QString &task : overruled)
+				tally.overrule(model, task);
+			settings_store::save_tally(tally);
+		}
 		if (m_readings && !m_readings_path.isEmpty())
 			saved_or_said(m_readings->save(m_readings_path), "the correction");
 		if (m_channel_rules && !m_channel_rules_path.isEmpty())

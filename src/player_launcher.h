@@ -91,14 +91,20 @@ public:
 	// always; cookies only when a learned extractor named them, because
 	// nothing observes the engine's jar -- see `media_dialog::watch`.
 	// `via_audio` is `item.audio` as the player should fetch it, the same way.
+	// `chapters_file`: a tracklist in ffmpeg's metadata format, for a player
+	// that reads one (mpv); empty for none.
 	bool play(const media_item &item, QString *error,
-	           const QUrl &via = QUrl(), const QUrl &via_audio = QUrl()) const;
+	           const QUrl &via = QUrl(), const QUrl &via_audio = QUrl(),
+	           const QString &chapters_file = QString()) const;
 
 	// The arguments a player is started with, apart from the program: the
 	// stream, and the sound beside it where the player can take a second
 	// input. `custom` is the custom command line, used for that player only.
 	static QStringList arguments(const QString &id, const QString &custom,
-	                              const QString &target, const QString &audio);
+	                              const QString &target, const QString &audio,
+	                              const QString &chapters_file = QString());
+	// Whether that player can be given a set's tracklist as chapters.
+	static bool takes_chapters(const QString &id) { return id == "mpv"; }
 	// Whether that player can play `audio` beside the picture.
 	static bool takes_audio_beside(const QString &id);
 

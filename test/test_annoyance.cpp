@@ -6,6 +6,7 @@
 #include "reading_log.h"
 #include "readings_dialog.h"
 #include "channel_rules.h"
+#include "model_tally.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -431,6 +432,8 @@ int main(int argc, char **argv) {
 		rec.artist      = "SomeUploads";
 		rec.title       = "Daft Punk - Around the World";
 		rec.video_title = vt;
+		rec.model       = "Ollama test";
+		rec.from_model  = { "kind", "artist", "title" };
 		log.add(rec);
 		channel_rules kept;
 		readings_dialog dlg(&log, &kept);
@@ -454,7 +457,14 @@ int main(int argc, char **argv) {
 			}
 		});
 		bool saved = false;
-		QObject::connect(&dlg, &readings_dialog::corrected, [&] { saved = true; });
+		QString counted_model;
+		QStringList counted;
+		QObject::connect(&dlg, &readings_dialog::corrected,
+		                 [&](const QString &model, const QStringList &overruled) {
+			saved         = true;
+			counted_model = model;
+			counted       = overruled;
+		});
 		button->click();
 		check(!ticked_before, QString("nothing is ticked before an edit (%1)").arg(before_edit));
 		check(offered.contains("Remember for SomeUploads") && offered.contains("before \" - \""),
@@ -468,6 +478,33 @@ int main(int argc, char **argv) {
 		      "and the channel's rule is kept");
 		check(list->topLevelItem(0)->text(4).contains("your correction"),
 		      "the row shows it was corrected");
+		check(counted_model == "Ollama test" &&
+		      counted == QStringList({ "artist", "title" }),
+		      QString("the model's changed answers are counted against it, not "
+		               "its unchanged kind (%1)").arg(counted.join(", ")));
+
+		// Corrected again: those answers were already counted.
+		QTimer::singleShot(0, [&] {
+			for (QWidget *t : QApplication::topLevelWidgets())
+				if (t->objectName() == "correct_dialog" && t->isVisible()) {
+					t->findChild<QLineEdit *>("correct_artist")->setText("Daft Punk!");
+					t->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->click();
+				}
+		});
+		list->setCurrentItem(list->topLevelItem(0));
+		button->click();
+		check(counted.isEmpty(), "and a second correction does not count them again");
+
+		model_tally tally;
+		for (int i = 0; i < 4; ++i)
+			tally.record("m", "artist", true);
+		tally.overrule("m", "artist");
+		check(tally.of("m", "artist").answered == 4 &&
+		      tally.of("m", "artist").rejected == 1,
+		      "the tally turns a kept answer into a rejected one, adding none");
+		tally.overrule("m", "nothing");
+		check(tally.of("m", "nothing").answered == 0,
+		      "and overrules nothing it never counted");
 	}
 
 	section("a log that will not parse is left alone");

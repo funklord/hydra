@@ -67,6 +67,7 @@ bool reading_log::load(const QString &path) {
 		r.flagged    = f.value("flagged").toStringList();
 		r.video_title = f.value("video_title").toString();
 		r.rule        = f.value("rule").toString();
+		r.overruled   = f.value("overruled").toStringList();
 		if (r.page.isEmpty() && r.id.isEmpty())
 			continue;   // a reading of nothing is not a reading
 		loaded << r;
@@ -111,6 +112,8 @@ bool reading_log::save(const QString &path) const {
 		f.setValue("video_title", r.video_title);
 		if (!r.rule.isEmpty())
 			f.setValue("rule", r.rule);
+		if (!r.overruled.isEmpty())
+			f.setValue("overruled", r.overruled);
 	}
 	f.endArray();
 	f.sync();
