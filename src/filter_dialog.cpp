@@ -191,16 +191,23 @@ void filter_dialog::build_ui() {
 
 void filter_dialog::on_send() {
 	m_send->setEnabled(false);
+	m_waiting = true;
 	say(QString("Asking %1…").arg(m_provider->name()));
 	m_provider->send(QString::fromLatin1(k_system_prompt), m_payload->toPlainText());
 }
 
 void filter_dialog::on_failed(const QString &error) {
+	if (!m_waiting)
+		return;
+	m_waiting = false;
 	m_send->setEnabled(true);
 	say("<b>Failed:</b> " + error.toHtmlEscaped());
 }
 
 void filter_dialog::on_reply(const QString &text) {
+	if (!m_waiting)
+		return;   // another tool's answer, not this dialog's to parse as rules
+	m_waiting = false;
 	m_send->setEnabled(true);
 
 	QList<filter_rule> proposed;

@@ -253,6 +253,12 @@ private slots:
 	// The one place that resolves which backend to use (sec 9.1). Returns null
 	// when the user's choice cannot be satisfied, with `why` set.
 	ai_provider *choose_ai(QString *why);
+	// **A provider of its own** for work that runs beside other AI work, the
+	// same backend and settings as `chosen`, owned by `owner`. The two shared
+	// providers carry one request at a time and a send aborts the one in
+	// flight, so an investigation and a media reading together cancelled each
+	// other, and each one's reply reached the other's listener.
+	ai_provider *own_ai(ai_provider *chosen, QObject *owner);
 	void go_back();
 	void go_forward();
 	void reload_page();

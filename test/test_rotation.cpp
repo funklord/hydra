@@ -3346,6 +3346,24 @@ int main(int argc, char **argv) {
 		          .arg(rules ? rules->topLevelItemCount() : -1));
 	}
 
+	// **Another tool's answer is not this dialog's.** The provider is shared
+	// and its `finished` carries no request identity, so a reply to a
+	// question this dialog never asked -- an investigation's, a reading's --
+	// reached it and was parsed as rules.
+	section("the filter dialog ignores a reply it did not ask for");
+	{
+		stub_ai prov;
+		filter_signals sig;
+		filter_list list;
+		filter_dialog open(&sig, &list, &prov, "site.example");
+		emit prov.finished("||ads.example.com^");
+		spin(50);
+		auto *rules = open.findChild<QTreeWidget *>();
+		check(rules && rules->topLevelItemCount() == 0,
+		      QString("nothing is proposed from it (%1 row(s))")
+		          .arg(rules ? rules->topLevelItemCount() : -1));
+	}
+
 	// **A rule accepted for a site whose ads are allowed does nothing.** The
 	// interceptor skips the whole imported list for such a site, and the
 	// cosmetic half was taught the same switch earlier today -- so everything

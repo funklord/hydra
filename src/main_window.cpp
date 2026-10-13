@@ -2592,7 +2592,12 @@ void main_window::start_investigation(annoyed_dialog *dlg,
 	delete dlg->findChild<tab_investigation *>();
 
 	auto *hands = new tab_investigation(view, m_filter, ev.host, dlg);
-	auto *inv   = new investigation(ai, hands, ev, dlg);
+	// Its own provider, gone with the run: an investigation goes on for
+	// minutes, beside whatever else is asking the model.
+	ai_provider *own = own_ai(ai, dlg);
+	auto *inv   = new investigation(own, hands, ev, dlg);
+	if (own != ai)
+		own->setParent(inv);
 	inv->set_load(settings_store::ai_load());
 	m_investigation = inv;
 	m_investigation_window = dlg;
@@ -6935,6 +6940,28 @@ void main_window::start_download(const QUrl &url) {
 	open_downloads();
 }
 
+ai_provider *main_window::own_ai(ai_provider *chosen, QObject *owner) {
+	if (!chosen)
+		return nullptr;
+	ai_provider *copy = nullptr;
+	if (chosen == m_local_ai) {
+		auto *local = new ollama_provider(owner);
+		settings_store::load_into(nullptr, nullptr, nullptr, local, nullptr);
+		// Probed itself, since readiness is per instance; chosen was just
+		// found answering, so this is the same quick question again.
+		local->probe_now();
+		copy = local;
+	} else if (chosen == m_external_ai) {
+		auto *external = new claude_provider(owner);
+		settings_store::load_into(nullptr, nullptr, nullptr, nullptr, external);
+		copy = external;
+	} else {
+		return chosen;   // a backend this does not know how to copy
+	}
+	copy->set_load(settings_store::ai_load());
+	return copy;
+}
+
 ai_provider *main_window::choose_ai(QString *why) {
 	if (!m_local_ai) {
 		m_local_ai    = new ollama_provider(this);
@@ -7308,9 +7335,12 @@ void main_window::find_media_with_ytdlp() {
 		// yt-dlp's whole answer, a model's reading of it checked against
 		// that evidence, the rules where there is no model or a part fails.
 		QString no_ai;
-		ai_provider *ai = choose_ai(&no_ai);
+		// A provider of its own, beside any investigation running.
+		ai_provider *ai = own_ai(choose_ai(&no_ai), this);
 		auto *step = new media_interpretation(ai, media_evidence::from_json(m.json),
 		                                      this);
+		if (ai && ai != m_local_ai && ai != m_external_ai)
+			connect(step, &QObject::destroyed, ai, &QObject::deleteLater);
 		m_status->showMessage(ai ? QString("Reading what it is with %1…")
 		                             .arg(ai->name())
 		                         : QStringLiteral("Reading what it is…"));

@@ -56,6 +56,9 @@ private slots:
 	void on_accept();
 
 private:
+	// Waiting for this dialog's own request: a reply or failure that arrives
+	// otherwise is another tool's, on a provider that is shared.
+	bool m_waiting = false;
 	void build_ui();
 	void show_proposals(const QList<filter_rule> &rules);
 

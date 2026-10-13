@@ -37910,10 +37910,18 @@ Removing the destructor's cleanup reds the first.
   now answers from what the probe sees, and presses I Can't for a point
   question. What this does not show is how the model does on a real site.
   That is still the holder's first use.
-- **The provider is shared.** `filter_dialog` connects to the same
-  provider's `finished`, so with both open at once a reply reaches both.
-  The investigation ignores replies it is not waiting for; the filter
-  dialog does not check.
+- **~~The provider is shared.~~ Fixed 2026-10-13, and it was worse than
+  this said.** A provider carries one request at a time, and `send`
+  aborts the one in flight. So any two AI tools running together
+  cancelled each other, and each one's reply reached every listener. The
+  filter dialog parsed an investigation's answer as rules. The work that
+  runs beside other work now gets a provider of its own, made by
+  `main_window::own_ai` from the same settings and owned by the work: the
+  Annoyed window's investigation and the media reading. The modal tools
+  (reorganize, filter evolution, extractors) cannot run together, so
+  they keep sharing. The filter dialog also takes a reply only while it is
+  waiting for one. With that guard removed, `test_rotation` sees a row
+  proposed from a reply the dialog never asked for.
 - **"Show me" needs the tab in front**, since the picker works on the
   current view; the window says so rather than switching.
 - **Network trials are per site**, and one investigation runs at a time.
