@@ -38459,3 +38459,37 @@ recorded "your rule for Groovix (…)".
 exactly the evidence the tally exists for, but the reading's answers were
 already counted as kept when it ran, so counting the correction needs the
 earlier entry undone rather than a second one added.
+
+## Watch through the proxy: the sound was throttled, and nothing held upstream back
+
+**The unexplained Watch failure has a likely cause now.** One of four Watch
+runs failed to open, and was recorded as unexplained. Measured 2026-10-13,
+with an open-ended request through the proxy for 20 s, as mpv asks:
+
+| Stream | Before | After |
+|---|---|---|
+| Sound | 639 KB in 20 s (32 KB/s) | all 60.5 MB in 1.9 s |
+| Picture | 44.7 MB in 20 s | 450 MB in 20 s |
+
+YouTube throttles the sound stream when it is asked for open-ended. 32 KB/s
+is about twice what opus playback needs, so it plays with no margin, and a
+seek or a slow moment starves it. That fits the failure, but the failure
+itself was not reproduced, so this is the likely cause rather than a
+proven one.
+
+- **The proxy now fetches a stream a range at a time** where yt-dlp gives
+  a chunk size (`publish(..., chunk)`; Watch passes it for the picture and
+  for its sound). The player gets one answer with the whole size stated up
+  front, a 206 with `Content-Range` for a ranged ask and a 200 for none.
+  A suffix or multi-range ask goes the single-request way. Each range
+  follows its own redirect, so cookies are asked for each hop, as in
+  `fetch_upstream`. A range that brings nothing ends the response instead
+  of being asked for ever.
+- **And only as fast as the player takes it.** The proxy wrote whatever
+  upstream sent straight into the player's socket. A player stops reading
+  once its cache is full, so the rest queued in memory, with no bound: a
+  4.2 GB stream at 2.2 MB/s would have filled memory within the half
+  hour. Both paths now stop pulling from upstream while 8 MB
+  (`k_backlog`) wait unsent, and reply buffers are capped at 1 MB. With
+  that check removed, `test_proxy_chunks` sees all 40 ranges fetched while
+  the player reads nothing, instead of 10.

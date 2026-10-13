@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build 77bc0f22, mtime 2026-10-12 23:17)
+#     /home/claude/src/fmake/fmake  (build 77bc0f22, mtime 2026-10-13 12:28)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -53,6 +53,7 @@ OBJSETS_SOURCES = \
 	test/test_picker.cpp \
 	test/test_probe.cpp \
 	test/test_probe_ui.cpp \
+	test/test_proxy_chunks.cpp \
 	test/test_replay.cpp \
 	test/test_rotation.cpp \
 	test/test_scriptlets.cpp \
@@ -417,6 +418,10 @@ OBJS_test_probe_ui = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o
+
+OBJS_test_proxy_chunks = \
+	$(BUILD_DIR)/app/local_proxy.o \
+	$(BUILD_DIR)/moc/moc_local_proxy.o
 
 OBJS_test_replay = \
 	$(BUILD_DIR)/app/site_extractor.o \
@@ -4436,6 +4441,7 @@ OBJS_try_media_model = \
 OBJS_try_media_reading = \
 	$(BUILD_DIR)/app/main_window.o \
 	$(BUILD_DIR)/app/reading_log.o \
+	$(BUILD_DIR)/app/channel_rules.o \
 	$(BUILD_DIR)/app/policy_engine.o \
 	$(BUILD_DIR)/app/request_filter.o \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
@@ -4472,7 +4478,6 @@ OBJS_try_media_reading = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
-	$(BUILD_DIR)/app/channel_rules.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_investigation.o \
 	$(BUILD_DIR)/app/investigation.o \

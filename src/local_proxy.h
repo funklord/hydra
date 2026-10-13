@@ -7,6 +7,7 @@
 #include <QUrl>
 
 #include <functional>
+#include <memory>
 
 class QTcpServer;
 class QTcpSocket;
@@ -76,6 +77,8 @@ struct stream_context {
 // it for response inspection is a separate problem, because intercepting HTTPS
 // means terminating TLS with a generated certificate the browser must trust,
 // which the design does not currently address.
+class QNetworkRequest;
+
 class local_proxy : public QObject {
 	Q_OBJECT
 public:
@@ -90,7 +93,12 @@ public:
 	quint16 port() const;
 
 	// Publish `upstream` and get back the localhost URL to hand a player.
-	QUrl publish(const QUrl &upstream, const stream_context &ctx);
+	// `chunk`: fetch upstream a range of this many bytes at a time, streamed
+	// to the player as one response; 0 for one request. yt-dlp names it per
+	// stream, because YouTube throttles an open-ended request -- measured
+	// through this proxy 2026-10-13, the sound at 32 KB/s, which plays with
+	// no margin for a seek, while the picture came at 2.2 MB/s.
+	QUrl publish(const QUrl &upstream, const stream_context &ctx, qint64 chunk = 0);
 
 	// How many bytes at the start of a published file are genuinely readable.
 	// Returning -1 means "trust the file's size".
@@ -144,6 +152,13 @@ public:
 signals:
 	void failed(const QString &message);
 
+public:
+	// **What waits unsent to the player before upstream is no longer read.**
+	// A player stops reading once its own cache is full, and everything
+	// fetched meanwhile queued in this process: a 4.2 GB stream at 2.2 MB/s
+	// would have filled memory within the half hour.
+	static constexpr qint64 k_backlog = 8 * 1024 * 1024;
+
 private:
 	struct entry {
 		QUrl           upstream;
@@ -158,7 +173,9 @@ private:
 		// player posts several times a second, and the same sentence repeated
 		// is a status bar nobody can read.
 		bool     write_failed = false;
+		qint64   chunk = 0;            // range size upstream, 0 for one request
 	};
+	struct chunked_fetch;
 
 	void on_connection();
 	void serve(QTcpSocket *client, const QByteArray &request_head,
@@ -186,6 +203,10 @@ private:
 	// actually about to fetch.
 	void fetch_upstream(QTcpSocket *client, const entry &e, const QUrl &url,
 	                     const QByteArray &head, int hops);
+	// The request for `url` with the page's context, asked per hop.
+	QNetworkRequest request_for(const entry &e, const QUrl &url) const;
+	void fetch_chunked(QTcpSocket *client, const entry &e, const QByteArray &head);
+	void next_range(QTcpSocket *client, std::shared_ptr<chunked_fetch> st);
 
 	QTcpServer            *m_server = nullptr;
 	QNetworkAccessManager *m_net    = nullptr;

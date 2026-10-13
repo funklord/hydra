@@ -96,7 +96,8 @@ quint16 local_proxy::port() const {
 	return m_server ? m_server->serverPort() : 0;
 }
 
-QUrl local_proxy::publish(const QUrl &upstream, const stream_context &ctx) {
+QUrl local_proxy::publish(const QUrl &upstream, const stream_context &ctx,
+                          qint64 chunk) {
 	if (!listening())
 		return {};
 	// 128 bits of unguessable token: the port is easy to find, the path is not.
@@ -111,6 +112,7 @@ QUrl local_proxy::publish(const QUrl &upstream, const stream_context &ctx) {
 	entry e;
 	e.upstream = upstream;
 	e.ctx      = ctx;
+	e.chunk    = chunk;
 	// **Not resolved here, and that is a correction.** This did cache the
 	// header at publish time, for the upstream -- which is right until the
 	// fetch redirects, when the cached value is a cookie for the host before
@@ -529,7 +531,242 @@ void local_proxy::serve(QTcpSocket *client, const QByteArray &head,
 		return;
 	}
 
+	if (e.chunk > 0 && method == "GET") {
+		fetch_chunked(client, e, head);
+		return;
+	}
 	fetch_upstream(client, e, e.upstream, head, 0);
+}
+
+namespace {
+
+// **Moves what upstream has sent to the player, while the player keeps up.**
+// Stops at `backlog` unsent; the reply's own buffer is capped too, so Qt
+// stops reading the network until this drains it, and the player's reading
+// is what pulls the stream. Returns the bytes moved.
+qint64 drain(QNetworkReply *reply, QTcpSocket *client, qint64 backlog) {
+	qint64 moved = 0;
+	while (client->state() == QAbstractSocket::ConnectedState &&
+	       client->bytesToWrite() < backlog && reply->bytesAvailable() > 0) {
+		const QByteArray part = reply->read(256 * 1024);
+		if (part.isEmpty())
+			break;
+		client->write(part);
+		moved += part.size();
+	}
+	return moved;
+}
+
+constexpr qint64 k_reply_buffer = 1024 * 1024;
+
+}  // namespace
+
+struct local_proxy::chunked_fetch {
+	entry  e;
+	QUrl   url;              // where the current range is asked: upstream, or a hop
+	qint64 pos   = 0;        // the next byte to ask for
+	qint64 last  = -1;       // the last byte the player asked for; -1 to the end
+	qint64 whole = -1;       // the stream's size, from the first Content-Range
+	bool   ranged      = false;  // the player sent a Range
+	bool   headed      = false;  // the status line has gone to the player
+	bool   passthrough = false;  // upstream ignored the Range: relayed as one
+	int    hops        = 0;
+
+	// The last byte this response covers: what the player asked for, within
+	// the stream; -1 while neither is known.
+	qint64 end() const {
+		if (last >= 0 && whole > 0)
+			return qMin(last, whole - 1);
+		return whole > 0 ? whole - 1 : last;
+	}
+};
+
+QNetworkRequest local_proxy::request_for(const entry &e, const QUrl &url) const {
+	QNetworkRequest req(url);
+	if (!e.ctx.referer.isEmpty())
+		req.setRawHeader("Referer", e.ctx.referer.toUtf8());
+	if (!e.ctx.user_agent.isEmpty())
+		req.setRawHeader("User-Agent", e.ctx.user_agent.toUtf8());
+	const QString ck = (e.ctx.cookies.isEmpty() && e.ctx.cookies_for)
+	                     ? e.ctx.cookies_for(url) : e.ctx.cookies;
+	if (!ck.isEmpty())
+		req.setRawHeader("Cookie", ck.toUtf8());
+	for (auto it = e.ctx.extra.cbegin(); it != e.ctx.extra.cend(); ++it) {
+		if (it.key().isEmpty() || it.value().isEmpty())
+			continue;
+		req.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
+	}
+	// Each hop is followed here, so the cookie is asked for the host it goes
+	// to -- the reason `fetch_upstream` follows them itself.
+	req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+	                 QNetworkRequest::ManualRedirectPolicy);
+	return req;
+}
+
+void local_proxy::fetch_chunked(QTcpSocket *client, const entry &e,
+                                const QByteArray &head) {
+	auto st = std::make_shared<chunked_fetch>();
+	st->e   = e;
+	st->url = e.upstream;
+	// "bytes=N-" and "bytes=N-M"; a suffix range ("bytes=-N") needs the size
+	// first, and goes the single-request way.
+	const QByteArray range = header_of(head, "Range");
+	if (!range.isEmpty()) {
+		const QByteArray spec = range.mid(range.indexOf('=') + 1).trimmed();
+		const int dash = spec.indexOf('-');
+		bool ok = dash > 0;
+		const qint64 from = ok ? spec.left(dash).toLongLong(&ok) : 0;
+		if (!ok || spec.contains(',')) {
+			fetch_upstream(client, e, e.upstream, head, 0);
+			return;
+		}
+		st->ranged = true;
+		st->pos    = from;
+		bool has_end = false;
+		const qint64 to = spec.mid(dash + 1).toLongLong(&has_end);
+		st->last = has_end ? to : -1;
+	}
+	next_range(client, st);
+}
+
+void local_proxy::next_range(QTcpSocket *client, std::shared_ptr<chunked_fetch> st) {
+	static constexpr int k_max_hops = 5;
+	if (client->state() != QAbstractSocket::ConnectedState)
+		return;
+	qint64 to = st->pos + st->e.chunk - 1;
+	if (st->end() >= 0)
+		to = qMin(to, st->end());
+
+	QNetworkRequest req = request_for(st->e, st->url);
+	req.setRawHeader("Range", "bytes=" + QByteArray::number(st->pos) + '-' +
+	                          QByteArray::number(to));
+	QNetworkReply *reply = m_net->get(req);
+	reply->setReadBufferSize(k_reply_buffer);
+	auto moved      = std::make_shared<qint64>(0);
+	auto redirected = std::make_shared<bool>(false);
+
+	connect(reply, &QNetworkReply::metaDataChanged, client,
+	         [this, reply, client, st, redirected] {
+		if (*redirected || client->state() != QAbstractSocket::ConnectedState)
+			return;
+		const int code =
+		  reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+		if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
+			*redirected = true;
+			const QByteArray where = reply->rawHeader("Location");
+			const QUrl hop = where.isEmpty()
+			                   ? QUrl() : st->url.resolved(QUrl::fromEncoded(where.trimmed()));
+			reply->abort();
+			if (!hop.isValid() || hop.scheme().isEmpty() || ++st->hops > k_max_hops) {
+				if (!st->headed)
+					send_simple(client, 502, "upstream redirected unusably");
+				else
+					client->disconnectFromHost();
+				return;
+			}
+			// The same range at the hop. Later ranges ask the original
+			// address again: a signed stream's hop may not outlive the range.
+			const QUrl original = st->url;
+			st->url = hop;
+			next_range(client, st);
+			st->url = original;
+			return;
+		}
+		st->hops = 0;   // a range answered: the next one may hop as far again
+		if (st->headed)
+			return;
+		if (code == 206) {
+			const QByteArray cr = reply->rawHeader("Content-Range");
+			const int slash = cr.lastIndexOf('/');
+			bool ok = false;
+			const qint64 whole = slash >= 0 ? cr.mid(slash + 1).trimmed().toLongLong(&ok)
+			                                : -1;
+			if (ok && whole > 0)
+				st->whole = whole;
+		} else if (code == 200) {
+			st->passthrough = true;   // the whole body, from the start
+		} else {
+			*redirected = true;       // nothing of this reply goes to the player
+			reply->abort();
+			send_simple(client, 502, "upstream answered " + QByteArray::number(code));
+			return;
+		}
+		st->headed = true;
+		const bool partial = st->ranged && !st->passthrough;
+		client->write(status_line(partial ? 206 : 200));
+		const QByteArray type = reply->rawHeader("Content-Type");
+		if (!type.isEmpty())
+			client->write("Content-Type: " + type + "\r\n");
+		if (st->passthrough) {
+			const QByteArray len = reply->rawHeader("Content-Length");
+			if (!len.isEmpty())
+				client->write("Content-Length: " + len + "\r\n");
+		} else if (st->end() >= st->pos) {
+			// The whole answer, said up front: the player sees one response
+			// however many ranges it is fetched in.
+			client->write("Content-Length: " +
+			              QByteArray::number(st->end() - st->pos + 1) + "\r\n");
+			if (partial)
+				client->write("Content-Range: bytes " + QByteArray::number(st->pos) +
+				              '-' + QByteArray::number(st->end()) + '/' +
+				              (st->whole > 0 ? QByteArray::number(st->whole)
+				                             : QByteArray("*")) + "\r\n");
+		}
+		client->write("Accept-Ranges: bytes\r\nConnection: close\r\n\r\n");
+	});
+
+	connect(reply, &QNetworkReply::readyRead, client, [reply, client, moved, redirected] {
+		if (!*redirected)
+			*moved += drain(reply, client, k_backlog);
+	});
+	connect(client, &QTcpSocket::bytesWritten, reply, [reply, client, moved, redirected] {
+		if (!*redirected)
+			*moved += drain(reply, client, k_backlog);
+	});
+
+	connect(reply, &QNetworkReply::finished, client,
+	         [this, reply, client, st, moved, redirected] {
+		reply->deleteLater();
+		if (*redirected || client->state() != QAbstractSocket::ConnectedState)
+			return;
+		// What remains is at most the reply's capped buffer.
+		const QByteArray rest = reply->readAll();
+		client->write(rest);
+		*moved += rest.size();
+		if (reply->error() != QNetworkReply::NoError) {
+			if (!st->headed)
+				send_simple(client, 502, reply->errorString().toUtf8());
+			else
+				client->disconnectFromHost();
+			return;
+		}
+		st->pos += *moved;
+		// Done; or a range that brought nothing, which would be asked for
+		// ever; or a size never learned, where there is no next range.
+		if (st->passthrough || *moved == 0 || st->end() < 0 || st->pos > st->end()) {
+			client->disconnectFromHost();
+			return;
+		}
+		// The next range once the player has taken most of this one.
+		if (client->bytesToWrite() < k_backlog) {
+			next_range(client, st);
+			return;
+		}
+		auto wait = std::make_shared<QMetaObject::Connection>();
+		*wait = connect(client, &QTcpSocket::bytesWritten, this,
+		                 [this, client, st, wait] {
+			if (client->bytesToWrite() >= k_backlog)
+				return;
+			disconnect(*wait);
+			next_range(client, st);
+		});
+	});
+
+	// If the player goes away, stop pulling from upstream.
+	connect(client, &QTcpSocket::disconnected, reply, [reply] {
+		if (reply->isRunning())
+			reply->abort();
+	});
 }
 
 void local_proxy::fetch_upstream(QTcpSocket *client, const entry &e,
@@ -615,10 +852,18 @@ void local_proxy::fetch_upstream(QTcpSocket *client, const entry &e,
 	});
 
 	// Stream rather than buffer: a video is not something to hold in memory.
+	// **And only as fast as the player takes it** -- see `k_backlog`; this
+	// wrote everything as it arrived, so a player whose cache was full left
+	// the rest of the stream queued here.
+	reply->setReadBufferSize(k_reply_buffer);
 	connect(reply, &QNetworkReply::readyRead, client,
 	         [reply, client, redirected] {
-		if (!*redirected && client->state() == QAbstractSocket::ConnectedState)
-			client->write(reply->readAll());
+		if (!*redirected)
+			drain(reply, client, k_backlog);
+	});
+	connect(client, &QTcpSocket::bytesWritten, reply, [reply, client, redirected] {
+		if (!*redirected)
+			drain(reply, client, k_backlog);
 	});
 
 	connect(reply, &QNetworkReply::finished, client,
