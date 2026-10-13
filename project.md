@@ -37898,9 +37898,18 @@ Removing the destructor's cleanup reds the first.
 
 **Open:**
 
-- **Not yet run against a real model.** The protocol and the gates are
-  proven with a script; whether llama3 or Claude follows it well, and how
-  good its rules are, is the holder's first use.
+- **~~Not yet run against a real model.~~ Run 2026-10-13** with
+  `qwen2.5-coder:14b` on the driver's one-ad page (`try_investigate`,
+  `HYDRA_REAL_MODEL=<name>`). It solved the page in 9 to 14 s, in two
+  ways: look, try `127.0.0.1##div#ad-slot`, solved; or try, ask "does the
+  ad still appear?", solved. The rule passed the gates, Keep wrote it to
+  `filters-ai.txt`, and the page stayed clean. **The first run went wrong
+  because of the driver**: it answered yes to everything, so the model
+  was told an ad it had hidden was still visible, kept trying, and then
+  asked to be shown the banner, which the driver could not do. The driver
+  now answers from what the probe sees, and presses I Can't for a point
+  question. What this does not show is how the model does on a real site.
+  That is still the holder's first use.
 - **The provider is shared.** `filter_dialog` connects to the same
   provider's `finished`, so with both open at once a reply reaches both.
   The investigation ignores replies it is not waiting for; the filter

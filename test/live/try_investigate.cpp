@@ -10,6 +10,11 @@
 // and finishes; Keep puts the rule in the person's own list and the page
 // stays clean after it.
 //
+// HYDRA_REAL_MODEL=<name> runs the loop once against the real Ollama at
+// localhost:11434 instead of the script -- the first run of it against a
+// model, which the scripted runs cannot be -- answering yes to anything it
+// asks, and prints what it did. It needs the model pulled and the server up.
+//
 // Offline and contained: the page and the model are local servers, and HOME
 // and the XDG directories are a temporary directory, so neither the real
 // profile, nor the real settings, nor a real model is touched.
@@ -24,15 +29,19 @@
 #include <QAction>
 #include <QApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
+#include <QLabel>
 #include <QJsonObject>
 #include <QListWidget>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSettings>
 #include <QSlider>
+#include <QStatusBar>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
@@ -187,8 +196,10 @@ int main(int argc, char *argv[]) {
 	{
 		QSettings s(QSettings::IniFormat, QSettings::UserScope, "hydra", "hydra");
 		s.setValue("ai/mode", "local_only");
-		s.setValue("ai/ollama_endpoint", origin);
-		s.setValue("ai/ollama_model", "llama3");
+		const QString real = qEnvironmentVariable("HYDRA_REAL_MODEL");
+		s.setValue("ai/ollama_endpoint", real.isEmpty() ? origin
+		                                                : QStringLiteral("http://localhost:11434"));
+		s.setValue("ai/ollama_model", real.isEmpty() ? QStringLiteral("llama3") : real);
 		s.sync();
 	}
 
@@ -224,6 +235,84 @@ int main(int argc, char *argv[]) {
 	}
 	check(!seen(view).isEmpty(), QString("the ad slot is visible to begin with "
 	                                     "(%1)").arg(seen(view).join("; ")));
+
+	if (qEnvironmentVariableIsSet("HYDRA_REAL_MODEL")) {
+		section("a real model works on the page");
+		annoyed->trigger();
+		annoyed_dialog *d = nullptr;
+		until([&] { return (d = open_window()) != nullptr; }, 8000);
+		QPushButton *start = d ? button(d, "Work On It") : nullptr;
+		check(start && start->isEnabled(), "Work On It is offered");
+		if (!start)
+			return 1;
+		start->click();
+		QElapsedTimer t;
+		t.start();
+		int asked = 0;
+		bool hidden_in_trial = false;
+		// Eight minutes: a 14B model on this machine takes ten to twenty
+		// seconds a turn, and the loop is bounded in turns.
+		while (t.elapsed() < 480000 && !button(d, "Keep") && !button(d, "Discard")) {
+			spin(500);
+			// **Answered as a person looking at the page would**, from what
+			// the probe sees, not "yes" to everything: the first run did
+			// that, the model asked whether the ad was still visible, was
+			// told yes when it was gone, and went on trying.
+			if (QPushButton *yes = button(d, "Yes")) {
+				++asked;
+				const bool clean = seen(view).isEmpty();
+				hidden_in_trial = hidden_in_trial || clean;
+				QString q;
+				for (QLabel *l : d->findChildren<QLabel *>())
+					if (l->isVisible() && l->text().contains('?'))
+						q = l->text();
+				const bool about_ad = q.contains(QRegularExpression(
+				    "still|visible|see (the|an|any) ad", QRegularExpression::CaseInsensitiveOption));
+				const bool say_yes = about_ad ? !clean : clean;
+				std::printf("  asked: %s -> %s\n", qPrintable(q), say_yes ? "yes" : "no");
+				QPushButton *answer = say_yes ? yes : button(d, "No");
+				if (answer)
+					answer->click();
+			} else if (QPushButton *cannot = button(d, "I Can't")) {
+				++asked;
+				std::printf("  asked to point; pressing I Can't\n");
+				cannot->click();
+			}
+		}
+		std::printf("  after %llds, asked %d time(s); the log:\n",
+		            (long long)(t.elapsed() / 1000), asked);
+		for (const QString &line : log_of(d).split('\n'))
+			std::printf("    | %s\n", qPrintable(line));
+		QStringList offered;
+		if (auto *rules = d->findChild<QListWidget *>("result_rules"))
+			for (int i = 0; i < rules->count(); ++i)
+				offered << rules->item(i)->text();
+		std::printf("  offered: %s\n", qPrintable(offered.join(", ")));
+		const bool ended = button(d, "Keep") || button(d, "Discard");
+		check(ended, "it finished within eight minutes");
+		check(!offered.isEmpty(), "and offered at least one rule");
+		const QStringList now = seen(view);
+		check(now.isEmpty() || hidden_in_trial,
+		      QString("the slot is hidden by what is in trial (%1)").arg(now.join("; ")));
+		if (QPushButton *keep = button(d, "Keep")) {
+			keep->click();
+			spin(4000);
+			QFile own(out + "/filters-ai.txt");
+			own.open(QIODevice::ReadOnly);
+			const QString kept = QString::fromUtf8(own.readAll());
+			std::printf("  kept in filters-ai.txt:\n%s\n", qPrintable(kept));
+			if (auto *bar = w.findChild<QStatusBar *>())
+				std::printf("  status: %s\n", qPrintable(bar->currentMessage()));
+			for (const QString &f : QDir(out).entryList(QDir::Files))
+				std::printf("  profile: %s (%lld)\n", qPrintable(f),
+				            (long long)QFileInfo(out + "/" + f).size());
+			check(kept.contains("ad-slot"), "Keep puts the rule in the person's own list");
+			check(seen(view).isEmpty(), "and with it kept, the page stays clean");
+		}
+		d->close();
+		std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
+		return g_fail ? 1 : 0;
+	}
 
 	section("a trial nobody keeps does not outlive the window");
 	{
