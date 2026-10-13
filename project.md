@@ -38527,3 +38527,38 @@ directly (measured: three chapters, titles intact). The file is one name
 in hydra's cache directory, overwritten on each Watch. The player reads it
 as it starts, so one name cannot accumulate. No other player is given
 it.
+
+## Fold, 2026-10-13: state for the next session
+
+Weekly usage passed 90 per cent with this session still working, so this is
+the record of where it stands.
+
+**Done and shipped this session** (each commit has its own entry above):
+reading history (`2a2e589`), Watch with sound (`8caeee2`), YouTube
+downloads (`8d34d71`), chapters in saved files (`5e204e4`), JS runtimes
+for yt-dlp (`cb044df`), Save… (`32a1be5`), channel rules (`38e7fee`), the
+chunked proxy with backpressure (`cfacc5a`), corrections counting against
+the tally and chapters on Watch (`5abd993`), the real-model run of the
+Annoyed loop (`c781b67`), and providers of their own (`741c3e9`). The
+latest package is `build/deb/hydra_0.1_amd64.deb`. **The holder's running
+hydra is still the 10 Oct build**: install the package and restart to get
+all of it.
+
+**In progress: measuring the 1.3 MB scriptlet script** (the open item under
+the subscriptions entry). `test/live/try_scriptlet_cost.cpp` loads a local
+page with 0, 1 and 20 frames eight times each and reads the page's
+navigation timing. It runs once with no lists, and once with the holder's
+cached lists copied into a scratch profile (pass `~/.local/share/Hydra`).
+Compare the two medians: that difference is what the script costs a page.
+**Not yet run to completion** when this was written. Its link set needs
+`make -C test objsets` with fmake before it builds. If the cost with 20
+frames is small, the open item can close as measured; if not, the design
+question is how to cut the script per site while still having it in place
+before the page's own scripts, in frames with hosts of their own.
+
+**Open, the holder's: `!#if`** -- unchanged; see its entry. Not asked yet.
+
+**Open, small**: the live drivers' `HYDRA_TRY_*` modes start real players
+and downloads; each is documented in its file's header. The style-gate
+files under `tool/` carry another session's uncommitted changes and were
+left alone throughout.
