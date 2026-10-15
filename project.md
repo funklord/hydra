@@ -38615,9 +38615,14 @@ it**: about 13 ms of some 45. Three changes were tried:
 - **No escapes in the data** (no separators in it, control characters in
   the index) -- kept, as harmless. No measurable change.
 
-**Open, for whoever picks it up**: where the remaining ~30 ms goes. It is
-not the catalog, not the number of frames (flat from 0 to 20), not the
-per-frame parse of the calls, and not the escapes. Untested: the transfer
-of the script to the renderer per document, and a two-byte string (the
-data holds non-ASCII text) against the one-byte inert test. A
-`pad` made of the real data's characters would separate those two.
+**~~Open: where the remaining ~30 ms goes.~~ Found the same day: the
+script was two-byte.** 1.3 MB of inert text in a character outside Latin-1
+(`pad-wide`) cost 62 to 64 ms to load, exactly the real lists' figure,
+where the same size in ASCII cost 29 to 30. The lists hold some non-ASCII
+text, and one such character makes the whole script two-byte, which the
+path into each document handles about twice as slowly. `js_string` now
+writes everything past ASCII as a `\uXXXX` escape, so the script stays
+one-byte. A test pins that, using an argument with an accented letter, a
+dash and a character outside the Basic Multilingual Plane. **Measured
+after**: 38 ms with the holder's lists against 19 ms without, where it had
+been 59 to 64 ms. What is left is about the cost of the script's size.

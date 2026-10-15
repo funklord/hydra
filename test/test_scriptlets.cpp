@@ -723,6 +723,31 @@ int main(int argc, char **argv) {
 		               "(%1 ran, %2 skipped)").arg(z.ran.size()).arg(z.skipped));
 	}
 
+	// **One-byte, whatever the lists hold.** A two-byte script of the same
+	// size cost a page twice as much to load, measured, and one character
+	// from a list was enough to make the whole of it two-byte.
+	section("the script is plain ASCII, even for an argument that is not");
+	{
+		QList<scriptlet_call> calls;
+		calls.push_back({ "x.test", "set-constant", { "cfg.a", "true" } });
+		calls.push_back({ "x.test", "json-prune", { QString::fromUtf8("caf\xc3\xa9 \xe2\x80\x94 \xf0\x9f\x98\x80") } });
+		const QString src = scriptlets::source_for(calls);
+		bool ascii = !src.isEmpty();
+		for (const QChar c : src)
+			if (c.unicode() > 0x7e)
+				ascii = false;
+		check(ascii, "every character of the script is ASCII");
+		QJSEngine eng;
+		give_window(&eng, "x.test");
+		eng.evaluate("var console = { debug: function (s) { window.__said = s; } };");
+		eng.evaluate(src);
+		check(eng.evaluate("!!(window.cfg && window.cfg.a)").toBool(),
+		      "and it still runs");
+		check(src.contains("\\u00e9") && src.contains("\\u2014") &&
+		      src.contains("\\ud83d\\ude00"),
+		      "the text is escaped, a pair for a character past the plane");
+	}
+
 	section("the names rules actually use, and the canonical one kept");
 	{
 		// A rule calls a scriptlet by whichever spelling its author knew, so

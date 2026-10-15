@@ -167,6 +167,13 @@ int main(int argc, char *argv[]) {
 		view->inject_main_world_script(QStringLiteral("hydra-scriptlets"), src);
 		std::printf("inert text for another host: %lld characters\n", (long long)src.size());
 	}
+	// "pad-wide" is the same size in a character outside Latin-1, so the
+	// string is two-byte as the real data is: whether that is the cost.
+	if (argc > 2 && QByteArray(argv[2]) == "pad-wide") {
+		const QString src = "(function(){var D='" + QString(1300000, QChar(0x2014)) + "';})();";
+		view->inject_main_world_script(QStringLiteral("hydra-scriptlets"), src);
+		std::printf("inert two-byte text: %lld characters\n", (long long)src.size());
+	}
 	if (argc > 2 && QByteArray(argv[2]) == "pad") {
 		const QString src = "(function(){var D='" + QString(1300000, 'x') + "';})();";
 		view->inject_main_world_script(QStringLiteral("hydra-scriptlets"), src);

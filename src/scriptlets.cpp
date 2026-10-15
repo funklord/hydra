@@ -1882,9 +1882,19 @@ QString js_string(const QString &text) {
 			case '\'': out += QStringLiteral("\\'");    break;
 			case '\n': out += QStringLiteral("\\n");    break;
 			case '\r': out += QStringLiteral("\\r");    break;
-			case 0x2028: out += QStringLiteral("\\u2028"); break;
-			case 0x2029: out += QStringLiteral("\\u2029"); break;
-			default:   out += c;
+			default:
+				// **Anything past ASCII as an escape**, so the script stays
+				// one-byte. Measured: 1.3 MB of two-byte text cost a page
+				// 62 ms to load where the same size in ASCII cost 30, and a
+				// single character from the lists makes the whole script
+				// two-byte -- which was the cost that had stayed unexplained.
+				// U+2028 and U+2029 were escaped here already, as line
+				// terminators a string literal may not hold.
+				if (c.unicode() > 0x7e)
+					out += QStringLiteral("\\u%1")
+					         .arg(int(c.unicode()), 4, 16, QLatin1Char('0'));
+				else
+					out += c;
 		}
 	}
 	return out + QStringLiteral("'");
