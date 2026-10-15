@@ -2,7 +2,7 @@
 // local page with 0, 1 and 20 frames, loaded repeatedly, timed by the page's
 // own navigation timing.
 //
-//     QT_QPA_PLATFORM=offscreen ./test/build-make/try_scriptlet_cost [lists-dir]
+//     QT_QPA_PLATFORM=offscreen ./test/build-make/try_scriptlet_cost [lists-dir [no-scriptlets]]
 //
 // With `lists-dir` -- a profile directory holding `filters-subscribed.json`
 // and `filters-subscribed/`, such as ~/.local/share/Hydra -- those cached
@@ -17,6 +17,7 @@
 #include "policy_engine.h"
 #include "qtwebengine_factory.h"
 #include "request_filter.h"
+#include "scriptlets.h"
 #include "web_view_backend.h"
 
 #include <QApplication>
@@ -139,6 +140,37 @@ int main(int argc, char *argv[]) {
 	if (!view) {
 		std::printf("no view\n");
 		return 1;
+	}
+	// A second argument, "no-scriptlets", keeps the lists and takes the
+	// script away, so the two runs with lists split the cost between the
+	// script and the rest of what the lists bring.
+	if (argc > 2 && QByteArray(argv[2]) == "no-scriptlets") {
+		view->remove_script(QStringLiteral("hydra-scriptlets"));
+		std::printf("scriptlet script removed\n");
+	}
+	// Two more, to find which part of the script costs: "tiny" is the real
+	// catalog with one call, "pad" is 1.3 MB of inert text and nothing else.
+	if (argc > 2 && QByteArray(argv[2]) == "tiny") {
+		QList<scriptlet_call> one;
+		one.push_back({ "nowhere.invalid", "set-constant", { "cfg.a", "true" } });
+		const QString src = scriptlets::source_for(one);
+		view->inject_main_world_script(QStringLiteral("hydra-scriptlets"), src);
+		std::printf("catalog with one call: %lld characters\n", (long long)src.size());
+	}
+	// "pad-elsewhere" is the same inert text, offered only to a host this
+	// page is not: whether the engine honours @include, so a frame is never
+	// given a script meant for other sites.
+	if (argc > 2 && QByteArray(argv[2]) == "pad-elsewhere") {
+		const QString src = "// ==UserScript==\n// @include *://nowhere.invalid/*\n"
+		                    "// ==/UserScript==\n(function(){var D='" +
+		                    QString(1300000, 'x') + "';})();";
+		view->inject_main_world_script(QStringLiteral("hydra-scriptlets"), src);
+		std::printf("inert text for another host: %lld characters\n", (long long)src.size());
+	}
+	if (argc > 2 && QByteArray(argv[2]) == "pad") {
+		const QString src = "(function(){var D='" + QString(1300000, 'x') + "';})();";
+		view->inject_main_world_script(QStringLiteral("hydra-scriptlets"), src);
+		std::printf("inert text: %lld characters\n", (long long)src.size());
 	}
 
 	// Asked in the isolated world; the navigation timing is the page's.

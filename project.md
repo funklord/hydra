@@ -38583,3 +38583,41 @@ before the page's own scripts, in frames with hosts of their own.
 and downloads; each is documented in its file's header. The style-gate
 files under `tool/` carry another session's uncommitted changes and were
 left alone throughout.
+
+## The scriptlet script is the whole cost of the lists, and the cause is open
+
+Measured 2026-10-15 with `try_scriptlet_cost`, as medians of seven loads of
+a local page. Every number below is a page load in ms, without lists → with
+the holder's lists. The machine's load varied between runs, so compare
+within a row.
+
+| What the page is given | Load (ms) |
+|---|---|
+| The holder's lists, script removed (`no-scriptlets`) | 18 → 18 to 24, no measurable cost |
+| The holder's lists, whole | 18 → 64 to 72 |
+| The catalog with one call, 67 KB (`tiny`) | 18 → 19 |
+| 1.3 MB of inert text (`pad`) | 18 → 31 to 45 |
+| The same text with `@include` for another host (`pad-elsewhere`) | 18 → 20 to 26 |
+
+**So the scriptlet script is the whole cost, and size explains only part of
+it**: about 13 ms of some 45. Three changes were tried:
+
+- **An index by host, so a frame reads only its own calls** -- kept, with
+  tests for order, deduplication and the skipped count (with the sort
+  removed, the order test fails). The measured load moved from about 70 to
+  64 ms, inside the noise.
+- **64 scripts, each with `@match` lines for its hosts** -- rejected and
+  removed. The engine does honour `@match`: checked live, a call scoped to
+  `localhost` ran on `localhost:PORT` and one scoped to another host did
+  not. But a frame is checked against every pattern, about 24,000 for the
+  holder's lists (24,495 distinct hosts in 10,290 scriptlet rules), and
+  loads went up to about 83 ms.
+- **No escapes in the data** (no separators in it, control characters in
+  the index) -- kept, as harmless. No measurable change.
+
+**Open, for whoever picks it up**: where the remaining ~30 ms goes. It is
+not the catalog, not the number of frames (flat from 0 to 20), not the
+per-frame parse of the calls, and not the escapes. Untested: the transfer
+of the script to the renderer per document, and a two-byte string (the
+data holds non-ASCII text) against the one-byte inert test. A
+`pad` made of the real data's characters would separate those two.

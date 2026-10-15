@@ -676,6 +676,53 @@ int main(int argc, char **argv) {
 		       "a frame where nothing was in scope says nothing");
 	}
 
+	// **Indexed by host, read per frame.** A frame reads only the calls
+	// filed under its own host, its parents and "*": the whole list was
+	// parsed in every frame, and that was what the lists cost a page. What
+	// must not change is which calls run and in what order.
+	section("a frame reads only its own calls, in the list's order");
+	{
+		const auto ran = [](const QList<scriptlet_call> &calls, const char *host) {
+			QJSEngine eng;
+			give_window(&eng, host);
+			eng.evaluate("var console = { debug: function (s) { window.__said = s; } };");
+			eng.evaluate(scriptlets::source_for(calls));
+			scriptlets::report r;
+			scriptlets::parse_report(eng.evaluate("String(window.__said || '')")
+			                             .toString(), &r);
+			return r;
+		};
+		QList<scriptlet_call> mixed;
+		mixed.push_back({ "x.test", "set-constant", { "cfg.a", "true" } });
+		mixed.push_back({ "", "json-prune", { "ads" } });
+		mixed.push_back({ "www.x.test", "abort-on-property-read", { "adsbygoogle" } });
+		const scriptlets::report r = ran(mixed, "www.x.test");
+		const QStringList in_order = { "set-constant", "json-prune",
+		                               "abort-on-property-read" };
+		check(r.ran == in_order,
+		      QString("a parent's, the unscoped and the host's own run, in list "
+		               "order (%1)").arg(r.ran.join(", ")));
+		QList<scriptlet_call> backwards;
+		backwards.push_back({ "www.x.test", "abort-on-property-read", { "adsbygoogle" } });
+		backwards.push_back({ "x.test", "set-constant", { "cfg.a", "true" } });
+		check(ran(backwards, "www.x.test").ran ==
+		          QStringList({ "abort-on-property-read", "set-constant" }),
+		      "whichever host each was filed under");
+		QList<scriptlet_call> twice;
+		twice.push_back({ "x.test,www.x.test", "set-constant", { "cfg.a", "true" } });
+		check(ran(twice, "www.x.test").ran.size() == 1,
+		      "a call naming two of the frame's hosts runs once");
+		QList<scriptlet_call> many;
+		for (int i = 0; i < 500; ++i)
+			many.push_back({ QString("site%1.test").arg(i), "set-constant",
+			                 { "cfg.a", "true" } });
+		many.push_back({ "z.test", "json-prune", { "ads" } });
+		const scriptlets::report z = ran(many, "z.test");
+		check(z.ran == QStringList({ "json-prune" }) && z.skipped == 500,
+		      QString("and the 500 for other sites are skipped and counted "
+		               "(%1 ran, %2 skipped)").arg(z.ran.size()).arg(z.skipped));
+	}
+
 	section("the names rules actually use, and the canonical one kept");
 	{
 		// A rule calls a scriptlet by whichever spelling its author knew, so

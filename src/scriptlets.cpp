@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMap>
 
 namespace {
 
@@ -2032,7 +2033,9 @@ bool parse_call(const QString &inside, scriptlet_call *out, QString *why) {
 }
 
 QString source_for(const QList<scriptlet_call> &calls) {
-	QJsonArray arr;
+	QString data;                                  // each call's JSON, back to back
+	QMap<QString, QStringList> index;              // host -> "offset:length"
+	int total = 0;
 	for (const scriptlet_call &c : calls) {
 		// Checked again here, not because `parse_call` is unreliable but
 		// because this is the function that writes the script: a caller that
@@ -2074,20 +2077,82 @@ QString source_for(const QList<scriptlet_call> &calls) {
 		for (const QString &a : c.args)
 			args.append(a);
 		o.insert(QStringLiteral("a"), args);
-		arr.append(o);
+
+		// **Indexed by the hosts its scope names**, so a frame reads only
+		// the calls that could be its own. Every frame parsed all of them --
+		// 10,004 with uBlock's lists, 1.3 MB -- and ran the scope check on
+		// each. **That was not the cost it looked like**: the script is the
+		// whole of what the lists cost a page, about 45 ms a load, and with
+		// this index it is about as much -- 70 to 64 ms, inside the noise.
+		// What the time is spent on is open; project.md has what was ruled
+		// out. Kept because each frame's work now follows its own calls.
+		// An unscoped call goes under "*", which every frame reads; a scope
+		// of exclusions only never runs, so it is not written at all. The
+		// scope still travels with the call and is checked in the page, so
+		// an exclusion still excludes.
+		QStringList keys;
+		bool positive = false;
+		for (const QString &raw : c.scope.split(',')) {
+			const QString e = raw.trimmed();
+			if (e.isEmpty() || e.startsWith('~'))
+				continue;
+			positive = true;
+			if (!keys.contains(e))
+				keys << e;
+		}
+		if (c.scope.trimmed().isEmpty())
+			keys = { QStringLiteral("*") };
+		else if (!positive)
+			continue;
+		const QString line = QString::fromUtf8(
+		  QJsonDocument(o).toJson(QJsonDocument::Compact));
+		const QString where = QString::number(data.size()) + ':' +
+		                      QString::number(line.size());
+		data += line;   // found by offset, so nothing between them
+		for (const QString &k : keys)
+			index[k] << where;
+		++total;
 	}
-	if (arr.isEmpty())
+	if (total == 0)
 		return QString();
 
-	const QString json = QString::fromUtf8(
-	  QJsonDocument(arr).toJson(QJsonDocument::Compact));
+	// "\x01host\x02offset:length,offset:length\x01...": offsets into `data`
+	// in UTF-16 units, which is what a JavaScript string counts in too.
+	// **Control characters, not a newline and a tab**: a string literal
+	// takes them as they are, where every newline is an escape to scan, and
+	// with one per call and one per host there were about 35,000.
+	QString table = QString(QChar(1));
+	for (auto it = index.cbegin(); it != index.cend(); ++it)
+		table += it.key() + QChar(2) + it.value().join(',') + QChar(1);
+
 	return QStringLiteral("(function(){'use strict';")
 	     + QString::fromUtf8(k_catalog)
-	     + QStringLiteral("var calls;try{calls=JSON.parse(")
-	     + js_string(json)
-	     + QStringLiteral(");}catch(e){return;}"
+	     + QStringLiteral("var D=") + js_string(data)
+	     + QStringLiteral(",I=") + js_string(table)
+	     + QStringLiteral(",N=") + QString::number(total)
+	     + QStringLiteral(";"
 	                       "var host='';try{host=String(location.hostname||'');}"
 	                       "catch(e){}"
+	                       // The frame's host and each parent of it, and "*":
+	                       // the only keys a call in scope here can be under.
+	                       // Read in the list's own order, all before any
+	                       // scriptlet runs, so none of them can have
+	                       // replaced JSON.parse first.
+	                       "var pick=function(k){var at=I.indexOf('\\x01'+k+'\\x02');"
+	                       "if(at<0)return[];var e=I.indexOf('\\x01',at+1);"
+	                       "return I.slice(at+k.length+2,e).split(',');};"
+	                       "var keys=['*'],h=host;"
+	                       "while(h){keys.push(h);var d=h.indexOf('.');"
+	                       "if(d<0)break;h=h.slice(d+1);}"
+	                       "var seen={},at=[];"
+	                       "for(var x=0;x<keys.length;x++){var ps=pick(keys[x]);"
+	                       "for(var y=0;y<ps.length;y++){if(!ps[y]||seen[ps[y]])continue;"
+	                       "seen[ps[y]]=1;at.push(ps[y]);}}"
+	                       "at.sort(function(a,b){return parseInt(a,10)-parseInt(b,10);});"
+	                       "var calls=[];"
+	                       "for(var z=0;z<at.length;z++){var q=at[z].split(':');"
+	                       "try{calls.push(JSON.parse(D.substr(+q[0],+q[1])));}"
+	                       "catch(e){}}"
 	                       // **A scope is a list, not a host.** uBlock writes
 	                       // `m.youtube.com,www.youtube.com##+js(...)`, and this
 	                       // compared the whole string against the hostname, so
@@ -2124,7 +2189,7 @@ QString source_for(const QList<scriptlet_call> &calls) {
 	                       // this tells the browser without telling the page.
 	                       "var log=null,str=null;"
 	                       "try{log=console.debug;str=JSON.stringify;}catch(e){}"
-	                       "var rep={h:host,r:[],e:[],k:0};"
+	                       "var rep={h:host,r:[],e:[],k:N-calls.length};"
 	                       "for(var i=0;i<calls.length;i++){"
 	                       "if(!in_scope(calls[i].s)){rep.k++;continue;}"
 	                       "var f=C[calls[i].n];"
