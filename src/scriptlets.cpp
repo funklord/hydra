@@ -2082,7 +2082,17 @@ QString source_for(const QList<scriptlet_call> &calls) {
 		// which is also what makes it right inside an iframe: an embedded
 		// player's frame has its own hostname, and that is the one the rule
 		// was written about.
-		o.insert(QStringLiteral("s"), c.scope);
+		//
+		// **Only where it can still say no.** The index below files a call
+		// under each host its scope names, so a frame that reads it is
+		// already one of them; what the page has left to check is an
+		// exclusion. Written only for a scope with a `~` -- 62 of 10,290
+		// with uBlock's lists -- because the scopes were 577 KB of a 1.3 MB
+		// script, repeated in the index, and the script's size is what it
+		// costs a page to load. A call without one passes `in_scope`, which
+		// takes an absent scope as every frame.
+		if (c.scope.contains('~'))
+			o.insert(QStringLiteral("s"), c.scope);
 		QJsonArray args;
 		for (const QString &a : c.args)
 			args.append(a);

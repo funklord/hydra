@@ -748,6 +748,27 @@ int main(int argc, char **argv) {
 		      "the text is escaped, a pair for a character past the plane");
 	}
 
+	// **The scope is written once**, as the index's keys, and again with the
+	// call only where an exclusion has to be checked in the page: the scopes
+	// were most of the script's size, and its size is what it costs.
+	section("a scope goes into the script once, unless it excludes");
+	{
+		QList<scriptlet_call> calls;
+		calls.push_back({ "a.test,b.test,c.test", "set-constant", { "cfg.a", "true" } });
+		calls.push_back({ "x.test,~ads.x.test", "set-constant", { "cfg.b", "true" } });
+		const QString src = scriptlets::source_for(calls);
+		check(src.count("b.test") == 1,
+		      QString("a plain scope's hosts appear once, in the index (%1)")
+		          .arg(src.count("b.test")));
+		check(src.count("ads.x.test") == 1 && src.count("x.test,~ads.x.test") == 1,
+		      "an excluding scope travels with its call as well");
+		QJSEngine eng;
+		give_window(&eng, "b.test");
+		eng.evaluate(src);
+		check(eng.evaluate("!!(window.cfg && window.cfg.a)").toBool(),
+		      "and a call without its scope still runs where the index puts it");
+	}
+
 	section("the names rules actually use, and the canonical one kept");
 	{
 		// A rule calls a scriptlet by whichever spelling its author knew, so

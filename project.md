@@ -38626,3 +38626,10 @@ one-byte. A test pins that, using an argument with an accented letter, a
 dash and a character outside the Basic Multilingual Plane. **Measured
 after**: 38 ms with the holder's lists against 19 ms without, where it had
 been 59 to 64 ms. What is left is about the cost of the script's size.
+
+**Then the size, by half.** Scopes were 577 KB of the data, written again as
+the index's keys. Only 62 of the 10,290 calls have an exclusion for the page
+to check, so a call carries its scope only when it has one, and the index
+does the rest. Measured after: 35 to 38 ms with the lists against 19 to 22
+without, at a load of 20, so the gain is within the noise. It is kept for
+the smaller script, and a test pins that a plain scope appears once.
