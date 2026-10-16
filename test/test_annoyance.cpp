@@ -1,5 +1,6 @@
 // The "something got through here" log: what it keeps and what a round trip
 // through disk does to it.
+#include "ad_probe.h"
 #include "annoyance_log.h"
 #include "filter_signals.h"
 #include "annoyed_dialog.h"
@@ -51,6 +52,28 @@ static annoyance_report make(const QString &host, const QStringList &suspects) {
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QApplication app(argc, argv);
+
+	// **Where a finding came from**, said in it: an ad is usually served in a
+	// frame of its own, and the model is told which frame, not only that the
+	// top document holds one.
+	section("a frame's findings say which frame they came from");
+	{
+		ad_probe::findings top, inner, all;
+		top.frames   << "frame from ads.example at iframe, 300x250";
+		inner.labels << "\"Advertisement\" shown at div.ad";
+		ad_probe::add(&all, top, "news.example", true);
+		ad_probe::add(&all, inner, "ads.example", false);
+		check(all.frames == QStringList{ "frame from ads.example at iframe, 300x250" },
+		      "the top document's findings are as they were");
+		const QString named = "in a frame from ads.example: \"Advertisement\" "
+		                      "shown at div.ad";
+		check(all.labels == QStringList{ named },
+		      QString("and a frame's are named for it (%1)").arg(all.labels.join(" | ")));
+		ad_probe::findings unnamed;
+		ad_probe::add(&unnamed, inner, QString(), false);
+		check(unnamed.labels.value(0).startsWith("in a frame from an unnamed origin: "),
+		      "a frame with no host says so rather than naming nothing");
+	}
 
 	section("filing a report");
 	{

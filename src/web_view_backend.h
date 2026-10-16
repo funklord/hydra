@@ -373,6 +373,26 @@ public:
 		done(QString());
 	}
 
+	// **The same question asked in every frame**, each answer with the
+	// address of the frame that gave it, the main frame first. An ad is
+	// usually served in a frame of its own, from another origin, and a probe
+	// asked of the top document sees only that there is a frame -- which was
+	// all the Annoyed window could tell the model about it. The default asks
+	// the main frame alone, so a backend with no frames to enumerate still
+	// answers. `done` is called at most once, and not if the view is gone.
+	struct frame_answer {
+		QUrl    url;
+		bool    main = false;
+		QString answer;
+	};
+	virtual void run_probe_in_frames(const QString &source,
+	                                 std::function<void(const QList<frame_answer> &)> done) {
+		const QUrl at = url();
+		run_probe(source, [done, at](const QString &answer) {
+			done({ frame_answer{ at, true, answer } });
+		});
+	}
+
 	// Session state -- navigation history and whatever else the engine can
 	// serialize. Opaque to the shell, which only stores and returns the blob
 	// (state_store keys it by node id, architecture doc sec 4.2).

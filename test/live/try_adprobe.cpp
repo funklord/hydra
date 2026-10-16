@@ -16,6 +16,8 @@
 #include "web_view_backend.h"
 
 #include <QApplication>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QEventLoop>
 #include <QFile>
 #include <QTemporaryDir>
@@ -65,6 +67,32 @@ static ad_probe::findings probe(web_view_backend *view, const QTemporaryDir &dir
 	*answered = got && ad_probe::parse(json, &out);
 	return out;
 }
+
+// Serves `/top` -- a page with a frame from `localhost`, another origin --
+// and `/ad`, the frame: an ad-named element and a label, as a served ad is.
+class frame_server : public QTcpServer {
+protected:
+	void incomingConnection(qintptr fd) override {
+		auto *s = new QTcpSocket(this);
+		s->setSocketDescriptor(fd);
+		connect(s, &QTcpSocket::readyRead, s, [this, s] {
+			const QByteArray head = s->readAll();
+			QByteArray body;
+			if (head.startsWith("GET /top"))
+				body = "<html><body><p>The story.</p><iframe src=\"http://localhost:" +
+				       QByteArray::number(serverPort()) +
+				       "/ad\" width=320 height=270></iframe></body></html>";
+			else
+				body = "<html><body><div class=\"ad-banner\" style=\"width:300px;"
+				       "height:250px\">Advertisement</div></body></html>";
+			s->write("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: " +
+			         QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" +
+			         body);
+			s->disconnectFromHost();
+		});
+		connect(s, &QTcpSocket::disconnected, s, &QObject::deleteLater);
+	}
+};
 
 static const char *k_style =
   "<style>div{min-width:40px;min-height:40px}</style>";
@@ -172,6 +200,57 @@ int main(int argc, char *argv[]) {
 		          labels.contains("Skip Ad") && labels.contains("Ad 1 of 2"),
 		       QString("three labels, and neither Adsorption nor a sentence "
 		               "that mentions ads (%1)").arg(labels));
+	}
+
+	// **An ad in a frame of its own, from another origin**, which is how ads
+	// are served. Asked of the top document alone, the probe could say only
+	// that there is a frame; asked in every frame, it says what is in it.
+	section("an ad inside a frame from another origin is seen there");
+	{
+		frame_server srv;
+		srv.listen(QHostAddress::LocalHost, 0);
+		QEventLoop loaded;
+		auto c = QObject::connect(view, &web_view_backend::load_finished,
+		                          &loaded, [&loaded](bool) { loaded.quit(); });
+		QTimer::singleShot(10000, &loaded, &QEventLoop::quit);
+		view->load(QUrl(QString("http://127.0.0.1:%1/top").arg(srv.serverPort())));
+		loaded.exec();
+		QObject::disconnect(c);
+		QEventLoop settle;
+		QTimer::singleShot(1500, &settle, &QEventLoop::quit);
+		settle.exec();
+
+		QString top_json;
+		bool top_got = false;
+		view->run_probe(ad_probe::source(), [&](const QString &j) { top_json = j; top_got = true; });
+		QList<web_view_backend::frame_answer> answers;
+		bool all_got = false;
+		view->run_probe_in_frames(ad_probe::source(),
+		    [&](const QList<web_view_backend::frame_answer> &a) { answers = a; all_got = true; });
+		QEventLoop wait;
+		QTimer poll;
+		QObject::connect(&poll, &QTimer::timeout, [&] { if (top_got && all_got) wait.quit(); });
+		poll.start(50);
+		QTimer::singleShot(10000, &wait, &QEventLoop::quit);
+		wait.exec();
+
+		ad_probe::findings top;
+		ad_probe::parse(top_json, &top);
+		check(top.elements.isEmpty(),
+		      QString("asked of the top document, the element inside is not seen "
+		               "(%1)").arg(ad_probe::describe(top).join(" | ")));
+		ad_probe::findings all;
+		for (const web_view_backend::frame_answer &a : answers) {
+			ad_probe::findings f;
+			if (ad_probe::parse(a.answer, &f))
+				ad_probe::add(&all, f, a.url.host(), a.main);
+		}
+		const QString said = ad_probe::describe(all).join(" | ");
+		check(answers.size() == 2 && answers.first().main,
+		      QString("asked in every frame, both answer, the top first (%1)")
+		          .arg(answers.size()));
+		check(said.contains("in a frame from localhost: ") && said.contains("ad-banner"),
+		      QString("and the ad inside is found, with the frame it is in (%1)").arg(said));
 	}
 
 	section("described with the decisive finding first");

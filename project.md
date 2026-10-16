@@ -37932,8 +37932,18 @@ Removing the destructor's cleanup reds the first.
   current view; the window says so rather than switching.
 - **Network trials are per site**, and one investigation runs at a time.
 - **Android**: `run_probe` answers empty there, so `look` sees nothing.
-- **Detection is the top frame.** A player in a cross-origin frame is
-  seen as the frame.
+- **~~Detection is the top frame.~~ Fixed 2026-10-16**: the probe is
+  asked in every frame (`run_probe_in_frames`, through Qt 6.8's
+  `QWebEngineFrame`), breadth first, at most 32 frames, each in the
+  isolated world. A finding from a frame other than the top document's
+  names that frame's host (`ad_probe::add`), so the model is told where
+  the ad is and not only that the top document holds a frame. Both the
+  Annoyed window's look and the report it files use it. Measured in
+  `try_adprobe`: a page on `127.0.0.1` with a frame from `localhost`.
+  Asked of the top document, nothing is seen inside the frame; asked in
+  every frame, it finds the ad-named element and its label, "in a frame
+  from localhost". A frame that never answers costs at most 4 s, and the
+  others' answers are kept.
 
 ## The AI load knob
 

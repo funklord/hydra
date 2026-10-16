@@ -1,5 +1,7 @@
 #include "qtwebengine_view.h"
 
+#include <algorithm>
+
 #include "permissions_shim.h"
 #include "scriptlets.h"
 
@@ -28,6 +30,8 @@
 #include <QWebEngineNewWindowRequest>
 #include <QWebEngineSettings>
 #include <QWebEngineScript>
+#include <QTimer>
+#include <QWebEngineFrame>
 #include <QWebEngineScriptCollection>
 #include <QWebChannel>
 #include <QFile>
@@ -1070,6 +1074,59 @@ void qtwebengine_view::run_probe(const QString &source,
                                   std::function<void(const QString &)> done) {
 	m_page->runJavaScript(source, QWebEngineScript::ApplicationWorld,
 	                      [done](const QVariant &v) { done(v.toString()); });
+}
+
+void qtwebengine_view::run_probe_in_frames(
+    const QString &source, std::function<void(const QList<frame_answer> &)> done) {
+	// Every frame, to a bound: a page of embeds can hold dozens, and each is
+	// a script run. Breadth first, so the frames a person sees -- the top
+	// document's own -- are asked before those nested inside them.
+	static constexpr int k_max_frames = 32;
+	QList<QWebEngineFrame> frames;
+	QList<QWebEngineFrame> queue{ m_page->mainFrame() };
+	while (!queue.isEmpty() && frames.size() < k_max_frames) {
+		const QWebEngineFrame f = queue.takeFirst();
+		if (!f.isValid())
+			continue;
+		frames << f;
+		queue << f.children();
+	}
+	struct gather {
+		QList<frame_answer> got;
+		int  waiting = 0;
+		bool sent    = false;
+		std::function<void(const QList<frame_answer> &)> done;
+	};
+	auto g = std::make_shared<gather>();
+	g->done    = std::move(done);
+	g->waiting = int(frames.size());
+	auto finish = [g] {
+		if (g->sent)
+			return;
+		g->sent = true;
+		std::stable_sort(g->got.begin(), g->got.end(),
+		                 [](const frame_answer &a, const frame_answer &b) {
+			return a.main && !b.main;
+		});
+		g->done(g->got);
+	};
+	if (frames.isEmpty()) {
+		finish();
+		return;
+	}
+	for (QWebEngineFrame &f : frames) {
+		const QUrl at   = f.url();
+		const bool main = f.isMainFrame();
+		f.runJavaScript(source, QWebEngineScript::ApplicationWorld,
+		                [g, at, main, finish](const QVariant &v) {
+			g->got << frame_answer{ at, main, v.toString() };
+			if (--g->waiting == 0)
+				finish();
+		});
+	}
+	// A frame that goes away while asked may never answer; what the others
+	// said is still worth saying. On this view, so a closed view says nothing.
+	QTimer::singleShot(4000, this, finish);
 }
 
 void qtwebengine_view::inject_script(const QString &name, const QString &source,

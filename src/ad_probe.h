@@ -38,6 +38,12 @@ QString source();
 // which is also what a backend that cannot run a probe hands back.
 bool parse(const QString &json, findings *out);
 
+// What one frame found, added to `into`. A finding from a frame other than
+// the top document's says so, naming the frame's host, so the model is told
+// where the ad is and not only that the top document holds a frame.
+void add(findings *into, const findings &frame, const QString &frame_host,
+         bool main_frame);
+
 // One line per finding, most decisive first: a player that says it is in an
 // ad is worth more than a div with "ad" in its class.
 QStringList describe(const findings &f);

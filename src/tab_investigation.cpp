@@ -33,10 +33,16 @@ void tab_investigation::look(std::function<void(const QStringList &)> done) {
 		done(QStringList());
 		return;
 	}
-	m_view->run_probe(ad_probe::source(), [done](const QString &json) {
-		ad_probe::findings f;
-		ad_probe::parse(json, &f);
-		done(ad_probe::describe(f));
+	// Every frame, since an ad is usually served in one of its own.
+	m_view->run_probe_in_frames(ad_probe::source(),
+	    [done](const QList<web_view_backend::frame_answer> &answers) {
+		ad_probe::findings all;
+		for (const web_view_backend::frame_answer &a : answers) {
+			ad_probe::findings f;
+			if (ad_probe::parse(a.answer, &f))
+				ad_probe::add(&all, f, a.url.host(), a.main);
+		}
+		done(ad_probe::describe(all));
 	});
 }
 

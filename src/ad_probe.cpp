@@ -211,6 +211,22 @@ bool parse(const QString &json, findings *out) {
 	return true;
 }
 
+void add(findings *into, const findings &frame, const QString &frame_host,
+         bool main_frame) {
+	const QString in = main_frame ? QString()
+	                 : QString("in a frame from %1: ").arg(
+	                       frame_host.isEmpty() ? QStringLiteral("an unnamed origin")
+	                                            : frame_host);
+	auto copy = [&in](QStringList *to, const QStringList &from) {
+		for (const QString &x : from)
+			*to << in + x;
+	};
+	copy(&into->players, frame.players);
+	copy(&into->elements, frame.elements);
+	copy(&into->frames, frame.frames);
+	copy(&into->labels, frame.labels);
+}
+
 QStringList describe(const findings &f) {
 	QStringList out;
 	for (const QString &p : f.players)

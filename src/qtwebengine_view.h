@@ -84,6 +84,8 @@ public:
 	void remove_script(const QString &name) override;
 	void run_probe(const QString &source,
 	               std::function<void(const QString &)> done) override;
+	void run_probe_in_frames(const QString &source,
+	                         std::function<void(const QList<frame_answer> &)> done) override;
 	QByteArray save_state() const override;
 	bool       restore_state(const QByteArray &blob) override;
 

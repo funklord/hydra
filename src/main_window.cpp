@@ -2445,11 +2445,17 @@ void main_window::report_annoyance() {
 	// closed first takes the question with it, which files nothing -- the
 	// page the complaint was about is gone.
 	QPointer<web_view_backend> asked(v);
-	v->run_probe(ad_probe::source(), [this, asked, page](const QString &json) {
+	// In every frame: the ad itself is usually inside one of its own.
+	v->run_probe_in_frames(ad_probe::source(),
+	    [this, asked, page](const QList<web_view_backend::frame_answer> &answers) {
 		if (!asked)
 			return;
 		ad_probe::findings found;
-		ad_probe::parse(json, &found);
+		for (const web_view_backend::frame_answer &a : answers) {
+			ad_probe::findings f;
+			if (ad_probe::parse(a.answer, &f))
+				ad_probe::add(&found, f, a.url.host(), a.main);
+		}
 		file_annoyance(asked, page, found);
 	});
 }
