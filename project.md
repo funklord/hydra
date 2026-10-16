@@ -27032,17 +27032,27 @@ carried along as amendments to a list item.
    `\.(m3u8|mpd)$` fallback was the only one rejected, and its sibling clause
    `/master\.txt/` could not match `cf-master.1774687168.txt` either. n is 3.
 
-   The retry is measured but not yet answered: of five runs, three never
-   answered inside fifteen minutes on a loaded machine, one retry came back
-   still refused and one timed out. That is a one-run result wearing a five-run
-   coat, and it wants an idle machine. **The model is a per-machine fact and
-   this machine has none** -- re-measured 2026-09-28: nothing listening on
-   11434, no `~/.ollama`, no binary on `PATH`, curl reports `000`. See *Two
-   environment claims that decide what is possible, re-measured* above, which
-   corrects the sentence that used to sit here saying Ollama had served
-   `qwen2.5-coder:14b` throughout. The eight runs in *The live model suite, run
-   for the first time* above are real and were taken where a model was
-   serving; they are not evidence that `test_live_model` can run here now.
+   **The retry, measured 2026-10-16 on an idle machine** (load under 1 at
+   the start), five runs of `HYDRA_RETRY=1 test_live_model
+   qwen2.5-coder:14b` on the synthetic set. Every answer came back in 4 to
+   9 s. The earlier attempt, on a loaded machine with no model serving, had
+   three runs unanswered after fifteen minutes. Results:
+
+   - first try accepted 2 of 5;
+   - of the three refused, the retry with the reason rescued one, so 3 of 5
+     ended accepted;
+   - both that stayed refused tested only for `.m3u8`/`.mpd` in the address,
+     which misses the disguised `cf-master….txt`. One then found nothing; the
+     other took one of the 60 segments and the gate refused it.
+   - The accepted scripts also tested the request's note (`seen === 1`) or the
+     `cf-master` name.
+
+   So the retry helps, once in three. The gap is unchanged: the prompt asks
+   for two tests and a share of answers write one. **This machine now serves
+   a model** -- Ollama 0.40.2 with `qwen2.5-coder:14b`, set up 2026-10-10 --
+   so the earlier "this machine has none", measured 2026-09-28, no longer
+   holds, and `test_live_model` runs here. The synthetic set still does not
+   transfer to the real captures this item is about.
 
    What those runs cannot supply is the real captures this item is about:
    `evidence/` is not in this checkout and the synthetic set does not transfer.
