@@ -123,9 +123,17 @@
 #
 # It does not touch `make objsets`, which is what this file otherwise exists
 # for: the link sets come from `--eject` and nothing there runs a test.
+#
+# **`test` is on the include path too**, for the live drivers. They sit in
+# `test/live/` and include `"media_corpus.h"` from `test/`, which the quoted
+# form looks for beside the driver first and does not find; a plain `fmake`
+# compiled `try_media_model.cpp` anyway, as a widening candidate, and exited 1
+# on it after building both programs. Reported from fmake 2026-10-14 through
+# this tree's inbox, with the line. No header in `test/` shares a name with one
+# in `src/`, checked before adding it, so no include resolves differently.
 
 [project]
-include-dirs = ['src']
+include-dirs = ['src', 'test']
 test-env = ["QT_QPA_PLATFORM=offscreen", "QT_QPA_PLATFORMTHEME="]
 cflags  = ['-DHYDRA_VERSION="(link sets only; see fmake.toml)"']
 exclude = ["build/**", "build-android-*/**", "build-qmake/**",

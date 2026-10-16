@@ -38633,3 +38633,15 @@ to check, so a call carries its scope only when it has one, and the index
 does the rest. Measured after: 35 to 38 ms with the lists against 19 to 22
 without, at a load of 20, so the gain is within the noise. It is kept for
 the smaller script, and a test pins that a plain scope appears once.
+
+## A plain `fmake` exited 1, and `test` is now on its include path
+
+Reported 2026-10-14 by the fmake session, through this tree's inbox: a plain
+`fmake` built both programs and then exited 1, because it compiled
+`test/live/try_media_model.cpp` as a widening candidate, and that driver
+includes `"media_corpus.h"` from `test/`, which was on no include path.
+`fmake.toml` now has `include-dirs = ['src', 'test']`, and the reason is
+recorded beside it. No header name in `test/` collides with one in `src/`.
+Measured after: plain `fmake` exits 0 having built `hydra` and
+`list_coverage`, and `make -C test objsets` gives the same link sets. The
+only change is two objects in a different order in one program's list.

@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build 77bc0f22, mtime 2026-10-13 14:37)
+#     /home/claude/src/fmake/fmake  (build 0817c3ae, mtime 2026-10-14 20:47)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -5686,6 +5686,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_scriptlet_cost = \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/main_window.o \
 	$(BUILD_DIR)/app/policy_engine.o \
 	$(BUILD_DIR)/app/request_filter.o \
@@ -5695,16 +5696,15 @@ OBJS_try_scriptlet_cost = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
