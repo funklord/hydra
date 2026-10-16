@@ -2294,10 +2294,22 @@ int main(int argc, char **argv) {
 			      QString("40 rows put a scrollbar on the tree (visible=%1)")
 			              .arg(bar && bar->isVisible()));
 			if (bar && bar->isVisible()) {
-				const QRect grip_at(grip->mapTo(w.m_sidebar, QPoint(0, 0)),
-				                     grip->size());
-				const QRect bar_at(bar->mapTo(w.m_sidebar, QPoint(0, 0)),
-				                    bar->size());
+				// **Waited for, not slept for.** The grip moves aside when the
+				// scrollbar appears, through a deferred layout; a full run on a
+				// loaded machine measured it once before it had moved (grip
+				// 458..471 over a bar at 453..466) after the fixed 120 ms, and
+				// twice alone it passed. Polled to two seconds instead, so a
+				// grip that genuinely stays on the bar still fails.
+				auto grip_rect = [&] {
+					return QRect(grip->mapTo(w.m_sidebar, QPoint(0, 0)), grip->size());
+				};
+				auto bar_rect = [&] {
+					return QRect(bar->mapTo(w.m_sidebar, QPoint(0, 0)), bar->size());
+				};
+				for (int i = 0; i < 40 && grip_rect().intersects(bar_rect()); ++i)
+					spin(50);
+				const QRect grip_at = grip_rect();
+				const QRect bar_at  = bar_rect();
 				check(!grip_at.intersects(bar_at),
 				      QString("and the grip does not sit on top of it "
 				               "(grip x=%1..%2, scrollbar x=%3..%4)")
