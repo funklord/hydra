@@ -2633,11 +2633,25 @@ void main_window::start_investigation(annoyed_dialog *dlg,
 		dlg->log_line("done", QString("Kept %1 rule(s) for this site.")
 		                          .arg(rules.size()));
 	});
-	connect(dlg, &annoyed_dialog::point_requested, this, [this, view] {
-		// The picker works on the tab in front, so that has to be this one.
+	connect(dlg, &annoyed_dialog::point_requested, this, [this, view, dlg] {
+		// **The picker works on the tab in front, so this one is brought
+		// there.** It said to switch back and then began picking anyway, on
+		// whichever tab was in front -- and the view was a raw pointer, so a
+		// tab closed meanwhile would have been used after it was gone. Looked
+		// up by its node first: a view no longer in the tree is not asked.
+		const QString id = m_views_by_id.key(view);
+		node *n = id.isEmpty() ? nullptr : m_model->node_by_id(id);
+		if (!n) {
+			dlg->log_line("error", "The tab this is about has been closed, so "
+			                       "there is nothing to point at.");
+			return;
+		}
+		if (current_view() != view)
+			open_node(n);
 		if (current_view() != view) {
-			m_status->showMessage("Switch back to the tab this is about to "
-			                      "point at it.", 6000);
+			dlg->log_line("error", "That tab could not be brought to the front "
+			                       "to point at it.");
+			return;
 		}
 		m_pick_for_investigation = true;
 		m_picker->begin(view->url().toString());

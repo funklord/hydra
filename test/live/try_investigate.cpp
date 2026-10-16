@@ -211,6 +211,9 @@ int main(int argc, char *argv[]) {
 		tf.open(QIODevice::WriteOnly);
 		tf.write(QString("- [f0] folder | Mine\n"
 		                 "  - [a1] unopened | A page | %1/page.html | "
+		                 "created=2026-01-01T00:00:00 | seen=2026-01-01T00:00:00\n"
+		                 // A second, to switch to before Show Me.
+		                 "  - [a2] unopened | Another | %1/other.html | "
 		                 "created=2026-01-01T00:00:00 | seen=2026-01-01T00:00:00\n")
 		             .arg(origin).toUtf8());
 	}
@@ -227,7 +230,12 @@ int main(int argc, char *argv[]) {
 	emit tree_view->activated(
 	  tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
 	spin(3000);
-	web_view_backend *view = w.findChild<web_view_backend *>();
+	// By its address, not the first view found: the second tab is warmed
+	// in the background and has a view of its own.
+	web_view_backend *view = nullptr;
+	for (web_view_backend *v : w.findChildren<web_view_backend *>())
+		if (v->url().path() == "/page.html")
+			view = v;
 	QAction *annoyed = toolbar_action(&w, "Annoyed");
 	if (!view || !annoyed) {
 		std::printf("no tab or no button\n");
@@ -432,6 +440,35 @@ int main(int argc, char *argv[]) {
 		check(s.value("ai/load").toInt() == 30,
 		       QString("and the setting is remembered (%1)")
 		           .arg(s.value("ai/load").toString()));
+		d->close();
+		spin(1500);
+	}
+
+	// **Show Me brings the tab it is about to the front**, since the picker
+	// works on the tab in front. It said to switch back, then began picking
+	// anyway on whichever tab was there.
+	section("Show Me brings the investigated tab to the front");
+	{
+		srv.script = { "{\"action\":\"ask\",\"kind\":\"point\","
+		               "\"question\":\"Where is it?\"}" };
+		annoyed->trigger();
+		annoyed_dialog *d = nullptr;
+		until([&] { return (d = open_window()) != nullptr; }, 8000);
+		if (!d)
+			return 1;
+		if (QPushButton *start = button(d, "Work On It"))
+			start->click();
+		check(until([&] { return button(d, "Show Me") != nullptr; }, 40000),
+		      "the model asks to be shown");
+		emit tree_view->activated(
+		  tree_view->model()->index(1, 0, tree_view->model()->index(0, 0)));
+		spin(3000);
+		check(!view->widget()->isVisible(), "precondition: another tab is in front");
+		if (QPushButton *show = button(d, "Show Me"))
+			show->click();
+		spin(1500);
+		check(view->widget()->isVisible(),
+		      "Show Me brings the tab the window is about back to the front");
 		d->close();
 		spin(1500);
 	}

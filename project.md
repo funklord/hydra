@@ -37928,8 +37928,12 @@ Removing the destructor's cleanup reds the first.
   they keep sharing. The filter dialog also takes a reply only while it is
   waiting for one. With that guard removed, `test_rotation` sees a row
   proposed from a reply the dialog never asked for.
-- **"Show me" needs the tab in front**, since the picker works on the
-  current view; the window says so rather than switching.
+- **~~"Show me" needs the tab in front.~~ Fixed 2026-10-16**: Show Me
+  brings the investigated tab to the front, since the picker works on the
+  current view. It had said to switch back and then begun picking anyway,
+  on whichever tab was in front, through a raw pointer that a closed tab
+  would have left dangling. The view is now looked up by its tree node
+  first; a closed tab is said in the window's log and nothing is picked.
 - **Network trials are per site**, and one investigation runs at a time.
 - **Android**: `run_probe` answers empty there, so `look` sees nothing.
 - **~~Detection is the top frame.~~ Fixed 2026-10-16**: the probe is
