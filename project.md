@@ -682,12 +682,14 @@ ring-refusal in both directions, that a copy's id is new and both nodes stay
 findable in the index, that the properties editor cannot change an id, and that
 deleting takes the subtree but refuses the root.
 
-**Found while testing, not fixed:** `tree_outline::load` returns an empty root
-when the file cannot be opened, and `tab_tree_model::load` reports success — so
-a mistyped tree path is indistinguishable from an empty tree. It is probably
-deliberate, since a first run has no file yet, but nothing says so and the two
-cases deserve different words. Left alone rather than changed blind, because
-changing it would change what happens on somebody's first launch.
+**~~Found while testing, not fixed~~ -- said, 2026-10-17, without changing a
+first launch:** `tree_outline::load` returns an empty root when the file cannot
+be opened, and `tab_tree_model::load` reports success, so a mistyped tree path
+looked exactly like an empty tree. A tree **named on the command line** that
+does not exist is still started there, since that is how a new tree is made,
+but it is now said: on stderr, and in the status bar for a desktop launch,
+naming the file and suggesting a check of the name. The personal tree's first
+run is seeded and never reaches this, so it is unchanged.
 
 ## Locked tabs and sub-tabs (§5.5, done)
 

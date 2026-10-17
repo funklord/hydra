@@ -541,7 +541,17 @@ int main(int argc, char *argv[]) {
 	// `!=` guard skips the whole block, and nothing here says anything at all.
 	// `load_tree` does say something, on stderr, which a desktop launch has
 	// nowhere to show.
-	if (!w.load_tree(tree_path)) {
+	// **A tree named on the command line that is not there is started empty,
+	// and said.** A mistyped path and a new tree look the same otherwise --
+	// an empty window -- and the person who meant their own tree is the one
+	// who needs telling. Found while testing long ago and left alone because
+	// the first run must not change; it does not: the personal tree is
+	// seeded and never reaches this, only an explicit argument does.
+	const bool named_but_absent = !tree_arg.isEmpty() && !QFileInfo::exists(tree_path);
+	if (w.load_tree(tree_path)) {
+		if (named_but_absent)
+			w.note_new_tree(tree_path);
+	} else {
 		const QString fallback = default_tree();
 		bool loaded = false;
 		QString tried = tree_path;

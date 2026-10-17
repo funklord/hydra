@@ -5982,6 +5982,16 @@ void main_window::warn_no_tree(const QString &path) {
 	m_page_note = false;
 }
 
+void main_window::note_new_tree(const QString &path) {
+	qWarning("tree: %s did not exist; started a new, empty tree there",
+	         qPrintable(path));
+	if (m_status)
+		m_status->showMessage(
+		    QString("%1 did not exist, so this is a new, empty tab tree. If you "
+		             "meant an existing one, check the name.")
+		        .arg(QFileInfo(path).fileName()), 20000);
+}
+
 stream_context main_window::page_context(web_view_backend *v) const {
 	stream_context ctx;
 	if (!v)

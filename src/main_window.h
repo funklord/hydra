@@ -127,6 +127,10 @@ public:
 	// read, rescued to a `.new` name beside it -- saves perfectly well and
 	// says so itself.
 	void warn_no_tree(const QString &path);
+	// Says that a tree named on the command line did not exist and was
+	// started empty, which is otherwise indistinguishable from a tree whose
+	// tabs are gone. Not for the personal tree's first run, which is seeded.
+	void note_new_tree(const QString &path);
 
 	// What a fetch outside the engine should say about itself, for the page
 	// `v` is on: the Referer that page would send, and what this browser
