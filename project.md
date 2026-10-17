@@ -38671,3 +38671,38 @@ recorded beside it. No header name in `test/` collides with one in `src/`.
 Measured after: plain `fmake` exits 0 having built `hydra` and
 `list_coverage`, and `make -C test objsets` gives the same link sets. The
 only change is two objects in a different order in one program's list.
+
+## The outward identity: what this engine lets hydra set, measured
+
+Reported 2026-10-17: Cloudflare's "verify you are human" failing on coupert.
+The holder: "an inability to change our entire outward surface undermines the
+purpose of this browser", and asked for **current Chrome on Linux** as the
+identity. The prime suspect is a contradiction: the user agent string claims
+Chrome 140, chosen because a bank refused the honest 122, while the engine's
+client hints say Chromium 122. `try_challenge` loads a page under `xvfb-run`
+in four modes (as shipped, Qt's own user agent, no MediaSource hook, both). On
+coupert's homepage every mode went straight through, with no challenge, so
+Cloudflare's choice of whom to challenge has not been reproduced here.
+
+`try_cdp` measures each route to a consistent identity: the headers a local
+server receives and what the page, a worker and a cross-origin frame report,
+sent back to the server since an attached front end blocks the isolated
+world.
+
+| Route | Result |
+|---|---|
+| `--remote-debugging-pipe` | Named in Qt's library; no answer through `QTWEBENGINE_CHROMIUM_FLAGS`. |
+| A debugging port | Would work; **refused**, since any local process, the other account's included, could drive the browser. |
+| A hidden DevTools front end (`setDevToolsPage`), sending `Emulation.setUserAgentOverride` | Every surface says 140, workers and frames too, and it survives navigation. But the page can see it (a console getter fires), `debugger;` paused a page 9.7 s with skip-all-pauses set, pages without it stopped reporting, the probe is blocked, it costs about 142 MB a tab, and it **does not survive detaching**. Rejected. |
+| `QWebEngineClientHints` (Qt 6.8) | Sets the high-entropy hints; the brand list (`Sec-CH-UA`, `navigator.userAgentData.brands`) stayed at 122. Qt's documentation says a set list is always extended with the engine's real Chromium and a random brand, through 6.10. |
+| The request interceptor setting `Sec-CH-UA` | **Works**: both the page's and a cross-origin frame's requests arrived as 140. |
+
+So every HTTP surface can be made consistent today: the profile's user
+agent, the interceptor's brand header, and `QWebEngineClientHints` for the
+rest. **The JavaScript brand list cannot**: `navigator.userAgentData.brands`
+says 122 in the page, its frames and its workers. A main-world script could
+cover the page and frames, detectably, but never workers, and comparing a
+worker's answer with the page's is a standard fingerprinting test. A
+complete fix needs a brand-list setter in QtWebEngine itself. Chromium
+supports it internally, so the patch would be small, but hydra would then
+build its own QtWebEngine. That is the holder's decision.
