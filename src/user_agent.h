@@ -2,6 +2,7 @@
 
 #include <QRegularExpression>
 #include <QString>
+#include <QVariantMap>
 
 // What this browser says it is.
 //
@@ -28,16 +29,42 @@
 // failure in general and the better one here, because being refused up front
 // is unconditional and cannot be worked around from inside the page.
 //
-// **What it does not fix, measured rather than assumed:** `sec-ch-ua` still
-// reports `"Chromium";v="122"`. Chromium builds client hints from its real
-// version and Qt exposes no override, so a site reading `navigator.
-// userAgentData` instead of the string sees through this. A known limit.
+// **The client hints say the same, where the engine allows.** The string
+// alone left `Sec-CH-UA` and `navigator.userAgentData` at the engine's real
+// 122 -- two versions at once, which is what a bot check compares (a
+// Cloudflare check failing on coupert, 2026-10-17) and a fingerprint of its
+// own. The holder: the whole outward surface is this browser's to set, as
+// "current Chrome on Linux". Qt 6.8's `QWebEngineClientHints` sets the full
+// version and the full version list; the brand list itself -- the header on
+// every request, and `brands` in pages, frames and workers -- it cannot, and
+// no Qt through 6.10 can. hydra's `engine-patch/0001` adds
+// `brandVersionList` to QtWebEngine for it. Set by name, so hydra builds and
+// runs on an unpatched engine too, where it says once that the brand list is
+// still the engine's. The routes tried and refused are in project.md.
 namespace user_agent {
 
 // The Chrome major to claim. **It has to be maintained**: nothing here can
 // work out what today's Chrome is, and a number left alone for two years
 // recreates the bug this exists to fix.
 constexpr int k_claimed_chrome = 140;
+
+// The full version claimed with it, as Chrome reports one: the major above
+// and a build of that release.
+inline QString claimed_full_version(int claimed = k_claimed_chrome) {
+	return QStringLiteral("%1.0.7339.80").arg(claimed);
+}
+
+// The brands Chrome sends, brand to version: majors for the brand list, full
+// versions for the full version list. The middle one is Chrome's own
+// "GREASE" brand for that release, which it sends so that sites cannot
+// depend on the list's exact shape.
+inline QVariantMap claimed_brands(bool full, int claimed = k_claimed_chrome) {
+	const QString v = full ? claimed_full_version(claimed) : QString::number(claimed);
+	return QVariantMap{ { QStringLiteral("Chromium"), v },
+	                    { QStringLiteral("Not=A?Brand"),
+	                      full ? QStringLiteral("24.0.0.0") : QStringLiteral("24") },
+	                    { QStringLiteral("Google Chrome"), v } };
+}
 
 // Qt's string in, the one to send out. Pure, so it can be tested without an
 // engine -- the edge cases are what make it worth testing at all.

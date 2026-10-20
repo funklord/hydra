@@ -2029,6 +2029,20 @@ int main(int argc, char **argv) {
 		check(user_agent::corrected(wout, 140) == wout,
 		      "and running it twice changes nothing, as on the desktop");
 
+		// **The hints claim what the string claims**: the same major in the
+		// brand list, a full version of that major in the full list, and
+		// Chrome's own names, so a check comparing them sees one browser.
+		const QVariantMap brands = user_agent::claimed_brands(false, 140);
+		const QVariantMap full   = user_agent::claimed_brands(true, 140);
+		check(brands.value("Chromium") == "140" && brands.value("Google Chrome") == "140",
+		      "the brand list names the claimed major, as Chromium and as Chrome");
+		check(full.value("Chromium").toString().startsWith("140.") &&
+		      full.value("Chromium") == user_agent::claimed_full_version(140) &&
+		      brands.keys() == full.keys(),
+		      "and the full list the same brands, each a full version of it");
+		check(out.contains("Chrome/140."),
+		      "which is the major the string itself says");
+
 		// "Request desktop site", which is the only thing that opens a site
 		// refusing phones outright. Measured case: teams.microsoft.com sends a
 		// mobile user agent to /v2/unsupported-browser#isMobile=true,

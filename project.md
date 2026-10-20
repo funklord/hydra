@@ -38706,3 +38706,32 @@ worker's answer with the page's is a standard fingerprinting test. A
 complete fix needs a brand-list setter in QtWebEngine itself. Chromium
 supports it internally, so the patch would be small, but hydra would then
 build its own QtWebEngine. That is the holder's decision.
+
+**The engine patch, built and measured 2026-10-20.** On the holder's choice,
+`engine-patch/0001-client-hints-brand-version-list.patch` adds
+`QWebEngineClientHints::brandVersionList` to QtWebEngine 6.8.2, beside
+`fullVersionList`, backed by the same `blink::UserAgentMetadata`. It sets
+`brand_version_list`, the list Qt never let an application set. Qt's own
+setter copies the full list as given, so the "automatically extended"
+wording in its documentation is not this code's doing. Built as Debian's
+`qt6-webengine 6.8.2+dfsg-4+hydra1` packages in `~/src/qt6-webengine`
+(sources from `apt-get source`, build dependencies from
+`apt-get build-dep` on the unpacked tree, `dpkg-buildpackage -B` with
+`parallel=16 nocheck nodoc`, about 2.3 hours).
+
+hydra sets the identity in `qtwebengine_factory`: the user agent string,
+the full version and full version list, and the brand list **by property
+name**, so hydra builds against the stock headers and runs on the stock
+engine. There it says once, on stderr, that the brand list is still the
+engine's. Measured with `try_cdp hints`, the patched library unpacked and
+used through `LD_LIBRARY_PATH` and `QTWEBENGINEPROCESS_PATH`, not installed:
+
+- `Sec-CH-UA` from both the page and a cross-origin frame read
+  `"Chromium";v="140", "Google Chrome";v="140", "Not=A?Brand";v="24"`;
+- the page, its worker, the frame and the frame's worker report the same
+  brands, after navigating to another origin as well;
+- no debugger can be detected, and `debugger;` does not pause.
+
+The stock engine gives 122 on every surface and the warning. **Not decided
+yet**: how the patched engine is installed, whether as Debian packages
+replacing the system QtWebEngine, or as a private copy for hydra.

@@ -1,0 +1,129 @@
+From: Nabeel Sowan <funklord@vibes.se>
+Subject: [PATCH] QWebEngineClientHints: add brandVersionList
+
+QWebEngineClientHints can set the full version list, the high-entropy
+Sec-CH-UA-Full-Version-List, but not the brand list itself: Sec-CH-UA,
+sent with every request, and navigator.userAgentData.brands in pages,
+frames and workers. Those keep the embedded Chromium's own version
+whatever an application sets, so a browser that sets its user agent and
+full version list consistently still presents two versions at once --
+which is what bot checks compare, and a fingerprint of its own.
+
+Add brandVersionList beside fullVersionList, backed by the same
+blink::UserAgentMetadata, setting brand_version_list.
+
+---
+--- a/src/core/profile_adapter.h
++++ b/src/core/profile_adapter.h
+@@ -148,6 +148,7 @@
+         UABitness,
+         UAFullVersionList,
+         UAWOW64,
++        UABrandVersionList,
+     };
+ 
+     HttpCacheType httpCacheType() const;
+--- a/src/core/profile_adapter.cpp
++++ b/src/core/profile_adapter.cpp
+@@ -655,6 +655,12 @@
+         }
+     case ProfileAdapter::UAWOW64:
+         return QVariant(userAgentMetadata.wow64);
++    case ProfileAdapter::UABrandVersionList: {
++            QJsonObject ret;
++            for (const auto &value : userAgentMetadata.brand_version_list)
++                ret.insert(toQString(value.brand), QJsonValue(toQString(value.version)));
++            return QVariant(ret);
++        }
+     default:
+         return QVariant();
+     }
+@@ -698,6 +704,16 @@
+     case ProfileAdapter::UAWOW64:
+         userAgentMetadata.wow64 = value.toBool();
+         break;
++    case ProfileAdapter::UABrandVersionList: {
++        userAgentMetadata.brand_version_list.clear();
++        QJsonObject brandVersionList = value.toJsonObject();
++        for (const QString &key : brandVersionList.keys())
++            userAgentMetadata.brand_version_list.push_back({
++                key.toStdString(),
++                brandVersionList.value(key).toString().toStdString()
++            });
++        break;
++    }
+     default:
+         break;
+     }
+--- a/src/core/api/qwebengineclienthints.h
++++ b/src/core/api/qwebengineclienthints.h
+@@ -28,6 +28,7 @@
+     Q_PROPERTY(QString platformVersion READ platformVersion WRITE setPlatformVersion FINAL)
+     Q_PROPERTY(QString bitness READ bitness WRITE setBitness FINAL)
+     Q_PROPERTY(QVariantMap fullVersionList READ fullVersionList WRITE setFullVersionList FINAL)
++    Q_PROPERTY(QVariantMap brandVersionList READ brandVersionList WRITE setBrandVersionList FINAL)
+     Q_PROPERTY(bool wow64 READ isWow64 WRITE setIsWow64 FINAL)
+ 
+     Q_PROPERTY(bool isAllClientHintsEnabled READ isAllClientHintsEnabled WRITE setAllClientHintsEnabled FINAL)
+@@ -47,6 +48,7 @@
+     QString platformVersion() const;
+     QString bitness() const;
+     QVariantMap fullVersionList() const;
++    QVariantMap brandVersionList() const;
+     bool isWow64() const;
+ 
+     void setArch(const QString &);
+@@ -57,6 +59,7 @@
+     void setPlatformVersion(const QString &);
+     void setBitness(const QString &);
+     void setFullVersionList(const QVariantMap &);
++    void setBrandVersionList(const QVariantMap &);
+     void setIsWow64(bool);
+ 
+     bool isAllClientHintsEnabled();
+--- a/src/core/api/qwebengineclienthints.cpp
++++ b/src/core/api/qwebengineclienthints.cpp
+@@ -149,6 +149,26 @@
+ }
+ 
+ /*!
++    \property QWebEngineClientHints::brandVersionList
++    The value of the \c{Sec-CH-UA} HTTP header and \c{brands} member of NavigatorUAData in JavaScript.
++
++    It holds brand name and major version pairs in a QVariantMap, and is the
++    low-entropy counterpart of fullVersionList: sent with every request, and
++    visible to pages, frames and workers alike. Set it together with
++    fullVersionList and the user agent string so that all three agree.
++*/
++QVariantMap QWebEngineClientHints::brandVersionList() const
++{
++    QVariantMap ret;
++    if (!m_profileAdapter)
++        return ret;
++    QJsonObject brandVersionList = m_profileAdapter->clientHint(QtWebEngineCore::ProfileAdapter::UABrandVersionList).toJsonObject();
++    for (const QString &key : brandVersionList.keys())
++        ret.insert(key, brandVersionList.value(key).toVariant());
++    return ret;
++}
++
++/*!
+     \property QWebEngineClientHints::wow64
+     The value of the \c{Sec-CH-UA-Wow64} HTTP header and \c{wow64} member of NavigatorUAData in JavaScript.
+ */
+@@ -218,6 +238,16 @@
+     m_profileAdapter->setClientHint(QtWebEngineCore::ProfileAdapter::UAFullVersionList, QVariant(jsonObject));
+ }
+ 
++void QWebEngineClientHints::setBrandVersionList(const QVariantMap &brandVersionList)
++{
++    if (!m_profileAdapter)
++        return;
++    QJsonObject jsonObject;
++    for (auto i = brandVersionList.cbegin(), end = brandVersionList.cend(); i != end; ++i)
++        jsonObject.insert(i.key(), QJsonValue(i.value().toString()));
++    m_profileAdapter->setClientHint(QtWebEngineCore::ProfileAdapter::UABrandVersionList, QVariant(jsonObject));
++}
++
+ void QWebEngineClientHints::setIsWow64(bool wow64)
+ {
+     if (!m_profileAdapter)

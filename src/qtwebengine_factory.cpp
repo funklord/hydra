@@ -15,6 +15,7 @@
 #include <QTimer>
 #include <QNetworkCookie>
 #include <QNetworkCookieJar>
+#include <QWebEngineClientHints>
 #include <QWebEngineProfile>
 #include <QWebEngineView>
 #include <QWebEngineUrlRequestJob>
@@ -144,6 +145,16 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 	// than here -- this is the one line that applies it.
 	m_profile->setHttpUserAgent(
 	  user_agent::corrected(m_profile->httpUserAgent()));
+	// The hints, to agree with it; the brand list by name, since only a
+	// QtWebEngine carrying engine-patch/0001 has it.
+	if (QWebEngineClientHints *hints = m_profile->clientHints()) {
+		hints->setFullVersion(user_agent::claimed_full_version());
+		hints->setFullVersionList(user_agent::claimed_brands(true));
+		if (!hints->setProperty("brandVersionList", user_agent::claimed_brands(false)))
+			qWarning("identity: this QtWebEngine cannot set the brand list, so "
+			         "Sec-CH-UA and navigator.userAgentData.brands still name the "
+			         "engine's own Chromium (hydra engine-patch 0001 is not in it)");
+	}
 
 	// **And what languages it asks for, which was nothing at all.** Qt sets no
 	// default and nothing here called for one, so every request went out
