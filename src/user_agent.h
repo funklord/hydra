@@ -60,9 +60,9 @@ inline QString claimed_full_version(int claimed = k_claimed_chrome) {
 // depend on the list's exact shape.
 inline QVariantMap claimed_brands(bool full, int claimed = k_claimed_chrome) {
 	const QString v = full ? claimed_full_version(claimed) : QString::number(claimed);
+	const QString grease = full ? QStringLiteral("24.0.0.0") : QStringLiteral("24");
 	return QVariantMap{ { QStringLiteral("Chromium"), v },
-	                    { QStringLiteral("Not=A?Brand"),
-	                      full ? QStringLiteral("24.0.0.0") : QStringLiteral("24") },
+	                    { QStringLiteral("Not=A?Brand"), grease },
 	                    { QStringLiteral("Google Chrome"), v } };
 }
 
