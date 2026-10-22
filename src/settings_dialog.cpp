@@ -2637,7 +2637,9 @@ void settings_dialog::build_player_page(QWidget *page) {
 	  "Keep it up to date",
 	  "Sites change often, and an old yt-dlp stops working with them. At most "
 	  "once a day, as Find Media looks a page up, the latest release is "
-	  "fetched from yt-dlp's GitHub and used only if its signature checks out.",
+	  "fetched from yt-dlp's GitHub and used only if its signature checks out. "
+	  "curl_cffi, which lets yt-dlp connect like a browser where a site "
+	  "refuses anything else, is kept current from PyPI beside it.",
 	  m_ytdlp_auto, page));
 	auto *update = new QPushButton("&Update now", page);
 	update->setObjectName("ytdlp_update_now");

@@ -598,6 +598,16 @@ int main(int argc, char **argv) {
 			check(older.version() == pinned,
 			      QString("and an older one is not (%1)").arg(older.description()));
 		}
+		// **Only an environment that has imported curl_cffi is used.** A
+		// half-made one -- python there, no marker -- must not be.
+		const QString venv = QDir(ytdlp_updater::directory()).filePath("venv");
+		QDir().mkpath(venv + "/bin");
+		QFile::link(QStandardPaths::findExecutable("python3"), venv + "/bin/python");
+		check(ytdlp_updater::python().isEmpty(),
+		      "a Python environment that never imported curl_cffi is not used");
+		put("venv/impersonation-ok", "0.16.3");
+		check(ytdlp_updater::python() == venv + "/bin/python",
+		      QString("one that did is (%1)").arg(ytdlp_updater::python()));
 		if (ours)
 			QDir(ytdlp_updater::directory()).removeRecursively();
 		QStandardPaths::setTestModeEnabled(false);

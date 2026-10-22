@@ -46,6 +46,24 @@ int main(int argc, char *argv[]) {
 	check(!ytdlp_updater::program().isEmpty() && !ytdlp_updater::installed_version().isEmpty(),
 	      QString("a release is in place, %1").arg(ytdlp_updater::installed_version()));
 
+	// **Impersonation**, which some sites require: measured 2026-10-23, a
+	// video page refused yt-dlp with 403 until `curl_cffi` was there.
+	check(!ytdlp_updater::python().isEmpty(),
+	      QString("a Python with curl_cffi is ready (%1)").arg(ytdlp_updater::python()));
+	{
+		QProcess t;
+		t.start(ytdlp_updater::python(),
+		        { ytdlp_updater::program(), "--list-impersonate-targets" });
+		t.waitForFinished(60000);
+		const QString out = QString::fromUtf8(t.readAllStandardOutput());
+		// Without curl_cffi every target is listed "(unavailable)"; with it
+		// they are not.
+		check(out.contains("curl_cffi") && !out.contains("(unavailable)"),
+		      QString("and with it yt-dlp can impersonate (%1)")
+		          .arg(out.contains("(unavailable)") ? "targets unavailable"
+		                                            : "targets available"));
+	}
+
 	ytdlp_resolver r;
 	check(r.description().contains("updated") || !updated,
 	      QString("and the resolver runs it where it is newer (%1)").arg(r.description()));

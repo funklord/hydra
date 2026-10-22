@@ -15,6 +15,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QTimer>
 
 namespace {
 
@@ -50,6 +51,14 @@ QString ytdlp_updater::installed_version() {
 	if (!f.open(QIODevice::ReadOnly))
 		return QString();
 	return QString::fromUtf8(f.readAll()).trimmed();
+}
+
+QString ytdlp_updater::python() {
+	const QString py = QDir(directory()).filePath("venv/bin/python");
+	return QFileInfo::exists(QDir(directory()).filePath("venv/impersonation-ok")) &&
+	               QFileInfo(py).isExecutable()
+	         ? py
+	         : QString();
 }
 
 QString ytdlp_updater::tag_from(const QUrl &url) {
@@ -256,7 +265,92 @@ void ytdlp_updater::on_program(QNetworkReply *r) {
 }
 
 void ytdlp_updater::done(bool ok, bool updated, const QString &text) {
+	m_ok      = ok;
+	m_updated = updated;
+	m_text    = text;
+	ensure_impersonation();
+}
+
+void ytdlp_updater::run_step(const QString &program, const QStringList &args,
+                             int timeout_ms,
+                             void (ytdlp_updater::*next)(bool, const QString &)) {
+	auto *p = new QProcess(this);
+	m_proc = p;
+	p->setProcessChannelMode(QProcess::MergedChannels);
+	// Bounded: a pip that hangs on a network that never answers is killed,
+	// and said, rather than holding the check open for ever.
+	auto *limit = new QTimer(p);
+	limit->setSingleShot(true);
+	connect(limit, &QTimer::timeout, p, [p] { p->kill(); });
+	connect(p, &QProcess::finished, this, [this, p, next](int code, QProcess::ExitStatus st) {
+		const QString out = QString::fromUtf8(p->readAll());
+		p->deleteLater();
+		m_proc = nullptr;
+		(this->*next)(st == QProcess::NormalExit && code == 0, out);
+	});
+	connect(p, &QProcess::errorOccurred, this, [this, p, next](QProcess::ProcessError e) {
+		if (e != QProcess::FailedToStart)
+			return;   // the others end in `finished` as well
+		p->deleteLater();
+		m_proc = nullptr;
+		(this->*next)(false, p->errorString());
+	});
+	p->start(program, args);
+	limit->start(timeout_ms);
+}
+
+void ytdlp_updater::ensure_impersonation() {
+	m_had_python = !python().isEmpty();
+	const QString venv = QDir(directory()).filePath("venv");
+	if (QFileInfo::exists(QDir(venv).filePath("bin/python")))
+		return on_venv(true, QString());
+	const QString py = QStandardPaths::findExecutable("python3");
+	if (py.isEmpty())
+		return finish_all("no python3, so no impersonation for yt-dlp");
+	QDir().mkpath(directory());
+	run_step(py, { "-m", "venv", venv }, 120000, &ytdlp_updater::on_venv);
+}
+
+void ytdlp_updater::on_venv(bool ok, const QString &output) {
+	if (!ok)
+		return finish_all("could not make a Python environment for impersonation "
+		                  "(is python3-venv installed?): " + output.trimmed().right(200));
+	// Prebuilt wheels only: nothing is compiled on this machine, and a
+	// release without one for this platform is skipped rather than built.
+	const QStringList pip = { "-m", "pip", "install", "--disable-pip-version-check",
+	                          "--no-input", "--quiet", "--only-binary=:all:",
+	                          "--upgrade", "curl_cffi" };
+	run_step(QDir(directory()).filePath("venv/bin/python"), pip, 300000,
+	         &ytdlp_updater::on_pip);
+}
+
+void ytdlp_updater::on_pip(bool ok, const QString &output) {
+	// Asked whether it imports, whichever way pip went: an environment that
+	// had it keeps working when one day's upgrade fails.
+	if (!ok)
+		qWarning("yt-dlp: pip could not install curl_cffi: %s",
+		         qPrintable(output.trimmed().right(300)));
+	run_step(QDir(directory()).filePath("venv/bin/python"),
+	         { "-c", "import curl_cffi; print(curl_cffi.__version__)" }, 60000,
+	         &ytdlp_updater::on_import);
+}
+
+void ytdlp_updater::on_import(bool ok, const QString &output) {
+	const QString marker = QDir(directory()).filePath("venv/impersonation-ok");
+	if (!ok) {
+		QFile::remove(marker);
+		return finish_all("impersonation is not available: curl_cffi would not install");
+	}
+	QFile f(marker);
+	if (f.open(QIODevice::WriteOnly))
+		f.write(output.trimmed().toUtf8());
+	finish_all("impersonation by curl_cffi " + output.trimmed());
+}
+
+void ytdlp_updater::finish_all(const QString &imp_text) {
+	const bool changed = m_updated || (m_had_python != !python().isEmpty());
+	const QString text = m_text + "; " + imp_text;
 	QSettings s = state();
 	s.setValue("ytdlp/last_result", text);
-	emit finished(ok, updated, text);
+	emit finished(m_ok, changed, text);
 }

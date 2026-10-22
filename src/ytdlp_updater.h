@@ -4,6 +4,7 @@
 #include <QNetworkReply>
 #include <QObject>
 #include <QPointer>
+#include <QProcess>
 #include <QString>
 #include <QUrl>
 
@@ -44,10 +45,21 @@ public:
 	static QString program();
 	static QString installed_version();
 
+	// **The Python to run yt-dlp with, where impersonation works**, or
+	// empty for the system's python3. Some sites refuse any connection that
+	// does not look like a browser's, down to the TLS handshake: measured
+	// 2026-10-23, a video page answered 403 to yt-dlp and to curl with a
+	// browser's user agent, and gave three formats once yt-dlp had
+	// `curl_cffi`. Debian does not package it, so by the holder's choice
+	// hydra keeps a private environment in the profile with it, from PyPI,
+	// upgraded with each daily check. Only an environment that has imported
+	// `curl_cffi` is named here.
+	static QString python();
+
 	// Check for a newer release. Without `forced`, at most once a day: a
 	// check that ran in the last 24 hours, finished or not, is not repeated.
 	void check(bool forced = false);
-	bool busy() const { return m_reply != nullptr; }
+	bool busy() const { return m_reply != nullptr || m_proc != nullptr; }
 
 	// --- pure, and separately testable ---------------------------------
 	// The release a `releases/tag/<tag>` address names, or empty.
@@ -75,11 +87,25 @@ private:
 	void on_sums(QNetworkReply *r);
 	void on_sig(QNetworkReply *r);
 	void on_program(QNetworkReply *r);
+	// The release half is decided; the impersonation half runs next, and
+	// `finished` follows both.
 	void done(bool ok, bool updated, const QString &text);
+	void ensure_impersonation();
+	void run_step(const QString &program, const QStringList &args, int timeout_ms,
+	              void (ytdlp_updater::*next)(bool ok, const QString &output));
+	void on_venv(bool ok, const QString &output);
+	void on_pip(bool ok, const QString &output);
+	void on_import(bool ok, const QString &output);
+	void finish_all(const QString &imp_text);
 
 	QNetworkAccessManager *m_net = nullptr;
 	QPointer<QNetworkReply> m_reply;
 	QString    m_tag;
 	QByteArray m_sums;
 	QByteArray m_want;   // the sha256 the release's sums give its yt-dlp
+	// The release half's answer, held while the impersonation half runs.
+	bool    m_ok = false, m_updated = false;
+	QString m_text;
+	bool    m_had_python = false;   // whether impersonation worked before this run
+	QPointer<QProcess> m_proc;
 };

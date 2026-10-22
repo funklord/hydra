@@ -39189,3 +39189,32 @@ and signature (`test/fixture/ytdlp`):
 
 `test/live/try_ytdlp_update` runs the whole thing against GitHub in
 test mode.
+
+**Impersonation, the same night (2026-10-23).** The holder reported a
+video page that yt-dlp could not read, even after the update. The site
+answered 403 to yt-dlp, and to curl with a browser's user agent, because
+it checks that the connection itself, down to the TLS handshake, looks
+like a browser's. yt-dlp said so: "no impersonate target is available".
+With `curl_cffi` in a scratch environment, the same yt-dlp found the
+video's three sizes.
+
+Debian does not package `curl_cffi`, and it is compiled code (a modified
+curl). The holder chose for hydra to manage it. The daily check keeps a
+private environment at `<app data>/yt-dlp/venv`:
+- made with `python3 -m venv`;
+- `curl_cffi` installed and upgraded by pip, prebuilt wheels only, so
+  nothing compiles here;
+- marked usable only after `import curl_cffi` succeeds.
+
+`ytdlp_resolver` runs yt-dlp, the pinned or the updated copy, with that
+environment's Python when it is marked, and the system's otherwise. A
+day whose upgrade fails keeps the environment that worked.
+
+**The trust is weaker than yt-dlp's**, and was chosen knowing it. The
+wheel comes from PyPI over TLS, with PyPI's checksums, but carries no
+signature from its authors that hydra could check.
+
+`try_ytdlp_update` checks the environment is made, and that yt-dlp run
+with it lists its impersonation targets as available rather than
+"(unavailable)". `test_ytdlp` checks that a half-made environment, never
+marked, is not used.

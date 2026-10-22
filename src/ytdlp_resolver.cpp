@@ -83,7 +83,12 @@ void ytdlp_resolver::refresh() {
 	//
 	// python3 is what makes the checkout runnable; without an interpreter it
 	// is inert source, so fall through to PATH rather than reporting nothing.
-	const QString python = QStandardPaths::findExecutable("python3");
+	// The private environment where impersonation works, when there is one
+	// (`ytdlp_updater::python`); the system's python3 otherwise. Either runs
+	// the vendored checkout and an updated release alike.
+	const QString python = !ytdlp_updater::python().isEmpty()
+	                         ? ytdlp_updater::python()
+	                         : QStandardPaths::findExecutable("python3");
 	if (!python.isEmpty()) {
 		for (const QString &dir : candidates()) {
 			if (!looks_like_checkout(dir))
