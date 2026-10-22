@@ -38732,6 +38732,16 @@ used through `LD_LIBRARY_PATH` and `QTWEBENGINEPROCESS_PATH`, not installed:
   brands, after navigating to another origin as well;
 - no debugger can be detected, and `debugger;` does not pause.
 
-The stock engine gives 122 on every surface and the warning. **Not decided
-yet**: how the patched engine is installed, whether as Debian packages
-replacing the system QtWebEngine, or as a private copy for hydra.
+The stock engine gives 122 on every surface and the warning.
+
+**Installed as Debian packages, on the holder's choice, 2026-10-22**: the 15
+`+hydra1` packages that replace the installed ones, and
+`libqt6webengine6-data`, which the core requires at the same version and an
+arch-only build does not produce. It was built afterwards from the same tree
+with `dpkg-buildpackage -A -nc`, so nothing was recompiled. Measured after
+the install with `try_cdp hints` against the system library: every surface
+says Chrome 140, and the running hydra logged no brand-list warning. **A
+Debian update of `qt6-webengine` would replace these** and bring the
+engine's own brand list back. The warning on stderr is how it shows;
+`apt-mark hold` prevents it, and rebuilding means `engine-patch/0001` on
+the new source.
