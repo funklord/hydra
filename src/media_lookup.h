@@ -55,6 +55,15 @@ public:
 	// For "Clear browsing data": these are a record of where somebody went.
 	int  clear();
 
+	// **Kept across a restart**, because what a lookup found is good for
+	// hours and restarting the browser did not change it -- the holder
+	// found the cache gone after one, 2026-10-22. Only finished entries are
+	// written, and only those still good; reading drops any that lapsed
+	// while the browser was closed. False when the file could not be
+	// written or read; an absent file reads as an empty cache.
+	bool save(const QString &path, const QDateTime &now) const;
+	bool load(const QString &path, const QDateTime &now);
+
 private:
 	QHash<QString, media_lookup> m_entries;
 };

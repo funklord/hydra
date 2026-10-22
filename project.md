@@ -38942,6 +38942,35 @@ It is local only by default, whatever the main choice is, and can name a
 smaller local model. The holder's reasoning: work that runs often and
 asks little isn't worth sending out, and most people will keep it local.
 
+**A video's sizes and formats fold under one row** (2026-10-22, the
+holder, after finding five rows for every size). YouTube offers each size
+five times: H.264 and VP9 each as a file and as a stream, plus AV1 as a
+file. Measured on Big Buck Bunny at 1080p60, the files are 258, 169 and
+124 MB, and the 50-format list is kept with its addresses replaced as
+`test/fixture/media/formats_bbb.json`. None of them is the uploaded
+original: YouTube re-encodes everything, and yt-dlp says nothing about
+the source.
+
+How the rows are laid out:
+- **The video's row** is the version Save takes for the picture, the
+  best up to 1080p.
+- **Under it**, every size, largest first.
+- **Under each size**, that size's other formats.
+- **Labels** name the size, codec and file size, so the formats no
+  longer read as copies.
+
+Each size is led by the most compatible version, which was the holder's
+choice (`ytdlp_resolver::picture_leads`): a file over a stream, then
+H.264, VP9, AV1. H.264 plays everywhere, old mplayer included, and joins
+M4A sound without converting. It was also already what Save took, so
+Save is unchanged. `best_picture` now prefers a size's lead explicitly
+rather than whichever came first.
+
+**The cache survives a restart** (`media-lookups.json` in app data). Only
+finished entries that are still good are written, and any that lapsed
+while the browser was closed are dropped on reading. The holder found it
+gone after a restart; it had lived in memory only.
+
 **One sound-only row: the best.** That means the highest bitrate (`abr`,
 else `tbr`), a direct file over a manifest at the same rate, then the
 larger file (`ytdlp_resolver::best_sound_format`). Sound is always wanted

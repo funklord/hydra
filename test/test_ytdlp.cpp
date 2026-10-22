@@ -12,6 +12,8 @@
 #include <QFileInfo>
 #include <QStandardPaths>
 #include <QStringList>
+#include <QSet>
+#include <QMap>
 #include <QEventLoop>
 #include <QSignalSpy>
 #include <QTimer>
@@ -467,6 +469,56 @@ int main(int argc, char **argv) {
 		      "vcodec":"none","acodec":"opus","tbr":133.5}]})");
 		check(!r.formats.isEmpty() && qFuzzyCompare(r.formats.first().abr, 133.5),
 		      "the rate is read, from tbr where abr is absent");
+	}
+
+	// **Five rows for every size**: YouTube offers each one as H.264 and VP9,
+	// each as a file and as a stream, and as AV1 -- one picture in five
+	// formats, which a flat list read as five copies. The holder,
+	// 2026-10-22: one per size, the most compatible leading. The fixture is
+	// a real answer's format list, Big Buck Bunny, with its signed addresses
+	// replaced.
+	section("each size has one lead, and it is the most compatible file");
+	{
+		QFile fx;
+		for (const QString &d : { QStringLiteral("test/fixture/media"),
+		                          QFileInfo(QString::fromUtf8(__FILE__)).absolutePath() +
+		                            QStringLiteral("/fixture/media") }) {
+			fx.setFileName(d + "/formats_bbb.json");
+			if (fx.exists())
+				break;
+		}
+		check(fx.open(QIODevice::ReadOnly), "the format list fixture is there");
+		const resolved_media r = ytdlp_resolver::parse(fx.readAll());
+		const QSet<int> leads = ytdlp_resolver::picture_leads(r.formats);
+		QMap<QString, QString> lead_of;
+		QSet<QString> groups;
+		for (int i = 0; i < r.formats.size(); ++i) {
+			const QString g = ytdlp_resolver::picture_group(r.formats[i]);
+			if (g.isEmpty())
+				continue;
+			groups << g;
+			if (leads.contains(i))
+				lead_of[g] = r.formats[i].format_id;
+		}
+		check(leads.size() == groups.size() && groups.size() == 8,
+		      QString("one lead for each of the eight sizes (%1 leads, %2 sizes)")
+		          .arg(leads.size()).arg(groups.size()));
+		check(lead_of.value("1080p60") == "299" && lead_of.value("720p60") == "298",
+		      QString("H.264 as a file where there is one (1080p60: %1, 720p60: %2)")
+		          .arg(lead_of.value("1080p60"), lead_of.value("720p60")));
+		check(lead_of.value("1440p60") == "308" && lead_of.value("2160p60") == "315",
+		      QString("VP9 as a file above it, never AV1 or a stream (1440p60: %1)")
+		          .arg(lead_of.value("1440p60")));
+		check(ytdlp_resolver::codec_name("avc1.64002A") == "H.264" &&
+		          ytdlp_resolver::codec_name("vp09.00.41.08") == "VP9" &&
+		          ytdlp_resolver::codec_name("vp9") == "VP9" &&
+		          ytdlp_resolver::codec_name("av01.0.09M.08") == "AV1",
+		      "codecs are named as a person knows them");
+		media_format thirty;
+		thirty.height = 480;
+		thirty.fps    = 30;
+		check(ytdlp_resolver::picture_group(thirty) == "480p",
+		      "and a size names its rate only where it is more than ordinary");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

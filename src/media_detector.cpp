@@ -200,15 +200,20 @@ int media_detector::best_picture(const QList<media_item> &items, int max_height)
 		const media_item &m = items[i];
 		if (!m.known_media || !m.has_video || (!m.has_audio && m.audio.isEmpty()))
 			continue;
+		// A size's lead before its other versions, so Save takes the row
+		// the list shows for that size rather than whichever came first.
+		const int lead = m.group_lead ? 1 : 0;
 		if (m.height <= max_height) {
-			const auto k = std::make_tuple(direct(m), m.height, m.rank);
-			if (fits < 0 || k > std::make_tuple(direct(items[fits]), items[fits].height,
-			                                    items[fits].rank))
+			const auto k = std::make_tuple(direct(m), m.height, lead, m.rank);
+			const media_item &b = fits < 0 ? m : items[fits];
+			if (fits < 0 || k > std::make_tuple(direct(b), b.height, b.group_lead ? 1 : 0,
+			                                    b.rank))
 				fits = i;
 		} else {
-			const auto k = std::make_tuple(direct(m), -m.height, m.rank);
-			if (over < 0 || k > std::make_tuple(direct(items[over]), -items[over].height,
-			                                    items[over].rank))
+			const auto k = std::make_tuple(direct(m), -m.height, lead, m.rank);
+			const media_item &b = over < 0 ? m : items[over];
+			if (over < 0 || k > std::make_tuple(direct(b), -b.height, b.group_lead ? 1 : 0,
+			                                    b.rank))
 				over = i;
 		}
 	}

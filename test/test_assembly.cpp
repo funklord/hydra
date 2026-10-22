@@ -355,6 +355,106 @@ int main(int argc, char **argv) {
 		      "and an empty answer clears them, saying so");
 	}
 
+	// **One row for the video, its sizes under it, each size's formats under
+	// that** -- the holder, 2026-10-22, after five formats of every size read
+	// as copies. The row shown is the one Save takes for the picture.
+	section("a video's sizes and formats fold under one row");
+	{
+		media_detector det;
+		auto row = [](const QString &url, int height, const QString &group, bool lead,
+		              const QString &variant) {
+			media_item m;
+			m.url         = QUrl(url);
+			m.known_media = true;
+			m.has_audio   = false;
+			m.audio       = QUrl("https://cdn.invalid/sound");
+			m.height      = height;
+			m.group       = group;
+			m.group_lead  = lead;
+			m.variant     = variant;
+			m.label       = "[video] Clip · " + variant;
+			return m;
+		};
+		media_item sound;
+		sound.url = QUrl("https://cdn.invalid/sound");
+		sound.known_media = true;
+		sound.has_video   = false;
+		sound.label       = "[video] Clip · opus 160 kbit/s";
+		// In the order an answer lists them, worst first and mixed.
+		det.replace_vouched("v.invalid", {
+			row("https://cdn.invalid/720-vp9", 720, "720p60", false, "720p60 · VP9"),
+			row("https://cdn.invalid/720-avc", 720, "720p60", true, "720p60 · H.264"),
+			row("https://cdn.invalid/1080-av1", 1080, "1080p60", false, "1080p60 · AV1"),
+			row("https://cdn.invalid/1080-avc", 1080, "1080p60", true, "1080p60 · H.264"),
+			row("https://cdn.invalid/1440-vp9", 1440, "1440p60", true, "1440p60 · VP9"),
+			sound });
+		media_dialog dlg(&det, &players, &downloads, &proxy, &tap, &assembly, nullptr);
+		dlg.set_site("v.invalid", "n1", stream_context{});
+		auto *list = dlg.findChild<QTreeWidget *>();
+		check(list && list->topLevelItemCount() == 2,
+		      QString("two rows: the video and its sound (%1)")
+		          .arg(list ? list->topLevelItemCount() : -1));
+		QTreeWidgetItem *video = list ? list->topLevelItem(0) : nullptr;
+		check(video && video->text(1) == "[video] Clip · 1080p60 · H.264",
+		      QString("the video's row is what Save takes, the best up to 1080p (%1)")
+		          .arg(video ? video->text(1) : QString()));
+		QStringList sizes;
+		for (int i = 0; video && i < video->childCount(); ++i)
+			sizes << video->child(i)->text(1);
+		check(sizes == QStringList({ "1440p60 · VP9", "1080p60 · H.264", "720p60 · H.264" }),
+		      QString("under it each size, largest first, by its lead (%1)")
+		          .arg(sizes.join(" | ")));
+		QTreeWidgetItem *p1080 = video && video->childCount() > 1 ? video->child(1) : nullptr;
+		check(p1080 && p1080->childCount() == 1 && p1080->child(0)->text(1) == "1080p60 · AV1",
+		      "and under a size its other formats");
+		check(video && !video->isExpanded(), "folded until opened");
+		const QList<media_item> items = det.items_for("v.invalid");
+		const int pick = media_detector::best_picture(items, 1080);
+		check(pick >= 0 && items[pick].url.toString() == "https://cdn.invalid/1080-avc",
+		      "and Save takes that same row, the size's lead");
+	}
+
+	// **The cache was gone after a restart**: it lived in memory only. The
+	// holder, 2026-10-22.
+	section("the lookups survive a restart, and lapsed ones do not");
+	{
+		QTemporaryDir dir;
+		const QString path = dir.filePath("media-lookups.json");
+		const QDateTime now = QDateTime::fromSecsSinceEpoch(1761100000, QTimeZone::UTC);
+		media_item r;
+		r.url        = QUrl("https://cdn.invalid/a?expire=" + QString::number(1761100000 + 7200));
+		r.label      = "[video] Clip · 1080p60 · H.264";
+		r.group      = "1080p60";
+		r.group_lead = true;
+		r.variant    = "1080p60 · H.264";
+		r.known_media = true;
+		r.headers.insert("Referer", "https://v.invalid/");
+		media_lookups before;
+		before.finish(QUrl("https://v.invalid/watch?v=1"), { r }, "found it", now);
+		before.fail(QUrl("https://v.invalid/watch?v=2"), "Unsupported URL", now);
+		before.start(QUrl("https://v.invalid/watch?v=3"));
+		check(before.save(path, now), "written");
+
+		media_lookups after;
+		check(after.load(path, now.addSecs(60)), "and read back");
+		const media_lookup *e = after.find(QUrl("https://v.invalid/watch?v=1"), now.addSecs(60));
+		check(e && e->st == media_lookup::state::done && e->note == "found it" &&
+		          e->rows.size() == 1 && e->rows[0].url == r.url &&
+		          e->rows[0].group_lead && e->rows[0].variant == r.variant &&
+		          e->rows[0].headers.value("Referer") == "https://v.invalid/",
+		      "a finished lookup comes back whole");
+		check(after.find(QUrl("https://v.invalid/watch?v=2"), now.addSecs(60)),
+		      "a failure too, while it is kept");
+		check(!after.find(QUrl("https://v.invalid/watch?v=3"), now.addSecs(60)),
+		      "but not one that was still running");
+		media_lookups later;
+		check(later.load(path, now.addSecs(2 * 3600)) &&
+		          !later.find(QUrl("https://v.invalid/watch?v=1"), now.addSecs(2 * 3600)),
+		      "and one that lapsed while closed is not read back");
+		media_lookups none;
+		check(none.load(dir.filePath("absent.json"), now), "an absent file is an empty cache");
+	}
+
 	// The cache those rows come from: per page, and only while true.
 	section("a lookup is kept per page until its addresses lapse");
 	{

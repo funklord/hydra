@@ -1370,6 +1370,13 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	if (keep_or_disown(m_downloads->load_history(dl_history), &dl_history,
 	                    "The download history"))
 		m_downloads->set_history_path(dl_history);
+	// What Find Media looked up, kept across a restart. The same guard: a
+	// file that could not be read is left alone rather than written over.
+	m_lookups_path = QDir(QStandardPaths::writableLocation(
+	                          QStandardPaths::AppDataLocation))
+	                     .filePath("media-lookups.json");
+	keep_or_disown(m_lookups.load(m_lookups_path, QDateTime::currentDateTimeUtc()),
+	               &m_lookups_path, "The media lookups");
 	// Per-tab zoom, read back so a page a person zoomed is zoomed again. Loaded
 	// before any tab opens, so `apply_zoom` sees last time's value.
 	//
@@ -6103,6 +6110,7 @@ void main_window::forget_shell_caches() {
 	if (m_ex_signals)  records += m_ex_signals->clear_all();
 	if (m_media)       records += m_media->clear_all();
 	records += m_lookups.clear();
+	save_lookups();
 	if (m_mse)         records += m_mse->clear_all();
 	if (m_signals)     records += m_signals->clear_all();
 	if (m_antiadblock) records += m_antiadblock->clear_all();
@@ -7484,6 +7492,7 @@ void main_window::look_up_media(bool forced) {
 			                "and a newer one is the likely fix.")
 			          .arg(age / 30);
 		m_lookups.fail(page, text, QDateTime::currentDateTimeUtc());
+		save_lookups();
 		if (m_lookup_page == page)
 			m_lookup_page = QUrl();
 		if (m_media_ui && media_lookups::key(page) == media_lookups::key(current_page()))
@@ -7491,6 +7500,12 @@ void main_window::look_up_media(bool forced) {
 	}, Qt::SingleShotConnection);
 
 	m_ytdlp->resolve(page);
+}
+
+void main_window::save_lookups() {
+	if (!m_lookups_path.isEmpty())
+		saved_or_said(m_lookups.save(m_lookups_path, QDateTime::currentDateTimeUtc()),
+		              "the media lookups");
 }
 
 QUrl main_window::current_page() const {
@@ -7609,6 +7624,7 @@ void main_window::list_resolved_media(const QString &host, const QUrl &page,
 		int order = 0;
 		QList<media_item> rows;
 		const int best_sound = ytdlp_resolver::best_sound_format(m.formats);
+		const QSet<int> leads = ytdlp_resolver::picture_leads(m.formats);
 		for (int at = 0; at < m.formats.size(); ++at) {
 			const media_format &f = m.formats.at(at);
 			if (!f.has_video && !f.has_audio)
@@ -7661,13 +7677,29 @@ void main_window::list_resolved_media(const QString &host, const QUrl &page,
 			  : f.has_audio ? QString()
 			  : item.audio.isEmpty() ? QStringLiteral(" · picture only")
 			  : QStringLiteral(" · picture only, the sound is added");
-			item.label     = QString("[%1] %2 %3%4%5")
-			                     .arg(kind, m.title.isEmpty() ? host : m.title,
-			                          f.height ? QString::number(f.height) + "p"
-			                                   : f.ext,
-			                          f.note.isEmpty() ? QString()
-			                                           : " · " + f.note,
-			                          carries);
+			// **Named for what it is**: the size, the codec and how large,
+			// since one size comes in several formats that differ in all
+			// but the picture. A stream is said to be one.
+			const bool stream = f.protocol.startsWith("m3u8") ||
+			                    f.protocol.startsWith("http_dash");
+			QStringList what;
+			if (f.has_video) {
+				what << ytdlp_resolver::picture_group(f);
+				what << ytdlp_resolver::codec_name(f.vcodec) +
+				          (stream ? QStringLiteral(" stream") : QString());
+			} else {
+				what << f.ext + (f.abr > 0 ? QString(" %1 kbit/s").arg(qRound(f.abr))
+				                           : QString());
+			}
+			if (f.filesize > 0)
+				what << QLocale().formattedDataSize(f.filesize);
+			what.removeAll(QString());
+			item.variant    = what.join(" · ");
+			item.group      = ytdlp_resolver::picture_group(f);
+			item.group_lead = leads.contains(at);
+			item.label      = QString("[%1] %2 · %3%4")
+			                      .arg(kind, m.title.isEmpty() ? host : m.title,
+			                           item.variant, carries);
 			rows << item;
 			++added;
 		}
@@ -7700,6 +7732,7 @@ void main_window::list_resolved_media(const QString &host, const QUrl &page,
 		// front: an answer arriving after somebody moved on waits in the
 		// cache for the next time they open Find Media there.
 		m_lookups.finish(page, rows, said, QDateTime::currentDateTimeUtc());
+		save_lookups();
 		if (media_lookups::key(m_lookup_page) == media_lookups::key(page))
 			m_lookup_page = QUrl();
 		if (media_lookups::key(current_page()) == media_lookups::key(page)) {

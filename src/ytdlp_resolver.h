@@ -5,6 +5,7 @@
 #include <QMap>
 #include <QObject>
 #include <QPointer>
+#include <QSet>
 #include <QString>
 #include <QUrl>
 
@@ -21,6 +22,8 @@ struct media_format {
 	int     height   = 0;
 	qint64  filesize = -1;   // -1 when unknown
 	double  abr      = 0;    // the sound's bitrate in kbit/s, 0 when unknown
+	QString vcodec;          // "avc1.64002A", "vp09.00.41.08", "av01.0.09M.08"
+	double  fps      = 0;
 	bool    has_video = true;
 	bool    has_audio = true;
 	QMap<QString, QString> headers;   // what the CDN expects to see (sec 11.3)
@@ -124,6 +127,22 @@ public:
 	// choices, since a smaller one is often what is wanted. Highest bitrate,
 	// a direct file over a manifest at the same rate, then the larger file.
 	static int best_sound_format(const QList<media_format> &formats);
+
+	// **One picture is offered several times over.** YouTube gives every size
+	// in five versions -- H.264 and VP9 each as a file and as a stream, and
+	// AV1 as a file -- and listing them flat read as five copies of one
+	// thing. The holder, 2026-10-22: one row per size, the others folded
+	// under it. These name a format and pick which leads.
+	//
+	// The size and rate it is a version of: "1080p60", "480p".
+	static QString picture_group(const media_format &f);
+	// The codec as a person knows it: "H.264", "VP9", "AV1", "H.265".
+	static QString codec_name(const QString &vcodec);
+	// Which format of each group leads, as indexes into `formats`. **The
+	// most compatible, by the holder's choice**: a file over a stream, then
+	// H.264, VP9, AV1 -- H.264 plays everywhere and joins M4A sound without
+	// converting, and it is also what Save took before there were groups.
+	static QSet<int> picture_leads(const QList<media_format> &formats);
 	// The same, with the name and track given -- by a checked reading of
 	// the evidence, which knows better than the fields alone.
 	static QString file_name_for(const resolved_media &m, const QString &ext,

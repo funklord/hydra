@@ -256,6 +256,8 @@ private slots:
 	// dropped first, and a reason it cannot run is said rather than skipped.
 	void look_up_media(bool forced);
 	QUrl current_page() const;
+	// Write the lookups to `m_lookups_path`, unless it was disowned.
+	void save_lookups();
 	void toggle_capture();
 	void learn_this_site();
 	// Run a stored extractor for this host, if there is one, and file what it
@@ -768,6 +770,7 @@ public:
 	torrent_download_source *m_torrents = nullptr;
 	ytdlp_resolver     *m_ytdlp          = nullptr;
 	media_lookups       m_lookups;
+	QString             m_lookups_path;
 	QUrl                m_lookup_page;   // what the resolver is busy with
 	QPointer<media_dialog> m_media_ui;   // while Find Media is open
 	mse_tap            *m_mse            = nullptr;

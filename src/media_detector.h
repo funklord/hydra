@@ -69,6 +69,16 @@ struct media_item {
 	// Where an authoritative answer places it, highest first; 0 for anything
 	// detected, which keeps the hit-count order below the ranked rows.
 	int rank = 0;
+	// **One picture in several versions, folded.** yt-dlp offers each size
+	// of a video in several formats, and all the sizes of one video are one
+	// thing to the person choosing. `group` is the size and rate this is a
+	// version of ("1080p60"), empty for a row that stands alone;
+	// `group_lead` marks the version shown for that size, the others
+	// folding under it; `variant` is the row's short name inside the group
+	// -- "1080p60, H.264, 258 MB" -- where `label` is the whole one.
+	QString group;
+	bool    group_lead = false;
+	QString variant;
 };
 
 // The media type to hand a system player along with the URL.

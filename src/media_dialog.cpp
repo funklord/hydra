@@ -259,10 +259,13 @@ void media_dialog::repopulate() {
 		                   std::any_of(items.cbegin(), items.cend(),
 		                               [](const media_item &m) { return m.known_media; }));
 
-	for (const media_item &item : items) {
-		auto *row = new QTreeWidgetItem(m_list);
+	// One row with its two buttons. `text` is what the Name column says,
+	// which inside a group is the short name.
+	auto add_row = [this](QTreeWidgetItem *parent, const media_item &item,
+	                      const QString &text) {
+		auto *row = parent ? new QTreeWidgetItem(parent) : new QTreeWidgetItem(m_list);
 		row->setText(0, kind_label(item.kind));
-		row->setText(1, item.label);
+		row->setText(1, text);
 		row->setText(2, item.url.host());
 
 		// Both actions on every row; the list is already primary-first (sec 11.3).
@@ -293,7 +296,42 @@ void media_dialog::repopulate() {
 		connect(watch, &QPushButton::clicked, this, [this, item] { this->watch(item); });
 		connect(save,  &QPushButton::clicked, this, [this, item] { this->save(item); });
 		m_list->setItemWidget(row, 3, cell);
+		return row;
+	};
+
+	// **A video's sizes, and each size's formats, fold under one row** --
+	// the holder, 2026-10-22: YouTube offers every size in five formats,
+	// and a flat list of thirty-odd rows read as copies of one thing. The
+	// row shown is what Save would fetch for the picture; open it for every
+	// size, and open a size for its other formats.
+	const int top = media_detector::best_picture(items, k_save_max_height);
+	const bool grouped = top >= 0 && !items[top].group.isEmpty();
+	QTreeWidgetItem *video = nullptr;
+	for (int i = 0; i < items.size(); ++i) {
+		const media_item &item = items[i];
+		if (!grouped || item.group.isEmpty() || !item.has_video) {
+			add_row(nullptr, item, item.label);
+			continue;
+		}
+		if (video)
+			continue;   // the whole group is built once, where it first appears
+		video = add_row(nullptr, items[top], items[top].label);
+		// The sizes, largest first, each led by its chosen format.
+		QList<int> lead_rows;
+		for (int j = 0; j < items.size(); ++j)
+			if (items[j].group_lead && !items[j].group.isEmpty())
+				lead_rows << j;
+		std::stable_sort(lead_rows.begin(), lead_rows.end(), [&](int x, int y) {
+			return items[x].height > items[y].height;
+		});
+		for (int j : lead_rows) {
+			QTreeWidgetItem *size = add_row(video, items[j], items[j].variant);
+			for (int k = 0; k < items.size(); ++k)
+				if (k != j && items[k].group == items[j].group && !items[k].group_lead)
+					add_row(size, items[k], items[k].variant);
+		}
 	}
+	m_list->setRootIsDecorated(video != nullptr);
 	// What the tap can see but no URL can name (sec 11.6). These rows are not
 	// streams anyone can fetch -- the bytes exist only inside the player -- so
 	// the one thing offered is to record them.

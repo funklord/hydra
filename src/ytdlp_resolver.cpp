@@ -369,6 +369,8 @@ resolved_media ytdlp_resolver::parse(const QByteArray &json) {
 			m.filesize = qint64(f.value("filesize").toDouble());
 		else if (f.value("filesize_approx").isDouble())
 			m.filesize = qint64(f.value("filesize_approx").toDouble());
+		m.vcodec = f.value("vcodec").toString();
+		m.fps    = f.value("fps").toDouble();
 		// The sound's own bitrate, or the whole stream's where that is all
 		// there is; for a sound-only format the two are the same thing.
 		m.abr = f.value("abr").toDouble();
@@ -538,4 +540,47 @@ int ytdlp_resolver::best_sound_format(const QList<media_format> &formats) {
 			best = i;
 	}
 	return best;
+}
+
+QString ytdlp_resolver::picture_group(const media_format &f) {
+	if (!f.has_video || f.height <= 0)
+		return QString();
+	// The rate only where it is more than ordinary, as YouTube says it.
+	const int fps = qRound(f.fps);
+	return QString("%1p%2").arg(f.height).arg(fps > 30 ? QString::number(fps) : QString());
+}
+
+QString ytdlp_resolver::codec_name(const QString &vcodec) {
+	const QString c = vcodec.toLower();
+	if (c.startsWith("avc"))
+		return QStringLiteral("H.264");
+	if (c.startsWith("vp09") || c.startsWith("vp9"))
+		return QStringLiteral("VP9");
+	if (c.startsWith("av01"))
+		return QStringLiteral("AV1");
+	if (c.startsWith("hev") || c.startsWith("hvc") || c.startsWith("h265"))
+		return QStringLiteral("H.265");
+	if (c.startsWith("vp8"))
+		return QStringLiteral("VP8");
+	return vcodec.section('.', 0, 0);
+}
+
+QSet<int> ytdlp_resolver::picture_leads(const QList<media_format> &formats) {
+	auto score = [](const media_format &f) {
+		const bool direct = !f.protocol.startsWith("m3u8") &&
+		                    !f.protocol.startsWith("http_dash");
+		const QString c = codec_name(f.vcodec);
+		const int codec = c == "H.264" ? 3 : c == "VP9" ? 2 : c == "AV1" ? 1 : 0;
+		return (direct ? 10 : 0) + codec;
+	};
+	QHash<QString, int> lead;
+	for (int i = 0; i < formats.size(); ++i) {
+		const QString g = picture_group(formats.at(i));
+		if (g.isEmpty())
+			continue;
+		const auto it = lead.find(g);
+		if (it == lead.end() || score(formats.at(i)) > score(formats.at(*it)))
+			lead.insert(g, i);
+	}
+	return QSet<int>(lead.cbegin(), lead.cend());
 }
