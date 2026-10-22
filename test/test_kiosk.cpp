@@ -41,6 +41,27 @@ static void spin(int ms) {
 // The stage is a frameless top-level the controller makes for itself, and the
 // geometric path detaches the page from it -- so `widget()->window()` stops
 // answering and the stage has to be found rather than walked to.
+// A page inside the view, holding the keyboard: it consumes the keys it is
+// told to, as a page with its own key handler does, and lets the rest go up
+// to its parent, as Chromium hands back a key the page did not use.
+class key_page : public QWidget {
+public:
+	explicit key_page(QWidget *parent, QList<int> eats) : QWidget(parent), m_eats(eats) {
+		setFocusPolicy(Qt::StrongFocus);
+	}
+	QList<int> got;
+protected:
+	void keyPressEvent(QKeyEvent *e) override {
+		got << e->key();
+		if (m_eats.contains(e->key()))
+			e->accept();
+		else
+			e->ignore();
+	}
+private:
+	QList<int> m_eats;
+};
+
 static QWidget *frameless_stage(QWidget *home) {
 	const QList<QWidget *> tops = QApplication::topLevelWidgets();
 	for (QWidget *w : tops) {
@@ -494,6 +515,63 @@ int main(int argc, char **argv) {
 		spin(150);
 		check(page && page->parentWidget() == home, "and handed back again");
 		delete home;
+	}
+
+	// **A real key goes to the focused widget, not the stage.** The section
+	// below sends Esc to the stage itself, which no key a person presses
+	// does: it goes to the page, and reached the stage only if the page let it
+	// go. Reported 2026-10-22: Esc did not leave a fullscreen video. And F,
+	// which leaves fullscreen in mplayer and in most players, did nothing.
+	section("a key pressed in the page leaves fullscreen, as a person presses it");
+	{
+		// What happens when `key` is pressed in a page that consumes `eats`,
+		// under `cfg`: whether the presentation is still up afterwards.
+		auto pressed = [&](kiosk_config cfg, QList<int> eats, int key) {
+			auto *home = new QWidget;
+			auto *layout = new QVBoxLayout(home);
+			auto *view = new fake_view(home);
+			layout->addWidget(view->widget());
+			auto *page = new key_page(view->widget(), eats);
+			page->resize(200, 100);
+			home->resize(400, 300);
+			home->show();
+			spin(60);
+			kiosk_controller k;
+			k.set_config(cfg);
+			k.enter(view, home);
+			spin(100);
+			page->setFocus();
+			QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier);
+			QCoreApplication::sendEvent(page, &press);
+			spin(100);
+			const bool still = k.active();
+			k.exit();
+			delete home;
+			return still;
+		};
+		kiosk_config video;               // what a page's fullscreen gets
+		video.allow_escape = true;
+		video.exit_on_f    = true;
+		kiosk_config kiosk;               // a kiosk somebody set up, escapable
+		kiosk.allow_escape = true;
+		kiosk_config locked;
+		locked.allow_escape = false;
+
+		check(!pressed(video, {}, Qt::Key_Escape), "Esc leaves a page's fullscreen");
+		check(!pressed(video, { Qt::Key_Escape }, Qt::Key_Escape),
+		      "even when the page takes Esc for itself -- a page cannot trap it");
+		check(!pressed(video, {}, Qt::Key_F11), "and F11 the same");
+		check(!pressed(video, {}, Qt::Key_F),
+		      "F leaves it when the page has no use for the key");
+		check(pressed(video, { Qt::Key_F }, Qt::Key_F),
+		      "and stays when the page uses F -- a player's own toggle, or typing");
+		check(pressed(kiosk, {}, Qt::Key_F),
+		      "F does nothing in a kiosk somebody set up");
+		check(!pressed(kiosk, { Qt::Key_Escape }, Qt::Key_Escape),
+		      "while Esc still leaves it, the setting allowing");
+		check(pressed(locked, { Qt::Key_Escape }, Qt::Key_Escape) &&
+		      pressed(locked, {}, Qt::Key_Escape),
+		      "and a locked-down kiosk ignores Esc, whatever the page does with it");
 	}
 
 	section("the way out is the way the settings page says it is");

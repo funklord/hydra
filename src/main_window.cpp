@@ -2243,6 +2243,9 @@ void main_window::toggle_kiosk() {
 		// two reloads are off for the same reason as below -- a video should
 		// not restart underneath whoever is watching it.
 		c.allow_escape = true;
+		// F as well, as in mplayer and most players -- a page's fullscreen
+		// only, never a kiosk somebody set up, where F is a letter.
+		c.exit_on_f = true;
 		c.watchdog = false;
 		c.idle_reset_seconds = 0;
 		// **Nor the forgetting.** Clearing between sessions is a decision

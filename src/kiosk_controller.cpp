@@ -87,6 +87,12 @@ bool kiosk_controller::enter(web_view_backend *view, QWidget *restore_to) {
 	m_stage->setContextMenuPolicy(Qt::NoContextMenu);
 	m_stage->setAutoFillBackground(true);
 	m_stage->installEventFilter(this);
+	// **And on the application, for the way out.** A key goes to the focused
+	// widget -- the page -- and reached the stage only if the page let it go,
+	// so a page that took Esc for itself left nobody a way out; measured with
+	// a page consuming the key, reported from a fullscreen video. Esc and F11
+	// are taken here, for any widget in the stage, before the page sees them.
+	qApp->installEventFilter(this);
 
 	QWidget *w = view->widget();
 	w->setParent(m_stage);
@@ -191,6 +197,7 @@ void kiosk_controller::forget_session(const char *why) {
 void kiosk_controller::exit() {
 	if (!active())
 		return;
+	qApp->removeEventFilter(this);
 
 	m_idle_timer->stop();
 	set_cursor_hidden(false);
@@ -352,8 +359,19 @@ void kiosk_controller::set_cursor_hidden(bool hidden) {
 }
 
 bool kiosk_controller::eventFilter(QObject *obj, QEvent *e) {
-	if (obj != m_stage)
+	// The application-wide half: Esc and F11, for anything in the stage, before
+	// whatever has the focus can keep them.
+	if (obj != m_stage) {
+		if (e->type() == QEvent::KeyPress && m_stage && m_config.allow_escape) {
+			auto *w = qobject_cast<QWidget *>(obj);
+			const int k = static_cast<QKeyEvent *>(e)->key();
+			if (w && w->window() == m_stage && (k == Qt::Key_Escape || k == Qt::Key_F11)) {
+				exit();
+				return true;
+			}
+		}
 		return QObject::eventFilter(obj, e);
+	}
 
 	switch (e->type()) {
 		case QEvent::Resize:
@@ -365,8 +383,14 @@ bool kiosk_controller::eventFilter(QObject *obj, QEvent *e) {
 			// up, so the key it is bound to reaches nothing at all -- the way
 			// in stopped being the way out. Handled here, where the key
 			// actually arrives.
-			const int k = static_cast<QKeyEvent *>(e)->key();
-			const bool leaving = k == Qt::Key_Escape || k == Qt::Key_F11;
+			// F here and not above: this half sees a key only once the page
+			// has let it go, so a player's own F and a letter typed into a
+			// field are left to the page.
+			const auto *ke = static_cast<QKeyEvent *>(e);
+			const int k = ke->key();
+			const bool f = m_config.exit_on_f && k == Qt::Key_F &&
+			               !(ke->modifiers() & ~Qt::KeypadModifier);
+			const bool leaving = k == Qt::Key_Escape || k == Qt::Key_F11 || f;
 			if (m_config.allow_escape && leaving) {
 				exit();
 				return true;

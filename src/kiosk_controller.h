@@ -37,6 +37,10 @@ struct kiosk_config {
 	int  idle_reset_seconds = 0;      // 0 = off
 	bool watchdog = true;             // reload if the render process dies
 	bool allow_escape = true;         // false = locked down; Esc will not exit
+	// F leaves too, as in mplayer and most players -- for a page's own
+	// fullscreen only, and only when the page did not use the key, so a
+	// player's own F and a letter typed into a field keep working.
+	bool exit_on_f = false;
 
 	// **Off by default, and the default is the decision.** Turning it on
 	// empties the browser's cookies and cached files -- the *shared* ones,

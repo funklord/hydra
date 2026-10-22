@@ -38745,3 +38745,29 @@ Debian update of `qt6-webengine` would replace these** and bring the
 engine's own brand list back. The warning on stderr is how it shows;
 `apt-mark hold` prevents it, and rebuilding means `engine-patch/0001` on
 the new source.
+
+## Leaving a page's fullscreen: Esc always, and F
+
+Reported 2026-10-22: Esc did not leave a fullscreen video, and the holder
+asked for F as well, "like mplayer". **The cause was where the key was
+caught.** The kiosk stage, through which a page's fullscreen is presented,
+filtered keys on its own window, but a key goes to the focused widget -- the
+page -- and reached the stage only if the page let it go. A page that took
+Esc for itself left nobody a way out. `test_kiosk`'s way-out section passed
+throughout because it sent Esc to the stage directly, which no pressed key
+does.
+
+- **Esc and F11** are now caught application-wide while the stage is up,
+  for any widget in it, before the page sees them. A page cannot trap them.
+  A locked-down kiosk (`allow_escape` off) still ignores them.
+- **F** leaves too, through `kiosk_config::exit_on_f`, which is set for a
+  page's fullscreen only and never for a kiosk somebody set up. It is
+  handled where the stage sees a key the page did not use, so a player's
+  own F, YouTube's among them, and a letter typed into a field keep
+  working.
+
+`test_kiosk` now sends keys to a focused page widget that consumes them or
+lets them go. Before the fix it reproduced the report: an Esc the page
+consumed did not leave, and F did nothing. `try_fullscreen_keys` shows the
+same in the real engine: an unused F leaves, an F typed into a field stays
+there with fullscreen kept, and Esc leaves from the field.
