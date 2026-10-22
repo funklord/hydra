@@ -111,9 +111,6 @@ void main_window::show_store_view(const QString &name) {
 		         qPrintable(store_view::names().join(", ")));
 		return;
 	}
-#ifdef Q_OS_ANDROID
-	android_view::enable_store_demo();
-#endif
 	// The page each view stands on: the article for the first two, the
 	// video's page for Find Media and the downloads.
 	const bool article = name == "tabs" || name == "page";
@@ -128,24 +125,58 @@ void main_window::show_store_view(const QString &name) {
 		return;
 
 	if (name == "media") {
-		// What Find Media lists on the demo video page. Put in directly,
-		// since detection depends on what a real player fetched and when.
-		struct demo { const char *file; const char *label; int height; };
+		// What Find Media lists on the demo video page: three sizes in two
+		// formats each, folded as a looked-up video is, and its sound.
+		//
+		// **Through the lookup cache, not into the list**, which is where a
+		// real answer comes from. Put straight into the list, the rows were
+		// taken out again by `show_cached_lookup` as the page came to the
+		// front -- it replaces the page's vouched rows with the cache's,
+		// which had none -- and the first run on a phone photographed an
+		// empty dialog. Found 2026-10-22.
+		struct demo { int height; const char *codec; const char *size; bool lead; };
 		const demo rows[] = {
-			{ "harbour-at-dusk-1080p.mp4", "Harbour at dusk (1080p)", 1080 },
-			{ "harbour-at-dusk-720p.mp4",  "Harbour at dusk (720p)",  720  },
-			{ "harbour-at-dusk-480p.mp4",  "Harbour at dusk (480p)",  480  },
+			{ 1080, "H.264", "212 MB", true },  { 1080, "AV1", "98 MB", false },
+			{ 720,  "H.264", "118 MB", true },  { 720,  "AV1", "56 MB", false },
+			{ 480,  "H.264", "61 MB",  true },  { 480,  "AV1", "29 MB", false },
 		};
+		QList<media_item> found;
+		const QUrl sound(QString("https://%1/media/harbour-at-dusk.m4a").arg(store_view::host()));
 		for (const demo &d : rows) {
 			media_item m;
+			const QString file = QString("harbour-at-dusk-%1p-%2.mp4")
+			                       .arg(d.height).arg(QString(d.codec).toLower().remove('.'));
 			m.kind        = media_kind::direct;
-			m.url         = QUrl(QString("https://%1/media/%2").arg(store_view::host(), d.file));
-			m.label       = d.label;
-			m.file_name   = d.file;
+			m.url         = QUrl(QString("https://%1/media/%2").arg(store_view::host(), file));
+			m.site_host   = store_view::host();
+			m.file_name   = file;
 			m.height      = d.height;
+			m.has_audio   = false;
+			m.audio       = sound;
 			m.known_media = true;
-			m_media->add_item(store_view::host(), m);
+			m.group       = QString("%1p").arg(d.height);
+			m.group_lead  = d.lead;
+			m.variant     = QString("%1p · %2 · %3").arg(d.height).arg(d.codec, d.size);
+			m.label       = QString("[video] Harbour at dusk · %1 · picture only, the "
+			                        "sound is added").arg(m.variant);
+			m.rank        = 200000 + d.height * 4 + (d.lead ? 2 : 0);
+			found << m;
 		}
+		media_item s;
+		s.kind        = media_kind::direct;
+		s.url         = sound;
+		s.site_host   = store_view::host();
+		s.file_name   = "harbour-at-dusk.m4a";
+		s.has_video   = false;
+		s.known_media = true;
+		s.variant     = "m4a 129 kbit/s · 4.1 MB";
+		s.label       = "[video] Harbour at dusk · " + s.variant + " · sound only";
+		s.rank        = 100000;
+		found << s;
+		m_lookups.finish(QUrl(QString("https://%1/harbour.html").arg(store_view::host())),
+		                 found, "Found 3 sizes of the video, and its sound.",
+		                 QDateTime::currentDateTimeUtc());
+		m_shown_lookup.clear();
 		QTimer::singleShot(0, this, [this] { open_media(); });
 		// `open_media` runs its dialog modally, so the dialog is found by
 		// asking which window is modal once it is up.
@@ -184,4 +215,10 @@ void main_window::show_store_view(const QString &name) {
 #endif
 		store_view::announce_when_drawn(v->widget(), name);
 	});
+	// **A load of its own to wait for.** The window warms background tabs
+	// as it starts, the demo page among them, so by now it may already have
+	// finished -- and a wait for a `load_finished` that came before the
+	// connection never ends. A reload always ends in one, and costs nothing
+	// for a page served from the package.
+	v->reload();
 }

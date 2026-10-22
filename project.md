@@ -38910,10 +38910,31 @@ reserved and resolves nowhere, so nothing real is shadowed.
   untouched;
 - the downloads view shows the demo's four rows.
 
-**Not yet run on a phone**, because none has been on adb in this session.
-The phone's half is the WebView serving the demo site and announcing a
-drawn page, plus the fragment's device commands, which have only met a
-fake adb. The first real run is the test of both.
+**First run on a phone, 2026-10-22**: a Galaxy Z Fold3, folded. The
+four views were captured at 1080x1920 from the cover display, the one in
+use, and `wm size` and the demo setting came back as they were. Four
+faults were found:
+- **The fragment's focus check read only the first display's line**, and
+  on the Fold that line is always `null`. It was fixed in the shared
+  `android.mk`, not here.
+- **The page views waited on a load that had already finished.** The
+  window warms background tabs as it starts, the demo page among them.
+  A reload before waiting gives them a load of their own to wait for.
+- **The demo site was switched on in the view, after the warmed tabs had
+  already gone to the real network.** Which tabs were photographed as
+  "Webpage not available" depended on timing. It is switched on in
+  `main` now, before any WebView exists. Every address in the demo tree
+  also has a page now, since a warmed tab without one showed its address
+  as its title.
+- **Find Media photographed empty.** The demo had put its rows straight
+  into the list, and `show_cached_lookup` took them out again as the
+  page came to the front. They go through the lookup cache now, as a
+  real answer does: three sizes in two formats each, plus the sound.
+
+**Still open:** the status bar in the pictures is the phone's real one
+(clock, battery, charging and mute icons). SystemUI demo mode, which the
+fragment turns on, did not take on this Samsung. That part is the shared
+fragment's, and it has been told.
 
 ## Find Media looks the page up itself, and keeps the answer per page
 

@@ -225,6 +225,12 @@ int main(int argc, char *argv[]) {
 			          qPrintable(store), qPrintable(why));
 			return 1;
 		}
+		// The demo site before any WebView exists: the window warms
+		// background tabs as it starts, and a tab loaded before this went to
+		// the real network, failed, and was photographed as "Webpage not
+		// available" -- which tabs depended on timing. Found on the first
+		// run on a phone, 2026-10-22.
+		android_view::enable_store_demo();
 	}
 #endif
 	app.setApplicationName("Hydra");
