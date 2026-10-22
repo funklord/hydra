@@ -39095,6 +39095,34 @@ tree into a drawer, so "narrow" means one thing in this program. The
 host is in the same tooltip. On a desktop the column stays: there, which
 server a stream comes from is worth seeing at a glance.
 
-**Still cut on the phone:** the Watch and Download buttons take about 40
-per cent of a 1080 px screen. Icon-only buttons on narrow screens would
-give that width to the names. That is not done yet.
+**And the rest of the width, the same day, on the holder's word:**
+- **On a narrow screen the buttons are icons alone** (▶ and ⬇, with the
+  words in their tooltips). Before, the words took about 40 per cent of a
+  1080 px screen.
+- **The title is said once, above the list**, as "Harbour at dusk
+  (video)", when every looked-up row shares it. Each row then names only
+  what tells it apart: "1080p · H.264 · 212 MB · picture only, ...".
+  Looked-up rows carry `Qt::UserRole` true, so a test can still tell them
+  from detection's rows.
+
+## Settings on a phone
+
+The holder found Settings unusable on a phone, 2026-10-22. On the Fold's
+cover screen, 840 px at a scale of 2.625, so 320 points, the dialog ran
+off the right edge, and OK went with it.
+
+`try_store_view settings` now measures the dialog's minimum width and
+names the widgets holding it there. It needed 416 points, of which 394
+were the button row: OK, Cancel, and a Restore button that names its
+page ("Restore Privacy & security defaults").
+
+Below a 620-point screen, Restore now goes on its own row above OK and
+Cancel, and the dialog needs 224 points. A desktop keeps the one row in
+the platform's order. The check runs on a phone-sized virtual screen
+(`xvfb-run -a -s "-screen 0 320x700x24"`), checks Find Media too, and
+says plainly when it was not run.
+
+The capture on the phone showed the search box, the page picker, the
+choices, and Restore, Cancel and OK, all on screen. `settings` is a
+store view now for that purpose, kept out of `STORE_VIEWS` so it isn't
+in the listing.

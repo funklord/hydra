@@ -161,14 +161,14 @@ int main(int argc, char *argv[]) {
 		auto *l = d->findChild<QLabel *>("media_lookup_note");
 		return l ? l->text() : QString("(no note)");
 	};
-	// The looked-up rows only, named "[kind] title, ..." -- the page's own
+	// The looked-up rows only, which the dialog marks as such -- the page's own
 	// request for the clip adds a row of detection's whenever the player
 	// asks, which depends on timing and is not what is being checked.
 	auto vouched_rows = [](QDialog *d) {
 		auto *list = d->findChild<QTreeWidget *>();
 		int n = 0;
 		for (int i = 0; list && i < list->topLevelItemCount(); ++i)
-			if (list->topLevelItem(i)->text(0).startsWith("["))
+			if (list->topLevelItem(i)->data(0, Qt::UserRole).toBool())
 				++n;
 		return list ? n : -1;
 	};

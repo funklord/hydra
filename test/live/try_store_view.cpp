@@ -3,6 +3,9 @@
 //
 //     xvfb-run -a ./test/build-make/try_store_view <view> android/assets/store
 //
+// With `-s "-screen 0 320x700x24"` after `-a`, Settings and Find Media are
+// also checked to fit a phone's width.
+//
 // **Why this exists**: `make android-screenshots` waits for a view to log
 // `store-view-ready <name>` and then publishes what it captures, so two things
 // must hold before a phone is involved -- every view announces itself, and
@@ -17,7 +20,12 @@
 #include "request_filter.h"
 #include "store_view.h"
 
+#include <QAbstractButton>
+#include <QLabel>
+#include <algorithm>
 #include <QApplication>
+#include <QGuiApplication>
+#include <QScreen>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
@@ -38,6 +46,37 @@ static void spin(int ms) {
 }
 
 static QStringList g_ready;
+// The narrowest the modal dialog of a view can be, and what holds it there.
+static int         g_modal_min = -1;
+static QStringList g_widest;
+
+// **A phone is 320 points wide**: a Galaxy Z Fold3's cover screen, 840
+// pixels at a scale of 2.625, where Settings ran off the right edge. The
+// holder reported it 2026-10-22. A dialog whose minimum width is more than
+// this cannot be used there, and which widgets set the minimum is the
+// thing to know.
+static constexpr int k_phone_width = 320;
+
+static void measure(QWidget *dlg) {
+	g_modal_min = dlg->minimumSizeHint().width();
+	QList<QPair<int, QString>> w;
+	for (QWidget *c : dlg->findChildren<QWidget *>()) {
+		const int m = qMax(c->minimumSizeHint().width(), c->minimumWidth());
+		if (m <= k_phone_width - 40)
+			continue;
+		QString what = c->metaObject()->className();
+		if (!c->objectName().isEmpty())
+			what += " " + c->objectName();
+		if (auto *b = qobject_cast<QAbstractButton *>(c))
+			what += " '" + b->text() + "'";
+		if (auto *l = qobject_cast<QLabel *>(c))
+			what += " '" + l->text().left(40) + "'";
+		w << qMakePair(m, what);
+	}
+	std::sort(w.begin(), w.end(), [](const auto &a, const auto &b) { return a.first > b.first; });
+	for (int i = 0; i < qMin(12, int(w.size())); ++i)
+		g_widest << QString("%1  %2").arg(w[i].first).arg(w[i].second);
+}
 static QtMessageHandler g_prior = nullptr;
 static void listen(QtMsgType t, const QMessageLogContext &c, const QString &m) {
 	if (m.startsWith("store-view-ready ")) {
@@ -45,8 +84,10 @@ static void listen(QtMsgType t, const QMessageLogContext &c, const QString &m) {
 		// Find Media is modal, and its exec() would hold the wait below
 		// until somebody closed it.
 		QTimer::singleShot(0, qApp, [] {
-			if (QWidget *modal = QApplication::activeModalWidget())
+			if (QWidget *modal = QApplication::activeModalWidget()) {
+				measure(modal);
 				modal->close();
+			}
 		});
 	}
 	g_prior(t, c, m);
@@ -113,6 +154,23 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < 300 && !g_ready.contains(view); ++i)
 		spin(100);
 	check(g_ready.contains(view), QString("the %1 view says it is drawn").arg(view));
+	// On a phone-sized screen only: a dialog may lay itself out for the
+	// screen it is on, and Settings does. Run under
+	// `xvfb-run -a -s "-screen 0 320x700x24"` for this check.
+	const QScreen *screen = QGuiApplication::primaryScreen();
+	const bool phone = screen && screen->availableGeometry().width() <= k_phone_width;
+	if ((view == "settings" || view == "media") && !phone)
+		std::printf("  --    not on a phone-sized screen, so whether it fits one is not "
+		            "checked\n");
+	if ((view == "settings" || view == "media") && phone) {
+		spin(300);
+		check(g_modal_min >= 0 && g_modal_min <= k_phone_width,
+		      QString("and fits a phone, %1 points wide (it needs %2)")
+		          .arg(k_phone_width).arg(g_modal_min));
+		if (g_modal_min > k_phone_width)
+			for (const QString &line : g_widest)
+				std::printf("        %s\n", qPrintable(line));
+	}
 	if (view == "downloads") {
 		download_manager *dm = w.findChild<download_manager *>();
 		check(dm && dm->jobs().size() == 4,

@@ -49,6 +49,7 @@
 #include "settings_bundle.h"
 #include "theme.h"
 #include <QHBoxLayout>
+#include <QScreen>
 #include <QFrame>
 #include <QPalette>
 #include <QFont>
@@ -793,6 +794,20 @@ settings_dialog::settings_dialog(player_launcher *players,
 	// while the button box is still being built, so the call landed on a null
 	// pointer and the label kept Qt's generic "Restore Defaults".
 	update_restore_button();
+	// **On a narrow screen, Restore on a row of its own.** Beside OK and
+	// Cancel it named its page -- "Restore Privacy & security defaults" --
+	// and the three needed 394 points where a folded Galaxy Z Fold3 has 320,
+	// so the dialog ran off the right edge and OK with it. The holder,
+	// 2026-10-22. Measured with `try_store_view settings` on a 320-point
+	// screen. A desktop keeps the one row, in the platform's order.
+	const QScreen *screen = QGuiApplication::primaryScreen();
+	if (screen && screen->availableGeometry().width() < k_narrow_screen) {
+		buttons->removeButton(m_restore);
+		auto *restore_row = new QHBoxLayout;
+		restore_row->addWidget(m_restore);
+		restore_row->addStretch(1);
+		outer->addLayout(restore_row);
+	}
 	outer->addWidget(buttons);
 
 	// Opening a settings window must not reach out to the network by itself:

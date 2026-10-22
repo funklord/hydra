@@ -88,6 +88,8 @@ private:
 
 	QTreeWidget *m_list   = nullptr;
 	QLabel      *m_status = nullptr;
+	QLabel      *m_title  = nullptr;   // the rows' shared title, when they have one
+	bool         m_narrow = false;     // what the rows were last built for
 	QLabel      *m_lookup = nullptr;
 	QPushButton *m_save   = nullptr;   // shown when yt-dlp's rows are listed
 	// The "nothing here" message, over the empty rows area rather than under

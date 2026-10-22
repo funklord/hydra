@@ -170,6 +170,25 @@ QIcon mark_icon(row_mark m, const QPalette &pal) {
 	return QIcon(px);
 }
 
+// **The title once, above the list, where every row shared it** -- the
+// holder, 2026-10-22, from a phone where "[video] Harbour at dusk" in front
+// of every row left no room for what told the rows apart. A looked-up row's
+// label is "<title>, <variant><what it carries>", a middle dot for the
+// comma; this is the title, or
+// empty for a row that has no variant to tell it from.
+QString title_of(const media_item &m) {
+	if (m.variant.isEmpty())
+		return QString();
+	const int at = m.label.indexOf(QStringLiteral(" · ") + m.variant);
+	return at > 0 ? m.label.left(at) : QString();
+}
+
+// The same label without its title, for a row under a title line.
+QString without_title(const media_item &m) {
+	const QString t = title_of(m);
+	return t.isEmpty() ? m.label : m.label.mid(t.size() + 3);
+}
+
 row_mark mark_for(media_kind k) {
 	switch (k) {
 	case media_kind::hls:
@@ -210,6 +229,18 @@ media_dialog::media_dialog(media_detector *detector, player_launcher *players,
 	// The placement is `empty_state`'s business; see its header for why the
 	// overlay is in the viewport and why both its pointers are guarded.
 	m_empty = new empty_state(m_list, this);
+
+	m_title = new QLabel(this);
+	m_title->setObjectName("media_title");
+	m_title->setWordWrap(true);
+	m_title->setTextFormat(Qt::PlainText);
+	{
+		QFont f = m_title->font();
+		f.setBold(true);
+		m_title->setFont(f);
+	}
+	m_title->hide();
+	outer->insertWidget(0, m_title);
 
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
@@ -313,6 +344,10 @@ void media_dialog::fit_host_column() {
 void media_dialog::resizeEvent(QResizeEvent *e) {
 	QDialog::resizeEvent(e);
 	fit_host_column();
+	// The buttons' words depend on the width too, and they are built with
+	// the rows.
+	if ((width() < k_narrow_width) != m_narrow)
+		repopulate();
 }
 
 void media_dialog::set_lookup_note(const QString &text) {
@@ -335,14 +370,51 @@ void media_dialog::repopulate() {
 		                   std::any_of(items.cbegin(), items.cend(),
 		                               [](const media_item &m) { return m.known_media; }));
 
+	// The looked-up rows' shared title, said once above the list when they
+	// all have one; empty when they do not, or when there are none.
+	QString shared;
+	bool one_title = true;
+	for (const media_item &m : items) {
+		if (!m.known_media)
+			continue;
+		const QString t = title_of(m);
+		if (t.isEmpty() || (!shared.isEmpty() && t != shared)) {
+			one_title = false;
+			break;
+		}
+		shared = t;
+	}
+	if (!one_title)
+		shared.clear();
+	// "[video] Harbour at dusk" reads as "Harbour at dusk (video)" on a line
+	// of its own: the kind in brackets was there to stand out from the row
+	// beside it, and there is none now.
+	QString heading = shared;
+	if (heading.startsWith('[') && heading.indexOf("] ") > 0)
+		heading = QString("%1 (%2)").arg(heading.mid(heading.indexOf("] ") + 2),
+		                                 heading.mid(1, heading.indexOf("] ") - 1));
+	m_title->setText(heading);
+	m_title->setVisible(!heading.isEmpty());
+	auto name_of = [&shared](const media_item &m) {
+		return shared.isEmpty() ? m.label : without_title(m);
+	};
+
+	// **Icons alone on a narrow screen**, where the words took two fifths of
+	// the width -- the holder, 2026-10-22. The words stay in the tooltip.
+	const bool narrow = width() < k_narrow_width;
+	m_narrow = narrow;
+
 	// One row with its two buttons. `text` is what the Name column says,
 	// which inside a group is the short name.
-	auto add_row = [this](QTreeWidgetItem *parent, const media_item &item,
-	                      const QString &text) {
+	auto add_row = [this, narrow](QTreeWidgetItem *parent, const media_item &item,
+	                              const QString &text) {
 		auto *row = parent ? new QTreeWidgetItem(parent) : new QTreeWidgetItem(m_list);
 		row->setIcon(0, mark_icon(mark_for(item.kind), m_list->palette()));
 		row->setText(0, text);
 		row->setText(1, item.url.host());
+		// Which rows were looked up, for anything that needs to tell them
+		// from detection's now that the name no longer carries the title.
+		row->setData(0, Qt::UserRole, item.known_media);
 		// What the mark means, and where it comes from -- the second also
 		// being the Host column's, which a narrow screen does not show.
 		row->setToolTip(0, QString("%1 from %2").arg(kind_label(item.kind), item.url.host()));
@@ -351,8 +423,12 @@ void media_dialog::repopulate() {
 		auto *cell    = new QWidget(m_list);
 		auto *layout  = new QHBoxLayout(cell);
 		layout->setContentsMargins(0, 0, 0, 0);
-		auto *watch   = new QPushButton("▶ Watch", cell);
-		auto *save    = new QPushButton("⬇ Download", cell);
+		auto *watch   = new QPushButton(narrow ? "▶" : "▶ Watch", cell);
+		auto *save    = new QPushButton(narrow ? "⬇" : "⬇ Download", cell);
+		watch->setObjectName("media_watch");
+		save->setObjectName("media_download");
+		watch->setToolTip("Watch");
+		save->setToolTip("Download");
 		layout->addWidget(watch);
 		layout->addWidget(save);
 		QString why_watch, why_save;
@@ -389,12 +465,12 @@ void media_dialog::repopulate() {
 	for (int i = 0; i < items.size(); ++i) {
 		const media_item &item = items[i];
 		if (!grouped || item.group.isEmpty() || !item.has_video) {
-			add_row(nullptr, item, item.label);
+			add_row(nullptr, item, item.known_media ? name_of(item) : item.label);
 			continue;
 		}
 		if (video)
 			continue;   // the whole group is built once, where it first appears
-		video = add_row(nullptr, items[top], items[top].label);
+		video = add_row(nullptr, items[top], name_of(items[top]));
 		// The sizes, largest first, each led by its chosen format.
 		QList<int> lead_rows;
 		for (int j = 0; j < items.size(); ++j)

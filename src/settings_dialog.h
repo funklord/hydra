@@ -51,6 +51,10 @@ class QStackedWidget;
 class settings_dialog : public QDialog {
 	Q_OBJECT
 public:
+	// Below this screen width the dialog lays itself out for a phone; the
+	// window's drawer threshold, so "narrow" means one thing in this program.
+	static constexpr int k_narrow_screen = 620;
+
 	settings_dialog(player_launcher *players, download_manager *downloads,
 	                 torrent_download_source *torrents, ollama_provider *local_ai,
 	                 claude_provider *external_ai, policy_engine *policy = nullptr,

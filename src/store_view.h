@@ -21,8 +21,9 @@ class QWidget;
 // opens them.
 namespace store_view {
 
-// What the listing shows, in listing order. The Makefile's `STORE_VIEWS`
-// names the same four.
+// The views there are: the listing's four, in listing order, which the
+// Makefile's `STORE_VIEWS` names, and `settings`, for looking at that
+// dialog on a phone.
 QStringList names();
 
 // The demo site's host, served from the package by `HydraWebView`.

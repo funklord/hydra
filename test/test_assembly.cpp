@@ -38,6 +38,7 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
+#include <QLabel>
 #include <QTimeZone>
 #include <QHeaderView>
 #include <QTreeWidget>
@@ -379,7 +380,8 @@ int main(int argc, char **argv) {
 		sound.url = QUrl("https://cdn.invalid/sound");
 		sound.known_media = true;
 		sound.has_video   = false;
-		sound.label       = "[video] Clip · opus 160 kbit/s";
+		sound.variant     = "opus 160 kbit/s";
+		sound.label       = "[video] Clip · opus 160 kbit/s · sound only";
 		// In the order an answer lists them, worst first and mixed.
 		det.replace_vouched("v.invalid", {
 			row("https://cdn.invalid/720-vp9", 720, "720p60", false, "720p60 · VP9"),
@@ -395,9 +397,19 @@ int main(int argc, char **argv) {
 		      QString("two rows: the video and its sound (%1)")
 		          .arg(list ? list->topLevelItemCount() : -1));
 		QTreeWidgetItem *video = list ? list->topLevelItem(0) : nullptr;
-		check(video && video->text(0) == "[video] Clip · 1080p60 · H.264",
+		check(video && video->text(0) == "1080p60 · H.264",
 		      QString("the video's row is what Save takes, the best up to 1080p (%1)")
 		          .arg(video ? video->text(0) : QString()));
+		// **The title once, above the list**, since every row shared it.
+		auto *title = dlg.findChild<QLabel *>("media_title");
+		check(title && !title->isHidden() && title->text() == "Clip (video)",
+		      QString("the shared title is said once, above the rows (%1)")
+		          .arg(title ? title->text() : QString()));
+		check(list && list->topLevelItemCount() > 1 &&
+		          list->topLevelItem(1)->text(0) == "opus 160 kbit/s · sound only",
+		      QString("and the sound's row is named without it (%1)")
+		          .arg(list && list->topLevelItemCount() > 1 ? list->topLevelItem(1)->text(0)
+		                                                     : QString()));
 		QStringList sizes;
 		for (int i = 0; video && i < video->childCount(); ++i)
 			sizes << video->child(i)->text(0);
@@ -423,9 +435,17 @@ int main(int argc, char **argv) {
 		QCoreApplication::processEvents();
 		check(list && list->isColumnHidden(1),
 		      QString("Host is hidden on a narrow screen (%1 wide)").arg(dlg.width()));
+		auto watch_text = [&] {
+			auto *b = dlg.findChild<QPushButton *>("media_watch");
+			return b ? b->text() : QString("(none)");
+		};
+		check(watch_text() == "▶",
+		      QString("and the buttons are icons alone (%1)").arg(watch_text()));
 		dlg.resize(900, 600);
 		QCoreApplication::processEvents();
-		check(list && !list->isColumnHidden(1), "and shown on a wide one");
+		check(list && !list->isColumnHidden(1) && watch_text() == "▶ Watch",
+		      QString("and on a wide one Host is shown and the buttons have words (%1)")
+		          .arg(watch_text()));
 		dlg.hide();
 		const QList<media_item> items = det.items_for("v.invalid");
 		const int pick = media_detector::best_picture(items, 1080);

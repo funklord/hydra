@@ -58,7 +58,9 @@ QString host() {
 }
 
 QStringList names() {
-	return { "tabs", "page", "media", "downloads" };
+	// `settings` is not in the listing (`STORE_VIEWS`); it is here to look
+	// at the dialog on a phone without tapping through to it.
+	return { "tabs", "page", "media", "downloads", "settings" };
 }
 
 bool prepare_profile(const QString &seed_dir, QString *why) {
@@ -193,6 +195,20 @@ void main_window::show_store_view(const QString &name) {
 				find->stop();
 				find->deleteLater();
 				store_view::announce_when_drawn(dlg, "media");
+			}
+		});
+		find->start();
+		return;
+	}
+	if (name == "settings") {
+		QTimer::singleShot(0, this, [this] { open_settings(); });
+		auto *find = new QTimer(this);
+		find->setInterval(100);
+		connect(find, &QTimer::timeout, find, [find] {
+			if (QWidget *dlg = QApplication::activeModalWidget()) {
+				find->stop();
+				find->deleteLater();
+				store_view::announce_when_drawn(dlg, "settings");
 			}
 		});
 		find->start();
