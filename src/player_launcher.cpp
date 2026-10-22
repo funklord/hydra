@@ -28,6 +28,33 @@ const known_player k_known[] = {
 	{ "mplayer",  "mplayer",   false },
 };
 
+// The terminals tried when none is configured, in order, with the option
+// after which each takes a program and its arguments as separate words.
+// `x-terminal-emulator` first: it is the desktop's own choice on Debian, and
+// policy requires it to take `-e` that way -- checked with qterminal, which
+// is what it names here, by passing it an argument with a space and a url
+// with `&` in it. The options that take one string to be split by a shell
+// (xfce4-terminal's `-e`, gnome-terminal's old `-e`) are not used: a url
+// with `&` in it would be cut there.
+struct known_terminal {
+	const char *program;
+	const char *option;   // empty: the program follows directly
+};
+const known_terminal k_terminals[] = {
+	{ "x-terminal-emulator", "-e" },
+	{ "xterm",               "-e" },
+	{ "konsole",             "-e" },
+	{ "gnome-terminal",      "--" },
+	{ "xfce4-terminal",      "-x" },
+	{ "mate-terminal",       "-x" },
+	{ "terminator",          "-x" },
+	{ "qterminal",           "-e" },
+	{ "alacritty",           "-e" },
+	{ "urxvt",               "-e" },
+	{ "kitty",               ""   },
+	{ "foot",                ""   },
+};
+
 bool is_manifest(const media_item &item) {
 	return item.kind == media_kind::hls || item.kind == media_kind::dash;
 }
@@ -167,6 +194,40 @@ void player_launcher::set_custom_command(const QString &cmd) {
 	}
 }
 
+QStringList player_launcher::resolve_terminal(const QString &configured) {
+	QStringList parts = configured.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+	if (!parts.isEmpty()) {
+		QString path = QStandardPaths::findExecutable(parts.first());
+		if (path.isEmpty() && QFileInfo(parts.first()).isExecutable())
+			path = parts.first();
+		// A configured terminal that is not there falls back rather than
+		// leaving the player with none: the setting says "a terminal, this
+		// one", and a different one is closer to that than no terminal.
+		if (!path.isEmpty()) {
+			parts.first() = path;
+			return parts;
+		}
+	}
+	for (const known_terminal &t : k_terminals) {
+		const QString path = QStandardPaths::findExecutable(QString::fromLatin1(t.program));
+		if (path.isEmpty())
+			continue;
+		QStringList out{ path };
+		if (*t.option)
+			out << QString::fromLatin1(t.option);
+		return out;
+	}
+	return {};
+}
+
+QStringList player_launcher::command_line(const QStringList &terminal,
+                                           const QString &program,
+                                           const QStringList &args) {
+	QStringList out = terminal;
+	out << program << args;
+	return out;
+}
+
 bool player_launcher::takes_audio_beside(const QString &id) {
 	return id == "mpv" || id == "vlc" || id == "mplayer" || id == "mplayer2";
 }
@@ -242,8 +303,16 @@ bool player_launcher::play(const media_item &item, QString *error,
 	const QStringList args = arguments(e->id, m_custom, target, audio,
 	                                   chapters_file);
 
+	const bool terminal = controlled_from_terminal(e->id) ||
+	                      (e->id == QLatin1String(custom_id()) && m_custom_in_terminal);
+	// Without a terminal to be found it still starts: a player that plays and
+	// cannot be paused is more use than one that does not play.
+	const QStringList line = command_line(terminal ? resolve_terminal(m_terminal)
+	                                               : QStringList(),
+	                                      e->path, args);
+
 	// Detached: a player outliving the browser is normal.
-	const bool ok = QProcess::startDetached(e->path, args);
+	const bool ok = QProcess::startDetached(line.first(), line.mid(1));
 	if (!ok && error)
 		*error = QString("Could not start %1.").arg(e->label);
 	return ok;

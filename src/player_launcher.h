@@ -75,6 +75,36 @@ public:
 	QString custom_command() const { return m_custom; }
 	void set_custom_command(const QString &cmd);
 
+	// **A player whose controls are its terminal is started in one.**
+	// mplayer reads its keys -- pause, seek, quit, volume -- from the terminal
+	// it was started from, and a browser has none to give it, so a detached
+	// mplayer played and could not be paused. Reported 2026-10-22.
+	//
+	// `terminal_command()` is the terminal and the option that runs a
+	// program, with the player's command line appended after it as separate
+	// arguments: `xterm -e`, `gnome-terminal --`, `kitty`. Empty means the
+	// first that is installed, `x-terminal-emulator -e` first, which Debian
+	// requires to take exactly that form.
+	QString terminal_command() const { return m_terminal; }
+	void set_terminal_command(const QString &cmd) { m_terminal = cmd.trimmed(); }
+	// Custom... is somebody's own command, so whether it wants a terminal is
+	// theirs to say.
+	bool custom_in_terminal() const { return m_custom_in_terminal; }
+	void set_custom_in_terminal(bool on) { m_custom_in_terminal = on; }
+
+	// The players that are controlled from their terminal.
+	static bool controlled_from_terminal(const QString &id) {
+		return id == "mplayer" || id == "mplayer2";
+	}
+	// The terminal as a program and its leading arguments, resolved: the
+	// configured command when its program is found, otherwise the first
+	// known terminal installed. Empty when there is none.
+	static QStringList resolve_terminal(const QString &configured);
+	// What is started: `program args` alone, or inside `terminal` when one is
+	// given.
+	static QStringList command_line(const QStringList &terminal,
+	                                 const QString &program, const QStringList &args);
+
 	// Empty when the launch is expected to work. Otherwise a reason to show the
 	// user -- no player, or a player that cannot handle this stream well.
 	QString warning_for(const media_item &item) const;
@@ -114,4 +144,6 @@ private:
 	QList<player_entry> m_players;
 	QString             m_selected;
 	QString             m_custom;
+	QString             m_terminal;
+	bool                m_custom_in_terminal = false;
 };

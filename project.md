@@ -38808,3 +38808,39 @@ on the installed binary), so one hydra binary runs on either engine. But
 a knob, not a patched Qt, and a private copy of the engine would miss
 Debian's Chromium security updates. Offering the patch to Qt is the
 holder's decision; until then it is a local stopgap.
+
+## mplayer is started in a terminal, because its controls are there
+
+Reported 2026-10-22: mplayer started from Watch played, and nothing could
+pause, seek or stop it. mplayer reads those keys from the terminal it was
+started in, and a detached process started by the browser has none. mpv,
+VLC, SMPlayer and ffplay take keys in their own windows, so they are
+unchanged.
+
+`player_launcher::controlled_from_terminal` names mplayer and mplayer2.
+Those two are started inside a terminal, and so is Custom... when its
+"Run it in a terminal" box is ticked. The terminal is the Media page's
+"Terminal" setting (`player/terminal`): a program followed by the option
+that runs a command, such as `xterm -e` or `gnome-terminal --`, with the
+player's command line added after it as separate arguments.
+
+- **Blank means the first known terminal installed**, starting with
+  `x-terminal-emulator -e`. That is the desktop's own choice on Debian, and
+  Debian policy requires it to take that form. qterminal (which it names
+  here) and xterm were each checked under xvfb with an argument containing
+  a space and a url containing `&`, and both arrived intact.
+- **Not used:** the terminal options that take one string and split it
+  with a shell, namely xfce4-terminal's `-e` and gnome-terminal's old `-e`.
+  A url containing `&` would be cut there.
+- **A configured terminal that isn't installed falls back** to the
+  automatic choice.
+- **With no terminal at all, the player is started without one, as
+  before.** A player that plays and can't be paused is more use than one
+  that doesn't play.
+
+`test_settings` covers the following. The end-to-end check uses a fake
+terminal that writes down its arguments.
+- The command line is built as above.
+- Terminal resolution, including the fallback.
+- The settings round trip.
+- The whole path through `play()`.

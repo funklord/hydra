@@ -31,6 +31,8 @@
 #include <QFile>
 #include <QSet>
 #include <QSettings>
+#include <QStandardPaths>
+#include <QThread>
 #include <QTimer>
 #include <cstdio>
 #include <csignal>
@@ -133,6 +135,8 @@ int main(int argc, char **argv) {
 		tor->set_sequential(true);
 		p.set_custom_command("/bin/echo --play %U");
 		p.set_selected(player_launcher::custom_id());
+		p.set_terminal_command("xterm -e");
+		p.set_custom_in_terminal(true);
 		settings_store::save_from(&p, &m, tor, nullptr, nullptr);
 	}
 	{
@@ -151,6 +155,8 @@ int main(int argc, char **argv) {
 		      "listen interfaces persists — the system-VPN binding");
 		check(tor2->sequential(), "sequential default persists");
 		check(p2.custom_command() == "/bin/echo --play %U", "custom command persists");
+		check(p2.terminal_command() == "xterm -e" && p2.custom_in_terminal(),
+		      "the terminal, and running Custom... in it, persist");
 		check(p2.selected() == QLatin1String(player_launcher::custom_id()),
 		      QString("custom player stays selected (%1)").arg(p2.selected()));
 	}
@@ -252,6 +258,65 @@ int main(int argc, char **argv) {
 
 	// **Watch on YouTube played a silent picture**: nearly every quality is
 	// picture alone or sound alone, and the player was handed one stream.
+	// **mplayer played and could not be paused**: its keys come from the
+	// terminal it was started from, and a browser has none. Reported
+	// 2026-10-22.
+	section("a player controlled from its terminal is started in one");
+	{
+		check(player_launcher::controlled_from_terminal("mplayer") &&
+		          !player_launcher::controlled_from_terminal("mpv"),
+		      "mplayer is, mpv is not");
+		const QStringList term = { "/usr/bin/xterm", "-e" };
+		const QStringList args = { "-cache", "8192", "http://h/v?a=1&b=2" };
+		const QStringList want = { "/usr/bin/xterm", "-e", "/usr/bin/mplayer",
+		                           "-cache", "8192", "http://h/v?a=1&b=2" };
+		check(player_launcher::command_line(term, "/usr/bin/mplayer", args) == want,
+		      "the player's words follow the terminal's, each its own argument");
+		check(player_launcher::command_line({}, "/usr/bin/mpv", { "v" })
+		          == QStringList({ "/usr/bin/mpv", "v" }),
+		      "and without a terminal it is the player alone");
+		check(player_launcher::resolve_terminal("/bin/sh -c") ==
+		          QStringList({ "/bin/sh", "-c" }),
+		      "a configured terminal is used as given");
+		check(player_launcher::resolve_terminal("no-such-terminal-here -e") ==
+		          player_launcher::resolve_terminal(QString()),
+		      "and one that is not installed falls back to the automatic choice");
+		const QString x = QStandardPaths::findExecutable("x-terminal-emulator");
+		if (!x.isEmpty())
+			check(player_launcher::resolve_terminal(QString()) == QStringList({ x, "-e" }),
+			      "the automatic choice is x-terminal-emulator -e where there is one");
+
+		// The whole path through play(), with a terminal that writes down
+		// what it was asked to run.
+		const QString argv_file = tmp + "/terminal-argv";
+		const QString fake      = tmp + "/fake-terminal";
+		{
+			QFile f(fake);
+			f.open(QIODevice::WriteOnly);
+			f.write(QString("#!/bin/sh\nprintf '[%s]\\n' \"$@\" > %1\n").arg(argv_file).toUtf8());
+		}
+		QFile::setPermissions(fake, QFile::permissions(fake) | QFileDevice::ExeOwner);
+		player_launcher p;
+		p.set_custom_command("/bin/true --play %U");
+		p.set_selected(player_launcher::custom_id());
+		p.set_terminal_command(fake + " -e");
+		p.set_custom_in_terminal(true);
+		media_item m;
+		m.url = QUrl("http://127.0.0.1:9/v?a=1&b=2");
+		QString error;
+		check(p.play(m, &error), QString("it starts (%1)").arg(error));
+		QString got;
+		for (int i = 0; i < 100 && got.isEmpty(); ++i) {
+			QFile r(argv_file);
+			if (r.open(QIODevice::ReadOnly))
+				got = QString::fromUtf8(r.readAll());
+			if (got.isEmpty())
+				QThread::msleep(20);
+		}
+		check(got == "[-e]\n[/bin/true]\n[--play]\n[http://127.0.0.1:9/v?a=1&b=2]\n",
+		      QString("the terminal is handed the player and its url (%1)").arg(got));
+	}
+
 	section("a picture-only stream is played with its sound beside it");
 	{
 		const QString v = "http://127.0.0.1:9/v", a = "http://127.0.0.1:9/a";

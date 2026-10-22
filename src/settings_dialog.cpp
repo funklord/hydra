@@ -314,6 +314,8 @@ void load_into(player_launcher *players, download_manager *downloads,
 
 	if (players) {
 		players->set_custom_command(s.value("player/custom_command").toString());
+		players->set_terminal_command(s.value("player/terminal").toString());
+		players->set_custom_in_terminal(s.value("player/custom_in_terminal", false).toBool());
 		const QString id = s.value("player/selected").toString();
 		if (!id.isEmpty())
 			players->set_selected(id);
@@ -365,6 +367,8 @@ void save_from(player_launcher *players, download_manager *downloads,
 	if (players) {
 		s.setValue("player/selected", players->selected());
 		s.setValue("player/custom_command", players->custom_command());
+		s.setValue("player/terminal", players->terminal_command());
+		s.setValue("player/custom_in_terminal", players->custom_in_terminal());
 	}
 	if (downloads)
 		s.setValue("downloads/directory", downloads->directory());
@@ -1559,6 +1563,9 @@ void settings_dialog::restore_page_defaults(int page) {
 	} else if (name.startsWith("Media")) {
 		player_launcher fresh;
 		m_custom_cmd->clear();
+		m_custom_terminal->setChecked(false);
+		if (m_terminal)
+			m_terminal->clear();
 		for (QRadioButton *b : m_player_buttons)
 			if (b->property("player_id").toString() == fresh.selected()) {
 				b->setChecked(true);
@@ -2534,6 +2541,26 @@ void settings_dialog::build_player_page(QWidget *page) {
 	  "appended. Arguments are split on spaces — this is not a shell, so "
 	  "quoting and pipes will not work.",
 	  m_custom_cmd, page, /*wide=*/true));
+	m_custom_terminal = new QCheckBox(page);
+	m_custom_terminal->setObjectName("player_custom_terminal");
+	v->addWidget(settings_row(
+	  "Run it in a terminal",
+	  "For a player controlled from the keyboard in its terminal, as "
+	  "mplayer is.", m_custom_terminal, page));
+
+#ifndef Q_OS_ANDROID
+	v->addWidget(section_heading("Terminal", page));
+	m_terminal = new QLineEdit(page);
+	m_terminal->setObjectName("player_terminal");
+	m_terminal->setPlaceholderText("automatic");
+	v->addWidget(settings_row(
+	  "Terminal",
+	  "mplayer takes its keys from a terminal, so it is started in one. The "
+	  "terminal and the option that runs a program, such as \"xterm -e\" or "
+	  "\"gnome-terminal --\"; the player's command is added after it. Blank "
+	  "uses x-terminal-emulator, or the first terminal found.",
+	  m_terminal, page, /*wide=*/true));
+#endif
 
 	m_player_note = new QLabel(page);
 	m_player_note->setWordWrap(true);
@@ -2936,6 +2963,10 @@ void settings_dialog::load() {
 	}
 	if (m_players)
 		put_value(m_custom_cmd, m_players->custom_command());
+	if (m_players && m_terminal)
+		put_value(m_terminal, m_players->terminal_command());
+	if (m_players && m_custom_terminal)
+		m_custom_terminal->setChecked(m_players->custom_in_terminal());
 
 	if (m_downloads)
 		put_value(m_dir, m_downloads->directory());
@@ -2981,6 +3012,8 @@ void settings_dialog::update_custom_state() {
 	const bool custom = chosen == QLatin1String(player_launcher::custom_id());
 	if (m_custom_cmd)
 		m_custom_cmd->setEnabled(custom);
+	if (m_custom_terminal)
+		m_custom_terminal->setEnabled(custom);
 
 	if (!m_player_note)
 		return;
@@ -3123,6 +3156,9 @@ void settings_dialog::apply() {
 		// launcher knows what to run, and set_custom_command re-resolves
 		// whether that entry counts as installed.
 		m_players->set_custom_command(m_custom_cmd->text());
+		if (m_terminal)
+			m_players->set_terminal_command(m_terminal->text());
+		m_players->set_custom_in_terminal(m_custom_terminal->isChecked());
 		for (QRadioButton *b : m_player_buttons) {
 			if (b->isChecked()) {
 				m_players->set_selected(b->property("player_id").toString());
