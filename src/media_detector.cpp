@@ -305,6 +305,18 @@ bool is_youtube_host(const QString &host) {
 
 }  // namespace
 
+namespace {
+bool g_saving_as_android = false;
+}
+
+void media_saving_as_android(bool on) {
+	g_saving_as_android = on;
+}
+
+bool media_saving_is_android() {
+	return g_saving_as_android;
+}
+
 bool media_saving_allowed_on(bool android, const QString &site_host,
                              const QUrl &media_url, QString *why) {
 	if (!android)

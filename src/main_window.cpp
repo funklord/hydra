@@ -4973,6 +4973,12 @@ void main_window::update_navigation() {
 	if (!m_back_action || !m_stack)
 		return;
 	web_view_backend *v = current_view();
+	// Capture saves what a page plays, so it is not offered where saving is
+	// against a service's terms -- YouTube on Android -- unless a capture is
+	// already running, which must stay stoppable.
+	if (m_capture_action)
+		m_capture_action->setVisible(m_capture_action->isChecked() || !v ||
+		                             media_saving_allowed(v->url().host(), QUrl(), nullptr));
 
 	// A locked tab does not walk out of its page backwards either (sec 5.5).
 	// Greying the buttons is the honest way to say so: the alternative is a

@@ -400,6 +400,44 @@ int main(int argc, char **argv) {
 		      "and not where nothing was vouched for, where it could not choose");
 	}
 
+	// **Hidden where saving is against a service's terms**, on the holder's
+	// ruling of 2026-10-22: deactivate only what is against policy. So on
+	// YouTube in the Android build the row and its Watch stay, and Download
+	// and Save are not shown; elsewhere, and on the desktop, nothing changes.
+	section("on Android, saving is hidden on YouTube and nowhere else");
+	{
+		media_detector det;
+		auto add = [&](const QString &site, const QString &url) {
+			media_item m;
+			m.kind        = media_kind::direct;
+			m.url         = QUrl(url);
+			m.label       = url;
+			m.known_media = true;
+			det.add_item(site, m);
+		};
+		add("www.youtube.com", "https://rr1.googlevideo.com/videoplayback?itag=18");
+		add("video.example", "https://cdn.example/clip.mp4");
+		download_manager dm;
+		dm.add_source(new fake_plain_source);
+		auto shown = [&](const QString &site, const QString &name) {
+			media_dialog dlg(&det, &players, &dm, &proxy, &tap, &assembly, nullptr);
+			dlg.set_site(site, "n1", stream_context{});
+			for (QPushButton *b : dlg.findChildren<QPushButton *>())
+				if (b->text().contains(name))
+					return !b->isHidden();
+			return false;
+		};
+		media_saving_as_android(true);
+		check(!shown("www.youtube.com", "Download") && !shown("www.youtube.com", "Save"),
+		      "Download and Save are not shown on YouTube");
+		check(shown("www.youtube.com", "Watch"), "while the row and its Watch stay");
+		check(shown("video.example", "Download") && shown("video.example", "Save"),
+		      "and another site keeps both");
+		media_saving_as_android(false);
+		check(shown("www.youtube.com", "Download"),
+		      "and the desktop hides nothing on YouTube");
+	}
+
 	section("an assembly outlives the dialog that started it");
 
 	QString out;

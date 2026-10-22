@@ -245,8 +245,9 @@ void media_dialog::repopulate() {
 	m_list->clear();
 	const QList<media_item> items = m_detector->items_for(m_site);
 	if (m_save)
-		m_save->setVisible(std::any_of(items.cbegin(), items.cend(),
-		                                [](const media_item &m) { return m.known_media; }));
+		m_save->setVisible(media_saving_allowed(m_site, QUrl(), nullptr) &&
+		                   std::any_of(items.cbegin(), items.cend(),
+		                               [](const media_item &m) { return m.known_media; }));
 
 	for (const media_item &item : items) {
 		auto *row = new QTreeWidgetItem(m_list);
@@ -265,9 +266,12 @@ void media_dialog::repopulate() {
 		QString why_watch, why_save;
 		gate(watch, can_watch(item, m_players, &why_watch), why_watch);
 		gate(save,  can_fetch(item, m_downloads, &why_save), why_save);
-		QString no_save;
-		if (save->isEnabled() && !media_saving_allowed(m_site, item.url, &no_save))
-			gate(save, false, no_save);
+		// **Hidden, not greyed, where saving is against a service's terms**
+		// -- YouTube on Android. The holder's ruling, 2026-10-22: deactivate
+		// only what is against policy, so the row and its Watch stay, and a
+		// button that could never be pressed is not shown at all.
+		if (!media_saving_allowed(m_site, item.url, nullptr))
+			save->hide();
 		// A player that will take it but warn about it stays enabled: a warning
 		// is advice, not a refusal, and greying on one would hide a stream that
 		// plays perfectly well.
@@ -288,6 +292,11 @@ void media_dialog::repopulate() {
 	for (const mse_stream &s : playing) {
 		if (s.bytes <= 0)
 			continue;
+		// Capture is all a playing row offers, so where saving is against a
+		// service's terms the row is left out rather than shown with nothing
+		// that can be done with it.
+		if (!media_saving_allowed(m_site, QUrl(), nullptr))
+			continue;
 		auto *row = new QTreeWidgetItem(m_list);
 		row->setText(0, "Playing");
 		row->setText(1, QString("%1 · %2 buffered")
@@ -305,13 +314,6 @@ void media_dialog::repopulate() {
 			emit capture_requested();
 			accept();
 		});
-		// Said on the button rather than refused after the click: a
-		// control that cannot work here should look like it.
-		QString no_capture;
-		if (!media_saving_allowed(m_site, QUrl(), &no_capture)) {
-			rec->setEnabled(false);
-			rec->setToolTip(no_capture);
-		}
 		m_list->setItemWidget(row, 3, cell);
 	}
 

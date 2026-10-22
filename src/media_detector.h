@@ -215,12 +215,17 @@ private:
 // `media_saving_allowed` answers for the build it is in.
 bool media_saving_allowed_on(bool android, const QString &site_host,
                              const QUrl &media_url, QString *why = nullptr);
+// Makes the desktop answer as Android would, for a test of what the Android
+// build hides; nothing else sets it.
+void media_saving_as_android(bool on);
+bool media_saving_is_android();
+
 inline bool media_saving_allowed(const QString &site_host, const QUrl &media_url,
                                  QString *why = nullptr) {
 #ifdef Q_OS_ANDROID
 	return media_saving_allowed_on(true, site_host, media_url, why);
 #else
-	return media_saving_allowed_on(false, site_host, media_url, why);
+	return media_saving_allowed_on(media_saving_is_android(), site_host, media_url, why);
 #endif
 }
 

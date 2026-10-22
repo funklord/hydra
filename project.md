@@ -38055,10 +38055,20 @@ The current Play policy has no YouTube example of its own -- older ones,
 quoted on developer forums, did -- so the clause above is what applies.
 `media_saving_allowed` refuses on Android for a YouTube page or media host
 (youtube.com, youtu.be, youtube-nocookie.com, googlevideo.com, and their
-subdomains), and every route asks it: the media dialog's Download and
-Capture are disabled with the reason, `save`, `toggle_capture` and the
+subdomains), and every route asks it: `save`, `toggle_capture` and the
 yt-dlp request refuse. Desktop is unchanged. `test_streamtype` asks both
 platforms' answers.
+
+**Hidden rather than disabled, on the holder's ruling of 2026-10-22**:
+deactivate only what is against policy, and keep downloading from every
+other site. So on YouTube in the Android build the media dialog shows its
+rows and Watch, and leaves out Download, Save... and the Playing rows that
+exist only to be captured; the Capture Playing Video menu item is hidden
+while the current tab is on YouTube, unless a capture is already running
+and has to stay stoppable. A greyed button with a reason still advertised
+the feature on exactly the page it is refused on. `test_assembly` checks
+the dialog with the desktop made to answer as Android, through
+`media_saving_as_android`, which nothing but that test sets.
 
 **Left to the holder, because the same terms reach them:** watching a
 YouTube stream in an external player is not saving, but is "access ...
