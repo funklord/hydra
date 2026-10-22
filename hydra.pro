@@ -170,6 +170,12 @@ qtHaveModule(dbus) {
 
 android {
 	ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
+	# **Pinned, not left to Qt.** Google Play has accepted only apps
+	# targeting API 36 or later since 2026-08-31. Unset, this came from
+	# Qt 6.12's default, measured as 36 in the built apk with aapt2 -- correct
+	# by accident, and liable to move with the next kit. Pinned on the
+	# holder's instruction 2026-10-22, as beerssh and bbq-predictor do.
+	ANDROID_TARGET_SDK_VERSION = 36
 	# A package with no versionCode installs, and then nothing can ever be an
 	# upgrade of it: Android compares that integer and treats absent as zero.
 	ANDROID_VERSION_NAME = $$VERSION
