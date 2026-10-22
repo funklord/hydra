@@ -4,6 +4,10 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
+import android.view.WindowManager;
 
 /**
  * Handing a stream to another app (architecture doc §19).
@@ -114,5 +118,34 @@ public class HydraIntents {
             return "";
         String v = a.getIntent().getStringExtra("store_view");
         return v == null ? "" : v;
+    }
+
+    /**
+     * Hide the system status bar, for a store screenshot run only.
+     *
+     * The screenshot target asks SystemUI for demo mode -- a fixed clock, a
+     * full battery, no notifications -- and on a Galaxy Z Fold3 it had no
+     * effect, so every picture showed the phone's own clock and a charging
+     * battery: the device's state, published in the listing. The holder,
+     * 2026-10-22: hide the bar during a run, and never in normal use.
+     * Swiping from the edge still shows it, so the phone stays usable.
+     */
+    public static void hideStatusBar(final Activity a) {
+        if (a == null)
+            return;
+        a.runOnUiThread(new Runnable() {
+            @Override public void run() {
+                if (Build.VERSION.SDK_INT >= 30) {
+                    WindowInsetsController c = a.getWindow().getInsetsController();
+                    if (c != null) {
+                        c.hide(WindowInsets.Type.statusBars());
+                        c.setSystemBarsBehavior(
+                            WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                    }
+                } else {
+                    a.getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+                }
+            }
+        });
     }
 }

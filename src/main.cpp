@@ -231,6 +231,7 @@ int main(int argc, char *argv[]) {
 		// available" -- which tabs depended on timing. Found on the first
 		// run on a phone, 2026-10-22.
 		android_view::enable_store_demo();
+		android_intents::hide_status_bar();
 	}
 #endif
 	app.setApplicationName("Hydra");

@@ -90,6 +90,12 @@ QString take_view_url() {
 	return url.isValid() ? url.toString() : QString();
 }
 
+void hide_status_bar() {
+	QJniObject::callStaticMethod<void>(
+	  k_cls, "hideStatusBar", "(Landroid/app/Activity;)V",
+	  QNativeInterface::QAndroidApplication::context().object());
+}
+
 QString store_view() {
 	const QJniObject v = QJniObject::callStaticObjectMethod(
 	  k_cls, "storeView", "(Landroid/app/Activity;)Ljava/lang/String;",

@@ -38931,10 +38931,15 @@ faults were found:
   page came to the front. They go through the lookup cache now, as a
   real answer does: three sizes in two formats each, plus the sound.
 
-**Still open:** the status bar in the pictures is the phone's real one
-(clock, battery, charging and mute icons). SystemUI demo mode, which the
-fragment turns on, did not take on this Samsung. That part is the shared
-fragment's, and it has been told.
+**The status bar in the pictures was the phone's real one** (clock,
+battery, charging and mute icons): SystemUI demo mode, which the fragment
+turns on, did not take on this Samsung. On the holder's instruction,
+`HydraIntents.hideStatusBar` hides the system status bar for a store run
+only, through the window's insets controller. It is called in `main` and
+again when the view opens, since Qt sets the system bars as it shows a
+window. Recaptured on the Fold: no clock, battery or notification icon in
+any of the four. The bar's space stays as an empty band at the top,
+because Qt keeps its layout clear of the inset.
 
 ## Find Media looks the page up itself, and keeps the answer per page
 

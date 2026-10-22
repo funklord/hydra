@@ -52,4 +52,8 @@ QString take_view_url();
 // fresh process with its own intent.
 QString store_view();
 
+// Hide the system status bar, for a store screenshot run only: demo mode
+// cannot be relied on to hide the phone's clock and battery.
+void hide_status_bar();
+
 }  // namespace android_intents

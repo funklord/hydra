@@ -7,6 +7,7 @@
 #include "tab_tree_model.h"
 #include "web_view_backend.h"
 #ifdef Q_OS_ANDROID
+#include "android_intents.h"
 #include "android_view.h"
 #endif
 
@@ -111,6 +112,11 @@ void main_window::show_store_view(const QString &name) {
 		         qPrintable(store_view::names().join(", ")));
 		return;
 	}
+#ifdef Q_OS_ANDROID
+	// Again now the window is up: Qt sets the system bars as it shows a
+	// window, which can bring the bar back that `main` hid.
+	android_intents::hide_status_bar();
+#endif
 	// The page each view stands on: the article for the first two, the
 	// video's page for Find Media and the downloads.
 	const bool article = name == "tabs" || name == "page";
