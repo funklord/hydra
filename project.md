@@ -38941,6 +38941,21 @@ window. Recaptured on the Fold: no clock, battery or notification icon in
 any of the four. The bar's space stays as an empty band at the top,
 because Qt keeps its layout clear of the inset.
 
+**Then, on the holder's word, beerssh's two answers**
+(`store_view::install_store_chrome`, store runs only):
+- **The band:** every window is given `Qt::ExpandedClientAreaHint` as it
+  is polished, so it may draw where the bar was. Widgets keep their
+  layouts inside the safe area by default (read in the 6.12 kit's
+  `qwidget.cpp`), and the safe area includes the display cutout. On the
+  Fold's cover screen the band that remains is about 105 px at 1080 wide,
+  which is the camera cutout's 82 px scaled, and is the same height as the
+  status bar there. So this phone cannot show the difference; a phone
+  without a cutout should show no band. That is unmeasured.
+- **Re-hiding:** the bar is hidden again on every
+  `QGuiApplication::focusWindowChanged`, since in beerssh a dialog closing
+  brought it back. No capture shows it back, but no run here closes a
+  dialog, so the case it guards is untested on hydra.
+
 ## Find Media looks the page up itself, and keeps the answer per page
 
 Asked for by the holder on 2026-10-22, in four parts.

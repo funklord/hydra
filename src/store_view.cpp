@@ -75,6 +75,35 @@ bool prepare_profile(const QString &seed_dir, QString *why) {
 	            data.filePath("download-history.json"), why);
 }
 
+#ifdef Q_OS_ANDROID
+namespace {
+
+// Sets the hint as each window is polished, which is before Qt makes the
+// native window: a flag set after that is not certain to take.
+class chrome_filter : public QObject {
+public:
+	using QObject::QObject;
+
+protected:
+	bool eventFilter(QObject *o, QEvent *e) override {
+		if (e->type() == QEvent::Polish)
+			if (auto *w = qobject_cast<QWidget *>(o); w && w->isWindow())
+				w->setWindowFlag(Qt::ExpandedClientAreaHint, true);
+		return QObject::eventFilter(o, e);
+	}
+};
+
+}  // namespace
+#endif
+
+void install_store_chrome() {
+#ifdef Q_OS_ANDROID
+	qApp->installEventFilter(new chrome_filter(qApp));
+	QObject::connect(qApp, &QGuiApplication::focusWindowChanged, qApp,
+	                 [](QWindow *) { android_intents::hide_status_bar(); });
+#endif
+}
+
 void announce_when_drawn(QWidget *w, const QString &name) {
 	// Polled rather than caught as an event: the first paint of a top-level
 	// window goes to its children, and which child is drawn last is the

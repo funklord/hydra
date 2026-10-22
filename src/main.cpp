@@ -232,6 +232,7 @@ int main(int argc, char *argv[]) {
 		// run on a phone, 2026-10-22.
 		android_view::enable_store_demo();
 		android_intents::hide_status_bar();
+		store_view::install_store_chrome();
 	}
 #endif
 	app.setApplicationName("Hydra");

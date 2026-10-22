@@ -37,6 +37,15 @@ QString host();
 // then not show anything, since what it would show is not the demo.
 bool prepare_profile(const QString &seed_dir, QString *why);
 
+// **Android only: the chrome of a store run.** Hides the system status bar
+// again whenever the focused window changes -- a dialog closing brought it
+// back in beerssh, and hydra's views are dialogs -- and lets every window
+// draw where the bar was, so the pictures have no empty band at the top.
+// Qt widgets keep their layouts inside the safe area by default, so only
+// the display cutout's height stays clear. Never in normal use. The
+// holder, 2026-10-22.
+void install_store_chrome();
+
 // Log `store-view-ready <name>` once `w` is on screen and has been painted.
 void announce_when_drawn(QWidget *w, const QString &name);
 
