@@ -38796,8 +38796,21 @@ corrected string claims (`claimedFullVersion` over JNI, from
 mobile, and no model. It is called wherever the string is set. The
 JavaScript shim, which covered the page only, now steps aside whenever the
 brands hold no "Android WebView", so it remains only as a fallback for a
-WebView without the feature. **Built, not yet run on a device**: the phone
-was not reachable over `adb`, which offered no debugging interface on USB.
+WebView without the feature.
+
+**Verified on the device 2026-10-22**, a Galaxy Z Fold3 (SM-F926B) with
+the APK of `9cc559e`. A page served from this machine through `adb
+reverse` recorded what the browser sent and saw, and every surface agrees
+on Chrome 140:
+- the `Sec-CH-UA` header and the User-Agent: `"Chromium";v="140",
+  "Not=A?Brand";v="24", "Google Chrome";v="140"`, mobile, Android, and
+  `Android 10; K ... Chrome/140.0.0.0 Mobile`;
+- `navigator.userAgentData.brands` in the page, and the same in a worker;
+- `fullVersionList`, at 140.0.7339.80.
+
+"Android WebView" appears nowhere. The high-entropy `model` answers the
+real `SM-F926B`, which is what Chrome on Android also answers when a site
+asks for it: the frozen "K" covers only the string.
 
 The holder's question, whether shipping a patched Qt is right if it cannot
 be upstreamed: the patch adds API and changes nothing existing, so
