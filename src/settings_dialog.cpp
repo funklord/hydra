@@ -284,6 +284,38 @@ void set_ai_mode(ai_choice mode) {
 	s.sync();
 }
 
+// **Routine tasks have their own backend**, by the holder's choice of
+// 2026-10-22: work that runs often and asks little -- reading what a video
+// is, each time Find Media looks one up -- is not worth sending out, and
+// most people will keep it local. Local only by default, whatever the main
+// setting says.
+ai_choice routine_ai_mode() {
+	const QString v = open_settings().value("ai/routine_mode", "local_only").toString();
+	if (v == "automatic")
+		return ai_choice::automatic;
+	if (v == "external")
+		return ai_choice::external;
+	return ai_choice::local_only;
+}
+
+void set_routine_ai_mode(ai_choice mode) {
+	QSettings s = open_settings();
+	s.setValue("ai/routine_mode", mode == ai_choice::local_only ? "local_only"
+	                             : mode == ai_choice::external  ? "external"
+	                                                            : "automatic");
+	s.sync();
+}
+
+QString routine_ollama_model() {
+	return open_settings().value("ai/routine_ollama_model").toString().trimmed();
+}
+
+void set_routine_ollama_model(const QString &model) {
+	QSettings s = open_settings();
+	s.setValue("ai/routine_ollama_model", model.trimmed());
+	s.sync();
+}
+
 int ai_load() {
 	return qBound(10, open_settings().value("ai/load", 100).toInt(), 100);
 }
@@ -1614,6 +1646,8 @@ void settings_dialog::restore_page_defaults(int page) {
 		m_probe_timeout->setValue(fresh_local.probe_timeout());
 		put_value(m_claude_model, fresh_remote.model());
 		m_ai_auto->setChecked(true);
+		m_routine_ai->setCurrentIndex(m_routine_ai->findData(int(ai_choice::local_only)));
+		m_routine_model->clear();
 		// The API key is not touched: it was never stored, so it has no default
 		// to go back to, and clearing it would throw away something the user
 		// typed this session for no gain.
@@ -2812,6 +2846,26 @@ void settings_dialog::build_ai_page(QWidget *page) {
 		++which;
 	}
 	v->addWidget(group);
+
+	v->addWidget(section_heading("Routine tasks", page));
+	m_routine_ai = new QComboBox(page);
+	m_routine_ai->setObjectName("routine_ai");
+	m_routine_ai->addItem("Local only", int(ai_choice::local_only));
+	m_routine_ai->addItem("Automatic", int(ai_choice::automatic));
+	m_routine_ai->addItem("Claude", int(ai_choice::external));
+	v->addWidget(settings_row(
+	  "Backend",
+	  "For small jobs that run often, such as reading what a video is each "
+	  "time Find Media looks one up. Separate from the choice above, so "
+	  "those can stay on this machine whatever the larger jobs use.",
+	  m_routine_ai, page));
+	m_routine_model = new QLineEdit(page);
+	m_routine_model->setObjectName("routine_model");
+	m_routine_model->setPlaceholderText("the local model below");
+	v->addWidget(settings_row(
+	  "Local model",
+	  "A smaller, faster model is usually enough for these.",
+	  m_routine_model, page, /*wide=*/true));
 	// The paragraph that used to sit here said what "Local only" means, which
 	// is now written under the button it is about. Two statements of one fact,
 	// four lines apart, read as two facts and send the reader back to compare
@@ -2993,6 +3047,11 @@ void settings_dialog::load() {
 	if (m_preload_bg)
 		m_preload_bg->setChecked(settings_store::preload_background_tabs());
 
+	if (m_routine_ai) {
+		m_routine_ai->setCurrentIndex(
+		  m_routine_ai->findData(int(settings_store::routine_ai_mode())));
+		put_value(m_routine_model, settings_store::routine_ollama_model());
+	}
 	switch (settings_store::ai_mode()) {
 		case ai_choice::local_only: m_ai_local->setChecked(true); break;
 		case ai_choice::external:   m_ai_external->setChecked(true); break;
@@ -3218,6 +3277,11 @@ void settings_dialog::apply() {
 	settings_store::set_ai_mode(m_ai_local->isChecked()    ? ai_choice::local_only
 	                            : m_ai_external->isChecked() ? ai_choice::external
 	                                                         : ai_choice::automatic);
+	if (m_routine_ai) {
+		settings_store::set_routine_ai_mode(
+		  static_cast<ai_choice>(m_routine_ai->currentData().toInt()));
+		settings_store::set_routine_ollama_model(m_routine_model->text());
+	}
 
 	settings_store::save_from(m_players, m_downloads, m_torrents,
 	                           m_local_ai, m_external_ai);

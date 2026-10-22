@@ -291,6 +291,8 @@ private:
 	QRadioButton *m_ai_external = nullptr;
 	QLineEdit    *m_ollama_url   = nullptr;
 	QLineEdit    *m_ollama_model = nullptr;
+	QComboBox    *m_routine_ai   = nullptr;
+	QLineEdit    *m_routine_model = nullptr;
 	QSpinBox     *m_probe_timeout = nullptr;
 	QPushButton  *m_check_local   = nullptr;
 	// Nothing is claimed about the local model until it has been checked.
@@ -331,6 +333,12 @@ void set_kiosk(const kiosk_config &c);
 
 ai_choice ai_mode();
 void set_ai_mode(ai_choice mode);
+// The backend for routine tasks, and the local model for them: empty means
+// the main local model. See the definition.
+ai_choice routine_ai_mode();
+void set_routine_ai_mode(ai_choice mode);
+QString routine_ollama_model();
+void set_routine_ollama_model(const QString &model);
 // The AI load knob, 10 to 100 per cent; 100 when never set. Kept because a
 // person who turned the AI down meant it for the next job too.
 int  ai_load();

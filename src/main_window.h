@@ -6,6 +6,7 @@
 #include "session_mirror.h"   // for the mirror and imported_tab
 #include "filter_subscription.h"   // for the subscribed lists' index
 #include "subscription_updater.h"
+#include "media_lookup.h"
 
 #include <QWidget>
 #include <QHash>
@@ -16,6 +17,7 @@
 #include <QStringList>
 #include <QString>
 
+enum class ai_choice;
 class annoyance_log;
 class reading_log;
 class channel_rules;
@@ -54,6 +56,7 @@ class media_detector;
 class player_launcher;
 class download_manager;
 class downloads_dialog;
+class media_dialog;
 class torrent_download_source;
 class ytdlp_resolver;
 class mse_tap;
@@ -248,7 +251,11 @@ private slots:
 	                              int job_id);
 	void start_download(const QUrl &url);
 	void open_downloads();
-	void find_media_with_ytdlp();
+	// Look the current page up with yt-dlp, unless a good answer for it is
+	// already cached (`media_lookups`). `forced` is Refresh: the cached one is
+	// dropped first, and a reason it cannot run is said rather than skipped.
+	void look_up_media(bool forced);
+	QUrl current_page() const;
 	void toggle_capture();
 	void learn_this_site();
 	// Run a stored extractor for this host, if there is one, and file what it
@@ -267,6 +274,12 @@ private slots:
 	// flight, so an investigation and a media reading together cancelled each
 	// other, and each one's reply reached the other's listener.
 	ai_provider *own_ai(ai_provider *chosen, QObject *owner);
+	// The backend for routine tasks (`settings_store::routine_ai_mode`), as a
+	// provider of its own owned by `owner`, with the routine local model where
+	// one is named. Null, with `why`, when that choice cannot be met.
+	ai_provider *routine_ai(QObject *owner, QString *why);
+	// `choose_ai` for a given choice rather than the main setting's.
+	ai_provider *choose_ai_for(ai_choice mode, QString *why);
 	void go_back();
 	void go_forward();
 	void reload_page();
@@ -298,7 +311,8 @@ private slots:
 	// yt-dlp's streams listed once what they are has been read: named from
 	// the reading, and the reading and its weaknesses said.
 	// `ruled`: the channel rule that decided the artist and title, in words.
-	void list_resolved_media(const QString &host, const resolved_media &m,
+	void list_resolved_media(const QString &host, const QUrl &page,
+	                         const resolved_media &m,
 	                         const media_reading &r, ai_provider *ai,
 	                         const QString &ruled = QString());
 	// The other half: did the rules just applied break this page? Reachable
@@ -753,6 +767,9 @@ public:
 	downloads_dialog   *m_downloads_ui  = nullptr;
 	torrent_download_source *m_torrents = nullptr;
 	ytdlp_resolver     *m_ytdlp          = nullptr;
+	media_lookups       m_lookups;
+	QUrl                m_lookup_page;   // what the resolver is busy with
+	QPointer<media_dialog> m_media_ui;   // while Find Media is open
 	mse_tap            *m_mse            = nullptr;
 	// HLS assembly, held here because it outlives the dialog that starts it.
 	stream_assembly    *m_assembly       = nullptr;

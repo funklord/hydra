@@ -38901,3 +38901,72 @@ reserved and resolves nowhere, so nothing real is shadowed.
 The phone's half is the WebView serving the demo site and announcing a
 drawn page, plus the fragment's device commands, which have only met a
 fake adb. The first real run is the test of both.
+
+## Find Media looks the page up itself, and keeps the answer per page
+
+Asked for by the holder on 2026-10-22, in four parts.
+
+**The lookup runs when Find Media opens**, not when a button is pressed.
+`look_up_media` starts yt-dlp, the rows arrive in the open dialog through
+the detector's `site_updated`, and what was found is said on the dialog's
+own line (`media_lookup_note`). The old flow closed the dialog and opened
+a new one when the answer came. The holder chose "when the dialog opens"
+over "when a video page loads": the second would cost a yt-dlp run, and
+its requests to the site, on every video page, including ones nobody
+looks at. A failure goes on the same line. It used to be a message box,
+which would interrupt every page yt-dlp can't read now that nobody asks
+first. It still names the yt-dlp that ran and how old it is.
+
+**The answer is kept per page** (`media_lookups`), keyed by the address
+without its fragment. Before this, rows were filed per site and never
+removed, so a second YouTube video listed the first one's streams too.
+Opening Find Media now replaces the site's vouched rows with this page's
+(`media_detector::replace_vouched`), or with none.
+- **Lifetime:** an entry lasts until five minutes before its first signed
+  address lapses (`expire=` in the query, or `/expire/N/` in the path).
+  It is capped at an hour, and an hour is also the life of one whose
+  addresses carry no expiry.
+- **Failures** are kept ten minutes.
+- **Clearing browsing data** empties the cache, since it is a record of
+  where somebody went.
+- **A late answer** for a page the person has left waits in the cache and
+  isn't listed.
+
+**Refresh replaces Ask yt-dlp.** It drops the entry and looks again, and
+the dialog stays open. The name says what the button does rather than
+which tool does it, since it may run other things later.
+
+**Reading what a video is uses the new routine-tasks AI setting**
+(`settings_store::routine_ai_mode`, "Routine tasks" in Settings → AI).
+It is local only by default, whatever the main choice is, and can name a
+smaller local model. The holder's reasoning: work that runs often and
+asks little isn't worth sending out, and most people will keep it local.
+
+**One sound-only row: the best.** That means the highest bitrate (`abr`,
+else `tbr`), a direct file over a manifest at the same rate, then the
+larger file (`ytdlp_resolver::best_sound_format`). Sound is always wanted
+at its best. Video keeps its choices, because many videos are offered at
+sizes far beyond what anyone needs. Pairing a silent picture with sound
+still chooses from every sound format, per container.
+
+**Shareable later, and not now.** The holder wants these caches to be
+shareable eventually, perhaps through fuzznet, with "many difficult
+hurdles" before that is possible. One thing about the shape is known
+already and is worth keeping in mind before it hardens:
+- **Not shareable:** an entry's stream addresses are signed for whoever
+  fetched them (YouTube's carry the requester's IP), so they are useless,
+  and identifying, to anyone else.
+- **Shareable:** what the page *is* (title, artist, kind, tracklist) is
+  the same for everyone.
+- So a shared form would carry the reading, not the rows. The reading is
+  already kept apart, in `reading_log`.
+
+`test_assembly` covers the cache's key, lifetimes and clearing, the
+replacement of vouched rows, and Refresh. `test_ytdlp` covers the sound
+pick. `test_settings` covers the routine setting.
+`test/live/try_media_lookup` runs the whole flow against a page served
+locally:
+- opening Find Media starts a lookup;
+- its rows arrive in the open dialog;
+- reopening uses the cache without fetching the page again;
+- Refresh runs it again.

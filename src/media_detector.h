@@ -164,6 +164,10 @@ public:
 	// resolves a page authoritatively rather than guessing from URL shape.
 	// Deduplicated by URL, so asking twice does not double the list.
 	void add_item(const QString &site_host, const media_item &item);
+	// Put one page's vouched rows in place of whatever vouched rows the site
+	// had: those came from another page on it, or from an older answer.
+	// What detection found is left alone. One `site_updated` for the lot.
+	void replace_vouched(const QString &site_host, const QList<media_item> &rows);
 
 	static media_kind classify(const QUrl &url, bool *saveable);
 

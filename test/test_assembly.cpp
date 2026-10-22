@@ -20,6 +20,7 @@
 #include "local_proxy.h"
 #include "media_detector.h"
 #include "media_dialog.h"
+#include "media_lookup.h"
 #include "mse_tap.h"
 #include "player_launcher.h"
 #include "stream_assembly.h"
@@ -36,6 +37,8 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
+#include <QTimeZone>
+#include <QTreeWidget>
 #include <QTimer>
 #include <cstdio>
 #include <unistd.h>   // geteuid, for the check root cannot fail
@@ -258,47 +261,106 @@ int main(int argc, char **argv) {
 	stream_assembly assembly(&players, &downloads, &proxy, nullptr);
 	QSignalSpy said(&assembly, &stream_assembly::status);
 
-	section("the dialog offers yt-dlp whatever detection found");
+	section("the dialog offers Refresh whatever detection found, and stays open");
 	{
-		// **Detection watches request shapes, so the states where it finds
-		// nothing are the ordinary ones on a site whose player is built in
-		// its own scripts** -- and those are exactly the states where asking
-		// yt-dlp is the only thing that works. The offer was reachable only
-		// from Tools > Media > Find Media on This Page, which is where
-		// somebody goes *after* the badge has brought them here and shown
-		// them nothing they can use.
-		//
-		// Asserted in two states rather than one. The button is built
-		// unconditionally today, so one would pass; two is what fails if
-		// somebody later makes it conditional on the list being empty, which
-		// is the plausible wrong turn -- a list detection filled can still be
-		// missing the stream somebody wants.
+		// **The lookup runs when the dialog opens now**, and Refresh is
+		// how somebody asks again. Asserted in two states rather than one,
+		// since a list detection filled can still be missing the stream
+		// somebody wants, so making it conditional on an empty list is the
+		// plausible wrong turn. And the dialog stays: the rows of a lookup
+		// arrive in it, where it used to close and be reopened.
 		const auto offer = [&](media_detector *det, const QString &host) {
 			media_dialog dlg(det, &players, &downloads, &proxy, &tap,
 			                  &assembly, nullptr);
 			dlg.set_site(host, "n1", stream_context{});
-			QPushButton *ask =
-			  dlg.findChild<QPushButton *>("media_ask_ytdlp");
-			if (!ask)
+			QPushButton *refresh = dlg.findChild<QPushButton *>("media_refresh");
+			if (!refresh)
 				return QStringLiteral("no such button");
 			int fired = 0;
-			QObject::connect(&dlg, &media_dialog::ytdlp_requested,
+			QObject::connect(&dlg, &media_dialog::refresh_requested,
 			                  [&fired] { ++fired; });
-			ask->click();
-			// Fired AND closed: the shell owns the resolver and reopens this
-			// with what it found, so a dialog that stays up would end with
-			// two of itself.
+			refresh->click();
 			return QString("fired=%1 accepted=%2").arg(fired)
 			           .arg(dlg.result() == QDialog::Accepted ? 1 : 0);
 		};
 
-		check(offer(&detector, "example.invalid") == "fired=1 accepted=1",
+		check(offer(&detector, "example.invalid") == "fired=1 accepted=0",
 		       QString("with rows in the list (%1)")
 		           .arg(offer(&detector, "example.invalid")));
 		media_detector empty;
-		check(offer(&empty, "nothing.invalid") == "fired=1 accepted=1",
+		check(offer(&empty, "nothing.invalid") == "fired=1 accepted=0",
 		       QString("and with nothing detected at all (%1)")
 		           .arg(offer(&empty, "nothing.invalid")));
+	}
+
+	// **A second video on a site listed the first one's streams**: rows were
+	// kept per site and nothing took a lookup's away. Now a page's rows
+	// replace the site's vouched ones, and what detection found stays.
+	section("a page's looked-up rows replace another page's, and only those");
+	{
+		media_detector det;
+		media_item seen;
+		seen.url = QUrl("https://cdn.invalid/seen.m3u8");
+		det.add_item("v.invalid", seen);
+		auto vouched = [](const QString &url) {
+			media_item m;
+			m.url         = QUrl(url);
+			m.known_media = true;
+			return m;
+		};
+		det.replace_vouched("v.invalid", { vouched("https://cdn.invalid/a1"),
+		                                   vouched("https://cdn.invalid/a2") });
+		check(det.items_for("v.invalid").size() == 3, "the first video's two rows join it");
+		det.replace_vouched("v.invalid", { vouched("https://cdn.invalid/b1") });
+		QStringList urls;
+		for (const media_item &m : det.items_for("v.invalid"))
+			urls << m.url.toString();
+		check(urls == QStringList({ "https://cdn.invalid/b1", "https://cdn.invalid/seen.m3u8" }),
+		      QString("the second's replace them, and detection's row stays (%1)")
+		          .arg(urls.join(", ")));
+		bool updated = false;
+		QObject::connect(&det, &media_detector::site_updated, [&] { updated = true; });
+		det.replace_vouched("v.invalid", {});
+		check(updated && det.items_for("v.invalid").size() == 1,
+		      "and an empty answer clears them, saying so");
+	}
+
+	// The cache those rows come from: per page, and only while true.
+	section("a lookup is kept per page until its addresses lapse");
+	{
+		const QDateTime now = QDateTime::fromSecsSinceEpoch(1761100000, QTimeZone::UTC);
+		media_lookups cache;
+		const QUrl page("https://v.invalid/watch?v=1#t=30");
+		media_item signed_row;
+		signed_row.url = QUrl(QString("https://cdn.invalid/play?expire=%1&x=1")
+		                          .arg(1761100000 + 3 * 3600));
+		cache.finish(page, { signed_row }, "found", now);
+		check(cache.find(QUrl("https://v.invalid/watch?v=1"), now) != nullptr,
+		      "the same page without its fragment is the same entry");
+		check(!cache.find(QUrl("https://v.invalid/watch?v=2"), now),
+		      "another video is another entry");
+		check(cache.find(page, now.addSecs(50 * 60)) != nullptr,
+		      "kept within the hour");
+		check(!cache.find(page, now.addSecs(61 * 60)),
+		      "and not past it, though the address claims three");
+
+		media_item soon;
+		soon.url = QUrl("https://cdn.invalid/m/expire/" + QString::number(1761100000 + 20 * 60) + "/x");
+		cache.finish(page, { soon }, "found", now);
+		check(cache.find(page, now.addSecs(14 * 60)) != nullptr &&
+		          !cache.find(page, now.addSecs(16 * 60)),
+		      "an address that lapses in twenty minutes is dropped five before it");
+
+		cache.fail(page, "Unsupported URL", now);
+		check(cache.find(page, now.addSecs(9 * 60)) &&
+		          cache.find(page, now.addSecs(9 * 60))->st == media_lookup::state::failed,
+		      "a failure is kept a while, so reopening does not rerun it");
+		check(!cache.find(page, now.addSecs(11 * 60)), "and then tried again");
+
+		cache.start(page);
+		check(cache.find(page, now.addSecs(100 * 3600)) != nullptr,
+		      "one still running never lapses");
+		check(cache.clear() == 1 && !cache.find(page, now), "and clearing empties it");
 	}
 
 	// **One Save for what yt-dlp found**, asked each time by the holder's

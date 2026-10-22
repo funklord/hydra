@@ -1911,8 +1911,8 @@ QMenuBar *main_window::build_menu_bar() {
 
 	QMenu *media_menu = tools_menu->addMenu("&Media");
 	QAction *find = media_menu->addAction("&Find Media on This Page…", this,
-	                                       &main_window::find_media_with_ytdlp);
-	find->setStatusTip("Ask yt-dlp what the video on this page is");
+	                                       &main_window::open_media);
+	find->setStatusTip("List what this page plays, looked up with yt-dlp");
 	QAction *readings = media_menu->addAction("Recent &Readings…", this,
 	                                          &main_window::open_readings);
 	readings->setStatusTip("What each video looked up was read as, and why");
@@ -2375,12 +2375,12 @@ void main_window::refresh_media_affordance(const QString &site_host) {
 	}
 	m_media_action->setText("Media (playing)");
 	// **Names the button, not the menu path.** Clicking this badge is how
-	// somebody gets here, and what they find is a dialog with an Ask yt-dlp
-	// button in it -- so sending them back out to Tools > Media > Find Media
-	// on This Page described the long way round to a thing one click away.
+	// somebody gets here, and the dialog it opens looks the page up by
+	// itself -- so sending them back out to Tools > Media > Find Media on
+	// This Page described the long way round to a thing one click away.
 	m_media_action->setToolTip(
 	  QString("This page is playing video (%1 buffered, %2), but no stream "
-	           "URL was detected — open this and press Ask yt-dlp.")
+	           "URL was detected — open this to look the page up.")
 	      .arg(QLocale().formattedDataSize(buffered), mime));
 }
 
@@ -2403,15 +2403,27 @@ void main_window::open_media() {
 	// so a learned stream appears beside whatever detection found on its own.
 	apply_extractor(v->url().host(), v->url());
 
+	// **This page's looked-up rows, and no other page's.** The list is kept
+	// per site, so what a lookup on another video of this site left there is
+	// taken away here, and this page's cached answer, where it has one, put
+	// in its place.
+	{
+		const media_lookup *e = m_lookups.find(v->url(), QDateTime::currentDateTimeUtc());
+		m_media->replace_vouched(v->url().host(),
+		                         e && e->st == media_lookup::state::done ? e->rows
+		                                                                 : QList<media_item>());
+	}
+
 	const stream_context ctx = page_context(v);
 	media_dialog dlg(m_media, m_players, m_downloads, m_local_proxy, m_mse,
 	                  m_assembly, this);
-	// **The resolver is the shell's, so the dialog asks and this answers.**
-	// Queued past the dialog's own `exec()` for the reason the capture is:
-	// `find_media_with_ytdlp` reopens this dialog when it finds something, and
-	// opening it from inside its own exec() nests two of them.
-	connect(&dlg, &media_dialog::ytdlp_requested, this, [this] {
-		QTimer::singleShot(0, this, [this] { find_media_with_ytdlp(); });
+	m_media_ui = &dlg;
+	// **The resolver is the shell's, so the dialog asks and this answers**,
+	// and answers into the dialog that stays open: the rows arrive through
+	// the detector, and what was said through `set_lookup_note`.
+	connect(&dlg, &media_dialog::refresh_requested, this, [this, v] {
+		apply_extractor(v->url().host(), v->url());
+		look_up_media(true);
 	});
 	connect(&dlg, &media_dialog::capture_requested, this, [this] {
 		// Queued: the dialog is closing itself, and starting a capture reloads
@@ -2422,6 +2434,8 @@ void main_window::open_media() {
 		});
 	});
 	dlg.set_site(v->url().host(), node_id, ctx);
+	// Looked up as it opens, from the cache where the answer is still good.
+	look_up_media(false);
 	dlg.exec();
 }
 
@@ -6088,6 +6102,7 @@ void main_window::forget_shell_caches() {
 	int records = 0;
 	if (m_ex_signals)  records += m_ex_signals->clear_all();
 	if (m_media)       records += m_media->clear_all();
+	records += m_lookups.clear();
 	if (m_mse)         records += m_mse->clear_all();
 	if (m_signals)     records += m_signals->clear_all();
 	if (m_antiadblock) records += m_antiadblock->clear_all();
@@ -7002,6 +7017,22 @@ ai_provider *main_window::own_ai(ai_provider *chosen, QObject *owner) {
 }
 
 ai_provider *main_window::choose_ai(QString *why) {
+	return choose_ai_for(settings_store::ai_mode(), why);
+}
+
+ai_provider *main_window::routine_ai(QObject *owner, QString *why) {
+	ai_provider *ai = own_ai(choose_ai_for(settings_store::routine_ai_mode(), why), owner);
+	// The routine model, where one is named, on the copy alone: the main
+	// local model stays what the larger jobs asked for.
+	if (auto *local = qobject_cast<ollama_provider *>(ai)) {
+		const QString model = settings_store::routine_ollama_model();
+		if (!model.isEmpty())
+			local->set_model(model);
+	}
+	return ai;
+}
+
+ai_provider *main_window::choose_ai_for(ai_choice mode, QString *why) {
 	if (!m_local_ai) {
 		m_local_ai    = new ollama_provider(this);
 		m_external_ai = new claude_provider(this);
@@ -7025,7 +7056,7 @@ ai_provider *main_window::choose_ai(QString *why) {
 	QApplication::restoreOverrideCursor();
 	const bool ext_ok   = m_external_ai->available();
 
-	switch (settings_store::ai_mode()) {
+	switch (mode) {
 		case ai_choice::local_only:
 			// Deliberately does *not* fall back. The whole value of this
 			// setting is that "nothing leaves this machine" keeps meaning that
@@ -7335,56 +7366,84 @@ void main_window::poll_capture() {
 	}
 }
 
-void main_window::find_media_with_ytdlp() {
+void main_window::look_up_media(bool forced) {
 	web_view_backend *v = current_view();
-	if (!v) {
-		m_status->showMessage("Open a page first.", 5000);
+	if (!v)
 		return;
-	}
+	const QUrl page = v->url();
+	const QString host = page.host();
+	// Where the answer goes: the open dialog when there is one, which is
+	// where somebody is looking, and the status line otherwise.
+	auto say = [this](const QString &text) {
+		if (m_media_ui)
+			m_media_ui->set_lookup_note(text);
+		else
+			m_status->showMessage(text, 10000);
+	};
 	// yt-dlp exists to save what it finds; not asked where saving is not
-	// allowed.
+	// allowed. Said only when asked for: an automatic lookup that did not
+	// happen is not news.
 	{
 		QString refused;
-		if (!media_saving_allowed(v->url().host(), QUrl(), &refused)) {
-			m_status->showMessage(refused, 10000);
+		if (!media_saving_allowed(host, QUrl(), &refused)) {
+			if (forced)
+				say(refused);
 			return;
 		}
 	}
 	if (!m_ytdlp)
 		m_ytdlp = new ytdlp_resolver(this);
 	if (!m_ytdlp->available()) {
-		m_status->showMessage(m_ytdlp->description(), 8000);
-		return;
-	}
-	if (m_ytdlp->busy()) {
-		m_status->showMessage("Still looking…", 3000);
+		if (forced)
+			say(m_ytdlp->description());
 		return;
 	}
 
-	const QUrl page = v->url();
-	const QString host = page.host();
-	m_status->showMessage(QString("Asking yt-dlp about %1…").arg(host));
+	const QDateTime now = QDateTime::currentDateTimeUtc();
+	if (forced)
+		m_lookups.forget(page);
+	if (const media_lookup *e = m_lookups.find(page, now)) {
+		// Still good, or still running: nothing to start.
+		say(e->st == media_lookup::state::running
+		      ? QStringLiteral("Looking this page up with yt-dlp…")
+		      : e->note);
+		return;
+	}
+	if (m_ytdlp->busy()) {
+		// A lookup for a page somebody has since left is not worth waiting
+		// for: one resolver, so it gives way, and its page is forgotten so
+		// the next visit asks again rather than finding it "running".
+		m_ytdlp->cancel();
+		if (m_lookup_page.isValid())
+			m_lookups.forget(m_lookup_page);
+	}
+
+	m_lookups.start(page);
+	m_lookup_page = page;
+	say(QString("Looking %1 up with yt-dlp…").arg(host));
 
 	// One-shot: these are reconnected per request so a later answer cannot
 	// arrive against a page the user has since left.
 	m_ytdlp->disconnect(this);
 	connect(m_ytdlp, &ytdlp_resolver::resolved, this,
-	         [this, host](const resolved_media &m) {
+	         [this, host, page](const resolved_media &m) {
 		// **What it is, read before anything is listed**: the evidence from
 		// yt-dlp's whole answer, a model's reading of it checked against
 		// that evidence, the rules where there is no model or a part fails.
 		QString no_ai;
-		// A provider of its own, beside any investigation running.
-		ai_provider *ai = own_ai(choose_ai(&no_ai), this);
+		// A provider of its own, beside any investigation running, and the
+		// routine one: this runs every time Find Media looks a page up.
+		ai_provider *ai = routine_ai(this, &no_ai);
 		auto *step = new media_interpretation(ai, media_evidence::from_json(m.json),
 		                                      this);
 		if (ai && ai != m_local_ai && ai != m_external_ai)
 			connect(step, &QObject::destroyed, ai, &QObject::deleteLater);
-		m_status->showMessage(ai ? QString("Reading what it is with %1…")
-		                             .arg(ai->name())
-		                         : QStringLiteral("Reading what it is…"));
+		if (m_media_ui)
+			m_media_ui->set_lookup_note(ai ? QString("Reading what it is with %1…")
+			                                   .arg(ai->name())
+			                               : QStringLiteral("Reading what it is…"));
 		connect(step, &media_interpretation::finished, this,
-		         [this, host, m, step, ai](const media_reading &r) {
+		         [this, host, page, m, step, ai](const media_reading &r) {
 			step->deleteLater();
 			// **The person's own rule for this channel**, over the model's
 			// and the rules' reading, where a correction taught one.
@@ -7402,35 +7461,41 @@ void main_window::find_media_with_ytdlp() {
 				if (!whole)
 					ruled += ", but " + why;
 			}
-			list_resolved_media(host, m, read, ai, ruled);
+			list_resolved_media(host, page, m, read, ai, ruled);
 		});
 		step->start();
 	}, Qt::SingleShotConnection);
-	connect(m_ytdlp, &ytdlp_resolver::failed, this, [this](const QString &e) {
+	connect(m_ytdlp, &ytdlp_resolver::failed, this, [this, page](const QString &e) {
 		// yt-dlp's own words: "Unsupported URL" is the answer that matters,
 		// and it is exactly the case sec 11.6's tap exists for.
 		//
-		// **Said in a window, with which copy ran.** This was a ten-second
-		// status message, and on 2026-10-10 it was all the holder saw of a
-		// feature that never ran: the yt-dlp on PATH was 17 months old and
-		// YouTube refused it. Which copy and how old is the first thing to
-		// know, so it is said, and an old one is named as the likely cause.
-		QString text = QString("<p>yt-dlp could not read this page:</p>"
-		                       "<p><tt>%1</tt></p><p>It was %2.</p>")
-		                 .arg(e.toHtmlEscaped(), m_ytdlp->description().toHtmlEscaped());
+		// **Said with which copy ran.** On 2026-10-10 a ten-second status
+		// message was all the holder saw of a feature that never ran: the
+		// yt-dlp on PATH was 17 months old and YouTube refused it. Which copy
+		// and how old is the first thing to know, so it is said, and an old
+		// one is named as the likely cause. In the dialog now rather than a
+		// box of its own, since the lookup starts by itself and a box
+		// interrupting every page yt-dlp does not know would be noise.
+		QString text = QString("yt-dlp could not read this page: %1 It was %2.")
+		                 .arg(e.trimmed(), m_ytdlp->description());
 		const int age = ytdlp_resolver::age_days(m_ytdlp->version());
 		if (age > 90)
-			text += QString("<p>That yt-dlp is %1 months old. Sites change "
-			                "often and old versions stop working with them; a "
-			                "newer yt-dlp is the likely fix.</p>")
+			text += QString(" That yt-dlp is %1 months old; sites change often "
+			                "and a newer one is the likely fix.")
 			          .arg(age / 30);
-		QMessageBox box(QMessageBox::Warning, "yt-dlp could not read this page",
-		                text, QMessageBox::Ok, this);
-		box.setTextFormat(Qt::RichText);
-		box.exec();
+		m_lookups.fail(page, text, QDateTime::currentDateTimeUtc());
+		if (m_lookup_page == page)
+			m_lookup_page = QUrl();
+		if (m_media_ui && media_lookups::key(page) == media_lookups::key(current_page()))
+			m_media_ui->set_lookup_note(text);
 	}, Qt::SingleShotConnection);
 
 	m_ytdlp->resolve(page);
+}
+
+QUrl main_window::current_page() const {
+	web_view_backend *v = current_view();
+	return v ? v->url() : QUrl();
 }
 
 // The tally's name for a model: what was asked, not how its state is shown.
@@ -7440,7 +7505,7 @@ static QString model_id(ai_provider *ai) {
 	return ai ? ai->name() : QString();
 }
 
-void main_window::list_resolved_media(const QString &host,
+void main_window::list_resolved_media(const QString &host, const QUrl &page,
                                       const resolved_media &m,
                                       const media_reading &r, ai_provider *ai,
                                       const QString &ruled) {
@@ -7542,8 +7607,15 @@ void main_window::list_resolved_media(const QString &host,
 		}
 		int added = 0;
 		int order = 0;
-		for (const media_format &f : m.formats) {
+		QList<media_item> rows;
+		const int best_sound = ytdlp_resolver::best_sound_format(m.formats);
+		for (int at = 0; at < m.formats.size(); ++at) {
+			const media_format &f = m.formats.at(at);
 			if (!f.has_video && !f.has_audio)
+				continue;
+			// One row of sound alone, the best; the pairing above still
+			// chooses from all of them.
+			if (!f.has_video && at != best_sound)
 				continue;
 			++order;
 			const bool direct = !f.protocol.startsWith("m3u8") &&
@@ -7596,7 +7668,7 @@ void main_window::list_resolved_media(const QString &host,
 			                          f.note.isEmpty() ? QString()
 			                                           : " · " + f.note,
 			                          carries);
-			m_media->add_item(host, item);
+			rows << item;
 			++added;
 		}
 		// What was read and by whom, what fell back and why, and what the
@@ -7624,9 +7696,19 @@ void main_window::list_resolved_media(const QString &host,
 			said += " Artist and title by " + ruled + ".";
 		for (const QString &w : warnings)
 			said += " " + w;
-		m_status->showMessage(said, 20000);
-		if (added)
-			open_media();
+		// Kept for this page, and listed only if it is still the page in
+		// front: an answer arriving after somebody moved on waits in the
+		// cache for the next time they open Find Media there.
+		m_lookups.finish(page, rows, said, QDateTime::currentDateTimeUtc());
+		if (media_lookups::key(m_lookup_page) == media_lookups::key(page))
+			m_lookup_page = QUrl();
+		if (media_lookups::key(current_page()) == media_lookups::key(page)) {
+			m_media->replace_vouched(host, rows);
+			if (m_media_ui)
+				m_media_ui->set_lookup_note(said);
+			else
+				m_status->showMessage(said, 20000);
+		}
 	}
 }
 

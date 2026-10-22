@@ -20,6 +20,7 @@ struct media_format {
 	QString note;
 	int     height   = 0;
 	qint64  filesize = -1;   // -1 when unknown
+	double  abr      = 0;    // the sound's bitrate in kbit/s, 0 when unknown
 	bool    has_video = true;
 	bool    has_audio = true;
 	QMap<QString, QString> headers;   // what the CDN expects to see (sec 11.3)
@@ -117,6 +118,12 @@ public:
 	// with their separators, and an over-long name is shortened in the
 	// track, the part a person needs least to tell two files apart.
 	static QString file_name_for(const resolved_media &m, const QString &ext);
+	// **The one sound-only format to list**, as an index into `formats`, or
+	// -1 for none. Sound is always wanted at its best, so offering six of it
+	// was six rows to read past -- the holder, 2026-10-22; picture keeps its
+	// choices, since a smaller one is often what is wanted. Highest bitrate,
+	// a direct file over a manifest at the same rate, then the larger file.
+	static int best_sound_format(const QList<media_format> &formats);
 	// The same, with the name and track given -- by a checked reading of
 	// the evidence, which knows better than the fields alone.
 	static QString file_name_for(const resolved_media &m, const QString &ext,

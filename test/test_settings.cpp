@@ -380,6 +380,21 @@ int main(int argc, char **argv) {
 			check(settings_store::ai_mode() == mode, "the mode round-trips");
 		}
 
+		// **Routine tasks have their own choice**, local by default whatever
+		// the main one says: the holder's, 2026-10-22.
+		settings_store::set_ai_mode(ai_choice::external);
+		check(settings_store::routine_ai_mode() == ai_choice::local_only,
+		      "routine tasks default to local only, whatever the main choice");
+		settings_store::set_routine_ai_mode(ai_choice::automatic);
+		settings_store::set_routine_ollama_model(" qwen2.5:3b ");
+		check(settings_store::routine_ai_mode() == ai_choice::automatic &&
+		          settings_store::routine_ollama_model() == "qwen2.5:3b" &&
+		          settings_store::ai_mode() == ai_choice::external,
+		      "and round-trips with its model, apart from the main choice");
+		settings_store::set_routine_ai_mode(ai_choice::local_only);
+		settings_store::set_routine_ollama_model(QString());
+		settings_store::set_ai_mode(ai_choice::automatic);
+
 		ollama_provider local_ai;
 		claude_provider external_ai;
 		local_ai.set_endpoint(QUrl("http://192.168.1.9:11434"));

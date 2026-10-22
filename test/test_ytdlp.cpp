@@ -439,6 +439,36 @@ int main(int argc, char **argv) {
 		QDir(dir).removeRecursively();
 	}
 
+	// **One row of sound, the best**: sound is always wanted at its best,
+	// and six of it were six rows to read past. The holder, 2026-10-22.
+	section("the one sound to list");
+	{
+		auto sound = [](double abr, const char *protocol, qint64 size) {
+			media_format f;
+			f.has_video = false;
+			f.abr       = abr;
+			f.protocol  = protocol;
+			f.filesize  = size;
+			return f;
+		};
+		media_format picture;
+		picture.abr = 999;
+		const QList<media_format> fs = { sound(48, "https", 10), picture,
+		                                 sound(160, "m3u8_native", 30),
+		                                 sound(160, "https", 20),
+		                                 sound(129, "https", 90) };
+		check(ytdlp_resolver::best_sound_format(fs) == 3,
+		      QString("the highest rate, a file over a manifest, a picture never "
+		              "(%1)").arg(ytdlp_resolver::best_sound_format(fs)));
+		check(ytdlp_resolver::best_sound_format({ picture }) == -1,
+		      "and none when there is no sound alone");
+		const resolved_media r = ytdlp_resolver::parse(
+		  R"({"title":"t","formats":[{"format_id":"a","url":"https://x.invalid/a",
+		      "vcodec":"none","acodec":"opus","tbr":133.5}]})");
+		check(!r.formats.isEmpty() && qFuzzyCompare(r.formats.first().abr, 133.5),
+		      "the rate is read, from tbr where abr is absent");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

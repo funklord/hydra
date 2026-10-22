@@ -237,6 +237,19 @@ void media_detector::add_item(const QString &site_host, const media_item &item) 
 	emit site_updated(site_host, count_for(site_host));
 }
 
+void media_detector::replace_vouched(const QString &site_host,
+                                     const QList<media_item> &rows) {
+	{
+		QMutexLocker lock(&m_lock);
+		QList<media_item> &list = m_by_site[site_host];
+		list.removeIf([](const media_item &m) { return m.known_media; });
+		// In their order, at the top: an authoritative answer leads.
+		for (qsizetype i = rows.size() - 1; i >= 0; --i)
+			list.prepend(rows.at(i));
+	}
+	emit site_updated(site_host, count_for(site_host));
+}
+
 int media_detector::clear_all() {
 	QStringList sites;
 	{

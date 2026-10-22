@@ -33,23 +33,22 @@ public:
 	void set_site(const QString &site_host, const QString &node_id,
 	               const stream_context &ctx);
 
+	// What the lookup is doing or found, in a line of its own so the list's
+	// own status is not overwritten by it.
+	void set_lookup_note(const QString &text);
+
 signals:
 	// A page whose video only the tap can see has nothing to Watch or
 	// Download -- the only way to get those bytes is to record them, and the
 	// shell owns that.
 	void capture_requested();
 
-	// **Ask yt-dlp, from here rather than from a menu three levels deep.**
-	// Detection watches request shapes, so a page whose player asks for
-	// nothing this recognises leaves this list empty or shows only a "Playing"
-	// row -- and the one thing that finds a URL then is yt-dlp, which reads
-	// the page's own scripts. It was reachable only from Tools > Media > Find
-	// Media on This Page, which is where somebody lands *after* the badge has
-	// already brought them here and shown them nothing they can use.
-	//
-	// The shell owns it for the same reason it owns the capture: this dialog
-	// has no resolver and no status bar to report into once it has closed.
-	void ytdlp_requested();
+	// **Look again.** The page is looked up when this opens and the answer
+	// cached (`media_lookups`); this drops it and asks once more. Named for
+	// what it does rather than for the tool that does it today, since what
+	// it runs may grow -- the holder, 2026-10-22. The dialog stays open and
+	// the rows arrive in it.
+	void refresh_requested();
 
 private:
 	void repopulate();
@@ -81,6 +80,7 @@ private:
 
 	QTreeWidget *m_list   = nullptr;
 	QLabel      *m_status = nullptr;
+	QLabel      *m_lookup = nullptr;
 	QPushButton *m_save   = nullptr;   // shown when yt-dlp's rows are listed
 	// The "nothing here" message, over the empty rows area rather than under
 	// it. `m_status` cannot carry this: it is the dialog's status line and

@@ -369,6 +369,11 @@ resolved_media ytdlp_resolver::parse(const QByteArray &json) {
 			m.filesize = qint64(f.value("filesize").toDouble());
 		else if (f.value("filesize_approx").isDouble())
 			m.filesize = qint64(f.value("filesize_approx").toDouble());
+		// The sound's own bitrate, or the whole stream's where that is all
+		// there is; for a sound-only format the two are the same thing.
+		m.abr = f.value("abr").toDouble();
+		if (m.abr <= 0)
+			m.abr = f.value("tbr").toDouble();
 		// "none" is yt-dlp's way of saying this rendition has no such stream.
 		m.has_video = f.value("vcodec").toString() != "none";
 		m.has_audio = f.value("acodec").toString() != "none";
@@ -505,4 +510,32 @@ QString ytdlp_resolver::file_name_for(const resolved_media &m, const QString &ex
 	return out;
 }
 
-
+int ytdlp_resolver::best_sound_format(const QList<media_format> &formats) {
+	int best = -1;
+	auto direct = [](const media_format &f) {
+		return !f.protocol.startsWith("m3u8") && !f.protocol.startsWith("http_dash");
+	};
+	for (int i = 0; i < formats.size(); ++i) {
+		const media_format &f = formats.at(i);
+		if (f.has_video || !f.has_audio)
+			continue;
+		if (best < 0) {
+			best = i;
+			continue;
+		}
+		const media_format &b = formats.at(best);
+		if (f.abr != b.abr) {
+			if (f.abr > b.abr)
+				best = i;
+			continue;
+		}
+		if (direct(f) != direct(b)) {
+			if (direct(f))
+				best = i;
+			continue;
+		}
+		if (f.filesize > b.filesize)
+			best = i;
+	}
+	return best;
+}

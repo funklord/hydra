@@ -152,6 +152,20 @@ media_dialog::media_dialog(media_detector *detector, player_launcher *players,
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
 	outer->addWidget(m_status);
+	m_lookup = new QLabel(this);
+	m_lookup->setObjectName("media_lookup_note");
+	m_lookup->setWordWrap(true);
+	m_lookup->setTextFormat(Qt::PlainText);
+	outer->addWidget(m_lookup);
+
+	// Rows found while this is open -- a lookup finishing, detection seeing
+	// the player start -- are listed as they come rather than at the next
+	// opening.
+	connect(m_detector, &media_detector::site_updated, this,
+	        [this](const QString &site, int) {
+		if (site == m_site)
+			repopulate();
+	});
 
 	// While this is open its own line is where somebody is looking, so the
 	// assembly reports here too. It goes on reporting to the window after the
@@ -166,19 +180,11 @@ media_dialog::media_dialog(media_detector *detector, player_launcher *players,
 	// filled can still be missing the stream somebody wants -- a page that
 	// requested one manifest for a trailer and plays the feature through its
 	// own scripts is the ordinary case -- so this is not an error path.
-	QPushButton *ask = buttons->addButton("&Ask yt-dlp",
-	                                       QDialogButtonBox::ActionRole);
-	ask->setObjectName("media_ask_ytdlp");
-	ask->setToolTip("Ask yt-dlp what this page is playing. It reads the "
-	                 "page's own scripts, so it finds streams the browser "
-	                 "never saw requested.");
-	connect(ask, &QPushButton::clicked, this, [this] {
-		// Closed first, like the capture: the shell runs the resolver and
-		// reopens this with whatever it found, and a dialog waiting on a
-		// subprocess is a dialog that looks hung.
-		emit ytdlp_requested();
-		accept();
-	});
+	QPushButton *refresh = buttons->addButton("&Refresh", QDialogButtonBox::ActionRole);
+	refresh->setObjectName("media_refresh");
+	refresh->setToolTip("Look this page up again, rather than using what was "
+	                    "found earlier.");
+	connect(refresh, &QPushButton::clicked, this, &media_dialog::refresh_requested);
 	// **One Save for what yt-dlp found**, so a person does not have to read
 	// 45 rows to get the sound of a set. It asks every time which of the
 	// three, by the holder's choice, and picks the row; the rows below stay
@@ -231,6 +237,10 @@ void media_dialog::save_as(save_choice choice) {
 	else if (!m_status->text().startsWith("<b>"))
 		m_status->setText(QString("Saving %1 to %2.")
 		                      .arg(said.join(" and "), m_downloads->directory()));
+}
+
+void media_dialog::set_lookup_note(const QString &text) {
+	m_lookup->setText(text);
 }
 
 void media_dialog::set_site(const QString &site_host, const QString &node_id,
@@ -347,16 +357,14 @@ void media_dialog::repopulate() {
 		// empty, which is how it read before these rows existed.
 		m_status->setText("This page is playing video, but no stream URL could "
 		                  "be found — the address is hidden, or the bytes never "
-		                  "travel as one. Ask yt-dlp reads the page's scripts; "
+		                  "travel as one. The lookup reads the page's scripts; "
 		                  "Capture records it as it plays.");
 	} else {
 		// Said once, in the space it is about. The status line stays empty
 		// here rather than repeating it two inches lower.
 		m_empty->set_text("Nothing detected yet.\n\nMany sites only request "
 		                   "the manifest when their player starts, so try "
-		                   "pressing play first — or ask yt-dlp, which reads "
-		                   "the page's own scripts instead of watching for "
-		                   "requests.");
+		                   "pressing play first.");
 		m_status->clear();
 	}
 }
