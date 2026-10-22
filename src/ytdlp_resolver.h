@@ -82,6 +82,8 @@ public:
 
 	// Re-probe. Cheap; call at startup and when settings change.
 	void refresh();
+	// Where a vendored copy may be, in the order they are tried.
+	static QStringList vendored_dirs();
 	bool available() const { return !m_program.isEmpty(); }
 
 	// One line for a settings page or a status bar: what was found, and where.

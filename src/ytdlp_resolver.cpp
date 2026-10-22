@@ -1,4 +1,5 @@
 #include "ytdlp_resolver.h"
+#include "ytdlp_updater.h"
 
 #include <QCoreApplication>
 #include <QDate>
@@ -11,6 +12,7 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QVersionNumber>
 #include <QStandardPaths>
 #include <QTimeZone>
 
@@ -20,7 +22,7 @@ namespace {
 // tree puts the executable in build/, an install puts it in bin/; both are
 // covered, and HYDRA_YTDLP overrides everything for anyone who keeps it
 // elsewhere.
-QStringList vendored_candidates() {
+QStringList candidates() {
 	const QString app = QCoreApplication::applicationDirPath();
 	QStringList out;
 	const QByteArray env = qgetenv("HYDRA_YTDLP");
@@ -45,6 +47,10 @@ bool looks_like_checkout(const QString &dir) {
 }
 
 }  // namespace
+
+QStringList ytdlp_resolver::vendored_dirs() {
+	return candidates();
+}
 
 ytdlp_resolver::ytdlp_resolver(QObject *parent) : QObject(parent) {
 	refresh();
@@ -79,7 +85,7 @@ void ytdlp_resolver::refresh() {
 	// is inert source, so fall through to PATH rather than reporting nothing.
 	const QString python = QStandardPaths::findExecutable("python3");
 	if (!python.isEmpty()) {
-		for (const QString &dir : vendored_candidates()) {
+		for (const QString &dir : candidates()) {
 			if (!looks_like_checkout(dir))
 				continue;
 			m_program = python;
@@ -94,8 +100,27 @@ void ytdlp_resolver::refresh() {
 				  QRegularExpression::MultilineOption);
 				m_version = v.match(QString::fromUtf8(vf.readAll())).captured(1);
 			}
-			return;
+			break;
 		}
+		// **A newer release the updater fetched wins over the pin**, by the
+		// holder's choice of 2026-10-22, and the determinism argued above is
+		// the price. A pinned copy ages after install -- it was three months
+		// old that day, and YouTube refuses old releases outright -- and
+		// nothing but a new package moved it. `ytdlp_updater` fetches yt-dlp's
+		// signed release into the profile, and it is used only when newer
+		// than what the package carries, so a package with a newer pin still
+		// wins.
+		const QString updated = ytdlp_updater::program();
+		const QVersionNumber have = QVersionNumber::fromString(m_version);
+		const QVersionNumber got  = QVersionNumber::fromString(ytdlp_updater::installed_version());
+		if (!updated.isEmpty() && (m_program.isEmpty() || got > have)) {
+			m_program = python;
+			m_prefix  = { updated };
+			m_origin  = updated;
+			m_version = ytdlp_updater::installed_version();
+		}
+		if (!m_program.isEmpty())
+			return;
 	}
 
 	// Else whatever the machine has, which is what a tree cloned without
@@ -125,7 +150,7 @@ void ytdlp_resolver::refresh() {
 	// missing interpreter falls straight through to here and the person is
 	// told to fix the one thing that is not wrong. It reaches the status bar,
 	// so it is a user reading it rather than a developer.
-	for (const QString &dir : vendored_candidates()) {
+	for (const QString &dir : candidates()) {
 		if (!looks_like_checkout(dir))
 			continue;
 		if (python.isEmpty())
@@ -145,6 +170,8 @@ QString ytdlp_resolver::description() const {
 	const QString v = m_version.isEmpty() ? QString() : " " + m_version;
 	if (m_origin == "PATH")
 		return QString("yt-dlp%1 from PATH (%2)").arg(v, m_program);
+	if (m_origin == ytdlp_updater::program())
+		return QString("yt-dlp%1, updated (%2)").arg(v, m_origin);
 	return QString("vendored yt-dlp%1 (%2)").arg(v, m_origin);
 }
 
@@ -202,8 +229,11 @@ void ytdlp_resolver::resolve(const QUrl &page_url) {
 
 	auto *proc = new QProcess(this);
 	m_proc = proc;
+	// The checkout's own directory, or for an updated release -- one file --
+	// the directory it is in.
 	if (!m_origin.isEmpty() && m_origin != "PATH")
-		proc->setWorkingDirectory(m_origin);
+		proc->setWorkingDirectory(QFileInfo(m_origin).isDir()
+		                              ? m_origin : QFileInfo(m_origin).absolutePath());
 
 	QStringList args = m_prefix;
 	args << "--dump-single-json"

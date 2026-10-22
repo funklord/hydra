@@ -1,6 +1,7 @@
 // Parsing yt-dlp's answer, and the format preference. Offline: the risky part
 // is reading the JSON correctly, not running the process.
 #include "ytdlp_resolver.h"
+#include "ytdlp_updater.h"
 #include <QUrl>
 #include <QTest>
 #include <QFile>
@@ -519,6 +520,87 @@ int main(int argc, char **argv) {
 		thirty.fps    = 30;
 		check(ytdlp_resolver::picture_group(thirty) == "480p",
 		      "and a size names its rate only where it is more than ordinary");
+	}
+
+	// **Kept current from yt-dlp's signed releases** -- the holder,
+	// 2026-10-22, after finding the shipped copy three months old. The
+	// fixture is a real release's SHA2-256SUMS and its signature.
+	section("an update is used only if yt-dlp's release key signed it");
+	{
+		QString fixture;
+		for (const QString &d : { QStringLiteral("test/fixture/ytdlp"),
+		                          QFileInfo(QString::fromUtf8(__FILE__)).absolutePath() +
+		                            QStringLiteral("/fixture/ytdlp") })
+			if (QFileInfo::exists(d + "/SHA2-256SUMS"))
+				fixture = d;
+		auto read = [](const QString &p) {
+			QFile f(p);
+			return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+		};
+		const QByteArray sums = read(fixture + "/SHA2-256SUMS");
+		const QByteArray sig  = read(fixture + "/SHA2-256SUMS.sig");
+		const QByteArray key  = ytdlp_updater::shipped_key();
+		check(!sums.isEmpty() && !sig.isEmpty() && !key.isEmpty(),
+		      "the fixture and the shipped release key are there");
+		check(ytdlp_updater::tag_from(QUrl("https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.21"))
+		          == "2026.10.21",
+		      "the release is read from where latest points");
+		check(ytdlp_updater::sum_for(sums, "yt-dlp").size() == 64 &&
+		          ytdlp_updater::sum_for(sums, "yt-dlp_linux") != ytdlp_updater::sum_for(sums, "yt-dlp") &&
+		          ytdlp_updater::sum_for(sums, "nothing-of-that-name").isEmpty(),
+		      "a file's checksum is its own line's, and none for a name not there");
+		if (QStandardPaths::findExecutable("gpgv").isEmpty()) {
+			std::printf("  --    no gpgv here, so signatures are not checked\n");
+		} else {
+			QString why;
+			check(ytdlp_updater::verify(sums, sig, key, &why),
+			      QString("a real release's checksums verify (%1)").arg(why));
+			QByteArray forged = sums;
+			forged[0] = forged[0] == 'a' ? 'b' : 'a';
+			why.clear();
+			check(!ytdlp_updater::verify(forged, sig, key, &why) && !why.isEmpty(),
+			      QString("and a changed one does not (%1)").arg(why));
+			why.clear();
+			check(!ytdlp_updater::verify(sums, sig, QByteArray("not a key"), &why),
+			      QString("nor without the key (%1)").arg(why));
+		}
+	}
+
+	// **A newer fetched copy wins over the pin, an older one does not.**
+	section("the resolver prefers an update only when it is newer");
+	{
+		QStandardPaths::setTestModeEnabled(true);
+		// Removed below, so checked first to be test mode's and not the
+		// person's own profile.
+		const bool ours = ytdlp_updater::directory().contains("qttest");
+		check(ours, QString("the update directory is test mode's (%1)")
+		                .arg(ytdlp_updater::directory()));
+		if (ours)
+			QDir(ytdlp_updater::directory()).removeRecursively();
+		QDir().mkpath(ytdlp_updater::directory());
+		auto put = [](const QString &name, const QByteArray &bytes) {
+			QFile f(QDir(ytdlp_updater::directory()).filePath(name));
+			f.open(QIODevice::WriteOnly);
+			f.write(bytes);
+		};
+		ytdlp_resolver pinned_only;
+		const QString pinned = pinned_only.version();
+		put("yt-dlp", "PK");
+		put("version", "2099.01.01");
+		ytdlp_resolver newer;
+		if (pinned.isEmpty() || QStandardPaths::findExecutable("python3").isEmpty()) {
+			std::printf("  --    no pinned copy or python3 here, so the choice is not checked\n");
+		} else {
+			check(newer.version() == "2099.01.01" && newer.description().contains("updated"),
+			      QString("a newer update is used (%1)").arg(newer.description()));
+			put("version", "2000.01.01");
+			ytdlp_resolver older;
+			check(older.version() == pinned,
+			      QString("and an older one is not (%1)").arg(older.description()));
+		}
+		if (ours)
+			QDir(ytdlp_updater::directory()).removeRecursively();
+		QStandardPaths::setTestModeEnabled(false);
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

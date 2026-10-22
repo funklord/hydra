@@ -7,6 +7,8 @@
 #include "main_window.h"
 #include "ollama_provider.h"
 #include "player_launcher.h"
+#include "ytdlp_resolver.h"
+#include "ytdlp_updater.h"
 #include "torrent_download_source.h"
 #include "web_view_factory.h"
 
@@ -232,6 +234,16 @@ int live_view_cap() {
 void set_live_view_cap(int n) {
 	QSettings s = open_settings();
 	s.setValue("tabs/liveViews", qBound(1, n, 64));
+	s.sync();
+}
+
+bool ytdlp_auto_update() {
+	return open_settings().value("ytdlp/auto_update", true).toBool();
+}
+
+void set_ytdlp_auto_update(bool on) {
+	QSettings s = open_settings();
+	s.setValue("ytdlp/auto_update", on);
 	s.sync();
 }
 
@@ -1611,6 +1623,8 @@ void settings_dialog::restore_page_defaults(int page) {
 		player_launcher fresh;
 		m_custom_cmd->clear();
 		m_custom_terminal->setChecked(false);
+		if (m_ytdlp_auto)
+			m_ytdlp_auto->setChecked(true);
 		if (m_terminal)
 			m_terminal->clear();
 		for (QRadioButton *b : m_player_buttons)
@@ -2609,6 +2623,41 @@ void settings_dialog::build_player_page(QWidget *page) {
 	  "\"gnome-terminal --\"; the player's command is added after it. Blank "
 	  "uses x-terminal-emulator, or the first terminal found.",
 	  m_terminal, page, /*wide=*/true));
+
+	// **yt-dlp, and keeping it current.** See `ytdlp_updater` for what is
+	// fetched and how it is checked.
+	v->addWidget(section_heading("yt-dlp", page));
+	m_ytdlp_state = dim_label(QString(), page);
+	m_ytdlp_state->setObjectName("ytdlp_state");
+	m_ytdlp_state->setWordWrap(true);
+	v->addWidget(m_ytdlp_state);
+	m_ytdlp_auto = new QCheckBox(page);
+	m_ytdlp_auto->setObjectName("ytdlp_auto_update");
+	v->addWidget(settings_row(
+	  "Keep it up to date",
+	  "Sites change often, and an old yt-dlp stops working with them. At most "
+	  "once a day, as Find Media looks a page up, the latest release is "
+	  "fetched from yt-dlp's GitHub and used only if its signature checks out.",
+	  m_ytdlp_auto, page));
+	auto *update = new QPushButton("&Update now", page);
+	update->setObjectName("ytdlp_update_now");
+	connect(update, &QPushButton::clicked, this, [this, update] {
+		if (!m_ytdlp_updater) {
+			m_ytdlp_updater = new ytdlp_updater(this);
+			connect(m_ytdlp_updater, &ytdlp_updater::finished, this,
+			        [this, update](bool, bool, const QString &text) {
+				update->setEnabled(true);
+				show_ytdlp_state(text);
+			});
+		}
+		update->setEnabled(false);
+		show_ytdlp_state("Checking for a newer yt-dlp…");
+		m_ytdlp_updater->check(true);
+	});
+	v->addWidget(settings_row("Check now", "Fetch the latest release if there is one.",
+	                          update, page));
+	show_ytdlp_state(QSettings(QSettings::IniFormat, QSettings::UserScope, "hydra", "hydra")
+	                   .value("ytdlp/last_result").toString());
 #endif
 
 	m_player_note = new QLabel(page);
@@ -2760,6 +2809,16 @@ void settings_dialog::populate_players() {
 		m_player_buttons << b;
 		m_player_group_layout->insertWidget(at++, b);
 	}
+}
+
+void settings_dialog::show_ytdlp_state(const QString &last) {
+	if (!m_ytdlp_state)
+		return;
+	ytdlp_resolver now;
+	QString text = "In use: " + now.description() + ".";
+	if (!last.isEmpty())
+		text += " Last check: " + last + ".";
+	m_ytdlp_state->setText(text);
 }
 
 void settings_dialog::rescan_players() {
@@ -3036,6 +3095,8 @@ void settings_dialog::load() {
 		put_value(m_terminal, m_players->terminal_command());
 	if (m_players && m_custom_terminal)
 		m_custom_terminal->setChecked(m_players->custom_in_terminal());
+	if (m_ytdlp_auto)
+		m_ytdlp_auto->setChecked(settings_store::ytdlp_auto_update());
 
 	if (m_downloads)
 		put_value(m_dir, m_downloads->directory());
@@ -3233,6 +3294,8 @@ void settings_dialog::apply() {
 		if (m_terminal)
 			m_players->set_terminal_command(m_terminal->text());
 		m_players->set_custom_in_terminal(m_custom_terminal->isChecked());
+		if (m_ytdlp_auto)
+			settings_store::set_ytdlp_auto_update(m_ytdlp_auto->isChecked());
 		for (QRadioButton *b : m_player_buttons) {
 			if (b->isChecked()) {
 				m_players->set_selected(b->property("player_id").toString());

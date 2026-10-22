@@ -38,6 +38,7 @@
 #include "downloads_dialog.h"
 #include "settings_dialog.h"
 #include "ytdlp_resolver.h"
+#include "ytdlp_updater.h"
 #include "mse_tap.h"
 #include "capture_source.h"
 #include "extractor_signals.h"
@@ -7402,6 +7403,28 @@ void main_window::look_up_media(bool forced) {
 	}
 	if (!m_ytdlp)
 		m_ytdlp = new ytdlp_resolver(this);
+#ifndef Q_OS_ANDROID
+	// **Kept current, by the holder's choice of 2026-10-22**: at most once a
+	// day, and only now, as a lookup is about to run, so there is no traffic
+	// of its own. The copy it fetches is used from the next lookup on; this
+	// one goes ahead with what is here rather than waiting on a download.
+	if (settings_store::ytdlp_auto_update()) {
+		if (!m_ytdlp_updater) {
+			m_ytdlp_updater = new ytdlp_updater(this);
+			connect(m_ytdlp_updater, &ytdlp_updater::finished, this,
+			        [this](bool, bool updated, const QString &text) {
+				qInfo("yt-dlp: %s", qPrintable(text));
+				if (updated)
+					m_ytdlp_refresh_due = true;
+			});
+		}
+		m_ytdlp_updater->check(false);
+	}
+	if (m_ytdlp_refresh_due && !m_ytdlp->busy()) {
+		m_ytdlp->refresh();
+		m_ytdlp_refresh_due = false;
+	}
+#endif
 	if (!m_ytdlp->available()) {
 		if (forced)
 			say(m_ytdlp->description());
@@ -7805,6 +7828,9 @@ void main_window::open_settings() {
 			               "the cleared reports");
 	});
 	dlg.exec();
+	// An Update now pressed in the dialog fetched into the profile: read
+	// again which yt-dlp to run, at the next lookup.
+	m_ytdlp_refresh_due = true;
 	// The kiosk lockdown setting may have moved, and the menu entry describes
 	// it. Refreshed here for the same reason the views are re-configured
 	// below: the dialog is the one place that can change it.

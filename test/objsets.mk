@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build a684d1ef, mtime 2026-10-22 18:45)
+#     /home/claude/src/fmake/fmake  (build 6dfe7ff9, mtime 2026-10-23 00:24)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -129,7 +129,8 @@ OBJSETS_SOURCES = \
 	test/live/try_tap.cpp \
 	test/live/try_taprow.cpp \
 	test/live/try_watch.cpp \
-	test/live/try_ytdlp.cpp
+	test/live/try_ytdlp.cpp \
+	test/live/try_ytdlp_update.cpp
 
 OBJS_test_address = \
 	$(BUILD_DIR)/app/address_input.o \
@@ -421,11 +422,15 @@ OBJS_test_probe_ui = \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
 	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/settings_bundle.o \
 	$(BUILD_DIR)/app/theme.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o
 
 OBJS_test_proxy_chunks = \
@@ -503,6 +508,9 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -514,6 +522,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
@@ -547,8 +556,6 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_readings_dialog.o \
 	$(BUILD_DIR)/app/readings_dialog.o \
@@ -645,6 +652,9 @@ OBJS_test_settings = \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/settings_bundle.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/app/filter_subscription.o \
@@ -653,6 +663,7 @@ OBJS_test_settings = \
 	$(BUILD_DIR)/app/theme.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o
 
 OBJS_test_shutdown = \
@@ -733,12 +744,16 @@ OBJS_test_watch = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o
 
 OBJS_test_ytdlp = \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o
 
 OBJS_test_ytdlp_live = \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o
 
 OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/main_window.o \
@@ -783,6 +798,8 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -955,6 +972,8 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -1100,6 +1119,9 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -1118,6 +1140,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -1158,8 +1181,6 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -1248,6 +1269,9 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -1266,6 +1290,7 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -1307,8 +1332,6 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -1424,6 +1447,8 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -1578,6 +1603,8 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -1742,6 +1769,8 @@ OBJS_try_challenge = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -1884,6 +1913,9 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -1902,6 +1934,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -1942,8 +1975,6 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -2050,6 +2081,8 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -2212,6 +2245,8 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -2358,6 +2393,8 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -2517,6 +2554,8 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -2673,6 +2712,8 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -2822,6 +2863,8 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -2988,6 +3031,8 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -3128,6 +3173,8 @@ OBJS_try_files = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -3284,6 +3331,8 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -3418,6 +3467,9 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -3433,6 +3485,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -3477,8 +3530,6 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -3573,6 +3624,9 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -3593,6 +3647,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -3636,8 +3691,6 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -3746,6 +3799,8 @@ OBJS_try_fullscreen_keys = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -3900,6 +3955,8 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -4061,6 +4118,8 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/media_lookup.o \
 	$(BUILD_DIR)/app/media_interpretation.o \
 	$(BUILD_DIR)/app/screen_picker.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -4210,6 +4269,8 @@ OBJS_try_investigate = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
 	$(BUILD_DIR)/moc/moc_capture_source.o \
@@ -4354,6 +4415,9 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -4372,6 +4436,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
@@ -4415,8 +4480,6 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -4521,6 +4584,9 @@ OBJS_try_look = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -4539,6 +4605,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
@@ -4579,8 +4646,6 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_readings_dialog.o \
 	$(BUILD_DIR)/app/readings_dialog.o \
@@ -4681,6 +4746,8 @@ OBJS_try_media = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -4791,8 +4858,10 @@ OBJS_try_media = \
 OBJS_try_media_lookup = \
 	$(BUILD_DIR)/app/main_window.o \
 	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/request_filter.o \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
+	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
@@ -4807,7 +4876,6 @@ OBJS_try_media_lookup = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
-	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -4831,6 +4899,8 @@ OBJS_try_media_lookup = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -4841,7 +4911,6 @@ OBJS_try_media_lookup = \
 	$(BUILD_DIR)/app/filter_signals.o \
 	$(BUILD_DIR)/app/keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
-	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
@@ -4999,6 +5068,8 @@ OBJS_try_media_reading = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -5157,6 +5228,8 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/app/media_lookup.o \
 	$(BUILD_DIR)/app/media_interpretation.o \
 	$(BUILD_DIR)/app/screen_picker.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -5288,6 +5361,9 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -5306,6 +5382,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -5348,8 +5425,6 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -5460,6 +5535,8 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -5598,6 +5675,9 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -5616,6 +5696,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -5658,8 +5739,6 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -5785,6 +5864,8 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -5955,6 +6036,9 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
 	$(BUILD_DIR)/app/settings_bundle.o \
@@ -5970,6 +6054,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
@@ -6005,8 +6090,6 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_readings_dialog.o \
 	$(BUILD_DIR)/app/readings_dialog.o \
@@ -6100,6 +6183,8 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/media_lookup.o \
 	$(BUILD_DIR)/app/media_interpretation.o \
 	$(BUILD_DIR)/app/screen_picker.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -6247,6 +6332,8 @@ OBJS_try_scriptlet_cost = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -6403,6 +6490,8 @@ OBJS_try_scriptlets = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -6570,6 +6659,8 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -6699,6 +6790,9 @@ OBJS_try_settings_ui = \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -6710,6 +6804,7 @@ OBJS_try_settings_ui = \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o
 
 OBJS_try_share = \
@@ -6734,6 +6829,9 @@ OBJS_try_share = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -6752,6 +6850,7 @@ OBJS_try_share = \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -6796,8 +6895,6 @@ OBJS_try_share = \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -6915,6 +7012,8 @@ OBJS_try_store_view = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -7066,6 +7165,8 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -7203,6 +7304,9 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -7221,6 +7325,7 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -7262,8 +7367,6 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
-	$(BUILD_DIR)/app/ytdlp_resolver.o \
-	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -7378,6 +7481,8 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -7532,6 +7637,8 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -7687,6 +7794,8 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -7838,6 +7947,8 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -7944,4 +8055,10 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
 	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
+
+OBJS_try_ytdlp_update = \
+	$(BUILD_DIR)/moc/moc_ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_updater.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o
 

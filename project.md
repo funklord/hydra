@@ -39141,3 +39141,51 @@ The capture on the phone showed the search box, the page picker, the
 choices, and Restore, Cancel and OK, all on screen. `settings` is a
 store view now for that purpose, kept out of `STORE_VIEWS` so it isn't
 in the listing.
+
+## yt-dlp is kept up to date from its signed releases
+
+The holder found the shipped yt-dlp three months old on 2026-10-22, and
+asked how to keep it current after install. The package pins yt-dlp as
+`third_party/yt-dlp` and ships it to `/usr/share/hydra/yt-dlp`, so it
+ages there, and YouTube refuses old releases outright. The other routes
+were measured and don't work:
+- Debian's yt-dlp is older still (2025.04.30 on this machine).
+- yt-dlp's own `-U` updates only its release builds, not a source copy
+  like ours.
+
+**The holder chose automatic updates, desktop only.** `ytdlp_updater`
+fetches yt-dlp's platform-independent release into the profile,
+`<app data>/yt-dlp/`, never beside the installed program. A check runs at
+most once a day, and only as Find Media is about to look a page up, so it
+makes no traffic of its own. The lookup that triggers it uses the copy
+already there; the next one uses the update. Settings → Media has "Keep
+it up to date" (on by default), Update now, and a line saying which copy
+is in use and what the last check said. Android has no yt-dlp and no
+Python, so nothing there changes.
+
+**What it trusts.** A release's `SHA2-256SUMS` must carry a good `gpgv`
+signature by yt-dlp's release key. That key comes from the vendored copy's
+`public.key`, which the package now installs. The signer must be
+fingerprint `AC0CBBE6848D6A873464AF4E57CF65933B5A7581`, and the fetched
+file must match its line in that file. Anything short of that keeps the
+copy already there. The latest release is read from where GitHub's
+`releases/latest` redirects, without following it.
+
+**The pin no longer decides on its own.** `ytdlp_resolver` used to prefer
+the vendored copy for determinism: the same page resolving the same way
+on every machine, with a submodule bump the one reviewable act that
+changed it. It now uses a fetched copy whenever that copy is newer than
+the pin, and that determinism is the price the holder chose to pay for
+staying current. A package with a newer pin still wins over an older
+fetched copy.
+
+`test_ytdlp` covers the following with a real release's `SHA2-256SUMS`
+and signature (`test/fixture/ytdlp`):
+- the release's checksums verify;
+- a single changed byte does not;
+- nothing verifies without the key;
+- the checksum lookup reads only its own line;
+- a newer fetched copy is chosen over the pin, and an older one is not.
+
+`test/live/try_ytdlp_update` runs the whole thing against GitHub in
+test mode.

@@ -933,6 +933,9 @@ install: all ytdlp
 	  tar -xf - --no-same-owner --no-same-permissions \
 	    -C $(DESTDIR)$(SHARE)/hydra/yt-dlp
 	@install -Dm644 third_party/yt-dlp/LICENSE $(DESTDIR)$(SHARE)/hydra/yt-dlp/LICENSE
+	@# The release key, which `ytdlp_updater` checks a newer release
+	@# against before it is used.
+	@install -Dm644 third_party/yt-dlp/public.key $(DESTDIR)$(SHARE)/hydra/yt-dlp/public.key
 	@echo "installed yt-dlp $$(sed -n "s/^__version__ = '\(.*\)'/\1/p" \
 	    third_party/yt-dlp/yt_dlp/version.py) to $(DESTDIR)$(SHARE)/hydra/yt-dlp"
 	@HYDRA_SKIP_CACHE_UPDATE=$${DESTDIR:+1} \

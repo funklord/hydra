@@ -771,6 +771,8 @@ public:
 	downloads_dialog   *m_downloads_ui  = nullptr;
 	torrent_download_source *m_torrents = nullptr;
 	ytdlp_resolver     *m_ytdlp          = nullptr;
+	class ytdlp_updater *m_ytdlp_updater = nullptr;   // desktop only
+	bool                m_ytdlp_refresh_due = false;  // an update is waiting to be used
 	media_lookups       m_lookups;
 	QString             m_lookups_path;
 	QString             m_shown_lookup;   // the page whose rows the list holds

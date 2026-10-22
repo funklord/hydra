@@ -185,6 +185,8 @@ private:
 	// happens because the window opened. Both of these are wired to a button.
 	void check_local_model();
 	void rescan_players();
+	// What yt-dlp is in use, and what the last check said.
+	void show_ytdlp_state(const QString &last);
 	void populate_players();
 	void load();
 	void apply();
@@ -277,6 +279,9 @@ private:
 	QLabel         *m_player_note  = nullptr;
 	QCheckBox      *m_custom_terminal = nullptr;
 	QLineEdit      *m_terminal     = nullptr;   // absent on Android
+	QLabel         *m_ytdlp_state  = nullptr;   // absent on Android
+	QCheckBox      *m_ytdlp_auto   = nullptr;   // absent on Android
+	class ytdlp_updater *m_ytdlp_updater = nullptr;
 	QLineEdit      *m_search_engine = nullptr;
 	QLabel         *m_search_note   = nullptr;
 
@@ -395,6 +400,10 @@ void set_live_view_cap(int n);
 // Bounded by `live_view_cap()` -- a preload never evicts a live view -- so
 // the cost is already the budget above rather than a second one.
 bool preload_background_tabs();
+// Whether yt-dlp is kept up to date from its signed releases. On unless
+// turned off; see `ytdlp_updater`.
+bool ytdlp_auto_update();
+void set_ytdlp_auto_update(bool on);
 void set_preload_background_tabs(bool on);
 
 }  // namespace settings_store
