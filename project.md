@@ -38971,6 +38971,20 @@ finished entries that are still good are written, and any that lapsed
 while the browser was closed are dropped on reading. The holder found it
 gone after a restart; it had lived in memory only.
 
+**And it was reported gone a second time when it wasn't** (same day,
+after the file existed). Their profile showed:
+- the saved answer was good for another hour;
+- the real loader read it back whole (32 rows);
+- yt-dlp had not run again after the restart.
+
+What looked lost was the badge. Cached rows went into the list only when
+Find Media opened, so after a restart the badge counted only what the
+page had been seen requesting. `show_cached_lookup` now puts a page's
+answer in (or another page's out) whenever the page in front changes, so
+the badge and Save follow the cache. `try_media_lookup` restarts the
+window on the same profile and checks the rows are listed before the
+dialog opens. With that one call removed, the check reports 0 of 1.
+
 **One sound-only row: the best.** That means the highest bitrate (`abr`,
 else `tbr`), a direct file over a manifest at the same rate, then the
 larger file (`ytdlp_resolver::best_sound_format`). Sound is always wanted

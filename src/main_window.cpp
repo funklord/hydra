@@ -4994,6 +4994,7 @@ void main_window::update_navigation() {
 	if (!m_back_action || !m_stack)
 		return;
 	web_view_backend *v = current_view();
+	show_cached_lookup(v);
 	// Capture saves what a page plays, so it is not offered where saving is
 	// against a service's terms -- YouTube on Android -- unless a capture is
 	// already running, which must stay stoppable.
@@ -7500,6 +7501,27 @@ void main_window::look_up_media(bool forced) {
 	}, Qt::SingleShotConnection);
 
 	m_ytdlp->resolve(page);
+}
+
+void main_window::show_cached_lookup(web_view_backend *v) {
+	// **As soon as the page is in front, not when Find Media opens.** The
+	// holder found the cache "gone" after a restart, 2026-10-22, while the
+	// saved answer was there and good for another hour: the badge counted
+	// only what the page had been seen requesting, because the cached rows
+	// went into the list only when the dialog opened. So the page's answer
+	// goes in -- or another page's comes out -- whenever the page in front
+	// changes, and the badge and Save follow it. Once per page, since this
+	// runs on every navigation update.
+	const QUrl page = v ? v->url() : QUrl();
+	const QString key = media_lookups::key(page);
+	if (!v || page.host().isEmpty() || key == m_shown_lookup) {
+		m_shown_lookup = key;
+		return;
+	}
+	m_shown_lookup = key;
+	const media_lookup *e = m_lookups.find(page, QDateTime::currentDateTimeUtc());
+	m_media->replace_vouched(page.host(), e && e->st == media_lookup::state::done
+	                                        ? e->rows : QList<media_item>());
 }
 
 void main_window::save_lookups() {
