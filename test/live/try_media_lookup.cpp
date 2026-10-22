@@ -168,7 +168,7 @@ int main(int argc, char *argv[]) {
 		auto *list = d->findChild<QTreeWidget *>();
 		int n = 0;
 		for (int i = 0; list && i < list->topLevelItemCount(); ++i)
-			if (list->topLevelItem(i)->text(1).startsWith("["))
+			if (list->topLevelItem(i)->text(0).startsWith("["))
 				++n;
 		return list ? n : -1;
 	};

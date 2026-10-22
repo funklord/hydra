@@ -39071,3 +39071,30 @@ The other lists were already draggable, with the last column filling the
 rest. The tab tree is the exception: it has no header, so there is
 nothing to drag. Its title still fills the panel, and its history count
 sizes to fit.
+
+## Find Media's columns on a phone: no Type, and Host only when wide
+
+Asked for by the holder on 2026-10-22, from the store screenshots taken on
+a phone. There the Type and Host columns took the width the names needed,
+and every name was cut to "[video] Harbour at d...".
+
+**Type is a mark in front of the name now.** It is drawn in the
+palette's text colour, so it reads on light and dark schemes and needs
+no icon theme, which the phone doesn't have. The marks:
+- a page, for a file;
+- stacked pieces, for an HLS or DASH stream;
+- one piece, for a segment;
+- a red dot, for a "Playing" row that can only be captured.
+
+The column mostly repeated the name anyway: a looked-up row already says
+"H.264 stream". Its words are in the row's tooltip, "File from
+cdn.invalid", which is a long-press on the phone.
+
+**Host is hidden below 620 px**, the width at which the window turns its
+tree into a drawer, so "narrow" means one thing in this program. The
+host is in the same tooltip. On a desktop the column stays: there, which
+server a stream comes from is worth seeing at a glance.
+
+**Still cut on the phone:** the Watch and Download buttons take about 40
+per cent of a 1080 px screen. Icon-only buttons on narrow screens would
+give that width to the names. That is not done yet.

@@ -79,12 +79,12 @@ static QList<QPushButton *> watch_buttons(QDialog *dlg, bool picture) {
 		return out;
 	for (int i = 0; i < list->topLevelItemCount(); ++i) {
 		QTreeWidgetItem *row = list->topLevelItem(i);
-		if (picture && row->text(1).contains("sound only"))
+		if (picture && row->text(0).contains("sound only"))
 			continue;
-		if (QWidget *cell = list->itemWidget(row, 3))
+		if (QWidget *cell = list->itemWidget(row, 2))
 			for (QPushButton *b : cell->findChildren<QPushButton *>())
 				if (b->text().contains("Watch")) {
-					b->setProperty("row", row->text(1));
+					b->setProperty("row", row->text(0));
 					out << b;
 				}
 	}
@@ -168,7 +168,7 @@ int main(int argc, char *argv[]) {
 				if (auto *list = dlg->findChild<QTreeWidget *>())
 					for (int i = 0; i < qMin(3, list->topLevelItemCount()); ++i)
 						std::printf("  row %d: %s\n", i,
-						            qPrintable(list->topLevelItem(i)->text(1)));
+						            qPrintable(list->topLevelItem(i)->text(0)));
 				// =sound chooses Save, Sound only, from the button's menu.
 				if (qEnvironmentVariable("HYDRA_TRY_SAVE") == "sound") {
 					for (QAction *a : dlg->findChildren<QAction *>())
@@ -182,10 +182,10 @@ int main(int argc, char *argv[]) {
 						QString label;
 						for (int i = 0; i < list->topLevelItemCount(); ++i) {
 							QTreeWidgetItem *row = list->topLevelItem(i);
-							if (row->text(0) != "File" ||
-							    !row->text(1).contains("the sound is added"))
+							if (!row->toolTip(0).startsWith("File") ||
+							    !row->text(0).contains("the sound is added"))
 								continue;
-							if (QWidget *cell = list->itemWidget(row, 3))
+							if (QWidget *cell = list->itemWidget(row, 2))
 								for (QPushButton *b : cell->findChildren<QPushButton *>())
 									if (b->text().contains("Download")) {
 										last  = b;

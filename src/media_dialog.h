@@ -37,6 +37,13 @@ public:
 	// own status is not overwritten by it.
 	void set_lookup_note(const QString &text);
 
+	// Below this width the Host column is hidden; `main_window`'s drawer
+	// threshold, so "narrow" means one thing in this program.
+	static constexpr int k_narrow_width = 620;
+
+protected:
+	void resizeEvent(QResizeEvent *e) override;
+
 signals:
 	// A page whose video only the tap can see has nothing to Watch or
 	// Download -- the only way to get those bytes is to record them, and the
@@ -52,6 +59,7 @@ signals:
 
 private:
 	void repopulate();
+	void fit_host_column();
 	void watch(const media_item &item);
 	// `separate`: a second job even when the address is already being
 	// fetched (`download_hints::separate`).

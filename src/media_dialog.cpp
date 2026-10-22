@@ -21,7 +21,11 @@
 #include <QDir>
 #include <QLabel>
 #include <QMenu>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPixmap>
 #include <QPushButton>
+#include <QResizeEvent>
 
 namespace {
 
@@ -117,6 +121,64 @@ QString kind_label(media_kind k) {
 	return "Unknown";
 }
 
+// **The kind as a small mark in front of the name**, not a column of its
+// own -- the holder, 2026-10-22, on a phone where the column took width the
+// names needed and said what the name mostly said already. Drawn here in
+// the palette's text colour rather than taken from an icon theme, so it
+// reads on a light or a dark scheme and on a phone with no theme at all.
+// What it means is in the row's tooltip.
+enum class row_mark { file, stream, segment, playing };
+
+QIcon mark_icon(row_mark m, const QPalette &pal) {
+	const int s = 32;   // drawn large and scaled down by the view
+	QPixmap px(s, s);
+	px.fill(Qt::transparent);
+	QPainter p(&px);
+	p.setRenderHint(QPainter::Antialiasing);
+	const QColor ink = pal.color(QPalette::Text);
+	p.setPen(QPen(ink, 2.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+	p.setBrush(Qt::NoBrush);
+	switch (m) {
+	case row_mark::file: {
+		// A page with its corner folded.
+		QPainterPath page;
+		page.moveTo(8, 4);
+		page.lineTo(19, 4);
+		page.lineTo(25, 10);
+		page.lineTo(25, 28);
+		page.lineTo(8, 28);
+		page.closeSubpath();
+		p.drawPath(page);
+		p.drawLine(QPointF(19, 4), QPointF(19, 10));
+		p.drawLine(QPointF(19, 10), QPointF(25, 10));
+		break;
+	}
+	case row_mark::stream:
+		// Pieces in a row, which is what a stream is.
+		for (int i = 0; i < 3; ++i)
+			p.drawRoundedRect(QRectF(5, 6 + i * 8, 22, 5), 1.5, 1.5);
+		break;
+	case row_mark::segment:
+		p.drawRoundedRect(QRectF(5, 14, 22, 5), 1.5, 1.5);
+		break;
+	case row_mark::playing:
+		p.setPen(Qt::NoPen);
+		p.setBrush(QColor(0xd9, 0x48, 0x3b));
+		p.drawEllipse(QRectF(8, 8, 16, 16));
+		break;
+	}
+	return QIcon(px);
+}
+
+row_mark mark_for(media_kind k) {
+	switch (k) {
+	case media_kind::hls:
+	case media_kind::dash:    return row_mark::stream;
+	case media_kind::segment: return row_mark::segment;
+	default:                  return row_mark::file;
+	}
+}
+
 }  // namespace
 
 media_dialog::media_dialog(media_detector *detector, player_launcher *players,
@@ -131,10 +193,10 @@ media_dialog::media_dialog(media_detector *detector, player_launcher *players,
 	auto *outer = new QVBoxLayout(this);
 
 	m_list = new QTreeWidget(this);
-	m_list->setColumnCount(4);
-	m_list->setHeaderLabels({"Type", "Name", "Host", ""});
+	m_list->setColumnCount(3);
+	m_list->setHeaderLabels({"Name", "Host", ""});
 	m_list->setRootIsDecorated(false);
-	list_columns::resizable(m_list, 1);   // the name
+	list_columns::resizable(m_list, 0);   // the name
 	outer->addWidget(m_list, 1);
 
 	// **The empty state goes over the rows area, not under it.** It used to be
@@ -239,6 +301,20 @@ void media_dialog::save_as(save_choice choice) {
 		                      .arg(said.join(" and "), m_downloads->directory()));
 }
 
+void media_dialog::fit_host_column() {
+	// **Not on a narrow screen**, where it took the width the names needed
+	// and left them cut to "[video] Harbour at d..." -- the holder,
+	// 2026-10-22, from the store screenshots taken on a phone. The host is
+	// still in each row's tooltip. The same width the window turns its tree
+	// into a drawer at, so "narrow" means one thing in this program.
+	m_list->setColumnHidden(1, width() < k_narrow_width);
+}
+
+void media_dialog::resizeEvent(QResizeEvent *e) {
+	QDialog::resizeEvent(e);
+	fit_host_column();
+}
+
 void media_dialog::set_lookup_note(const QString &text) {
 	m_lookup->setText(text);
 }
@@ -264,9 +340,12 @@ void media_dialog::repopulate() {
 	auto add_row = [this](QTreeWidgetItem *parent, const media_item &item,
 	                      const QString &text) {
 		auto *row = parent ? new QTreeWidgetItem(parent) : new QTreeWidgetItem(m_list);
-		row->setText(0, kind_label(item.kind));
-		row->setText(1, text);
-		row->setText(2, item.url.host());
+		row->setIcon(0, mark_icon(mark_for(item.kind), m_list->palette()));
+		row->setText(0, text);
+		row->setText(1, item.url.host());
+		// What the mark means, and where it comes from -- the second also
+		// being the Host column's, which a narrow screen does not show.
+		row->setToolTip(0, QString("%1 from %2").arg(kind_label(item.kind), item.url.host()));
 
 		// Both actions on every row; the list is already primary-first (sec 11.3).
 		auto *cell    = new QWidget(m_list);
@@ -295,7 +374,7 @@ void media_dialog::repopulate() {
 		}
 		connect(watch, &QPushButton::clicked, this, [this, item] { this->watch(item); });
 		connect(save,  &QPushButton::clicked, this, [this, item] { this->save(item); });
-		m_list->setItemWidget(row, 3, cell);
+		m_list->setItemWidget(row, 2, cell);
 		return row;
 	};
 
@@ -346,10 +425,12 @@ void media_dialog::repopulate() {
 		if (!media_saving_allowed(m_site, QUrl(), nullptr))
 			continue;
 		auto *row = new QTreeWidgetItem(m_list);
-		row->setText(0, "Playing");
-		row->setText(1, QString("%1 · %2 buffered")
+		row->setIcon(0, mark_icon(row_mark::playing, m_list->palette()));
+		row->setText(0, QString("Playing · %1 · %2 buffered")
 		                    .arg(s.mime, QLocale().formattedDataSize(s.bytes)));
-		row->setText(2, m_site);
+		row->setText(1, m_site);
+		row->setToolTip(0, "Playing in the page, with no address to fetch: it "
+		                   "can only be recorded.");
 
 		auto *cell   = new QWidget(m_list);
 		auto *layout = new QHBoxLayout(cell);
@@ -362,11 +443,11 @@ void media_dialog::repopulate() {
 			emit capture_requested();
 			accept();
 		});
-		m_list->setItemWidget(row, 3, cell);
+		m_list->setItemWidget(row, 2, cell);
 	}
 
-	// Type, host and the button cell take the width they need; Name is the
-	// stretch column and absorbs whatever is left.
+	// Host and the button cell take the width they need; Name is the
+	// filling column and absorbs whatever is left.
 	//
 	// **Host was the one column nobody sized**, so it kept a default width and
 	// elided `hls.cdnvideo11...` while Name had several hundred pixels to
@@ -377,9 +458,9 @@ void media_dialog::repopulate() {
 	// Sized to contents rather than stretched, because a host is bounded in a
 	// way a name is not: it is a domain, and the longest one here is shorter
 	// than most of the names beside it.
-	m_list->resizeColumnToContents(0);
+	m_list->resizeColumnToContents(1);
 	m_list->resizeColumnToContents(2);
-	m_list->resizeColumnToContents(3);
+	fit_host_column();
 
 	if (!items.isEmpty()) {
 		// **Counts the rows, not `items`.** `playing` adds rows of its own

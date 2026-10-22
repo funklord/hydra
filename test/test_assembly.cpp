@@ -395,19 +395,38 @@ int main(int argc, char **argv) {
 		      QString("two rows: the video and its sound (%1)")
 		          .arg(list ? list->topLevelItemCount() : -1));
 		QTreeWidgetItem *video = list ? list->topLevelItem(0) : nullptr;
-		check(video && video->text(1) == "[video] Clip · 1080p60 · H.264",
+		check(video && video->text(0) == "[video] Clip · 1080p60 · H.264",
 		      QString("the video's row is what Save takes, the best up to 1080p (%1)")
-		          .arg(video ? video->text(1) : QString()));
+		          .arg(video ? video->text(0) : QString()));
 		QStringList sizes;
 		for (int i = 0; video && i < video->childCount(); ++i)
-			sizes << video->child(i)->text(1);
+			sizes << video->child(i)->text(0);
 		check(sizes == QStringList({ "1440p60 · VP9", "1080p60 · H.264", "720p60 · H.264" }),
 		      QString("under it each size, largest first, by its lead (%1)")
 		          .arg(sizes.join(" | ")));
 		QTreeWidgetItem *p1080 = video && video->childCount() > 1 ? video->child(1) : nullptr;
-		check(p1080 && p1080->childCount() == 1 && p1080->child(0)->text(1) == "1080p60 · AV1",
+		check(p1080 && p1080->childCount() == 1 && p1080->child(0)->text(0) == "1080p60 · AV1",
 		      "and under a size its other formats");
 		check(video && !video->isExpanded(), "folded until opened");
+		// **No Type column, and no Host on a narrow screen** -- the holder,
+		// 2026-10-22, from the phone screenshots. The kind is a mark, and
+		// both are said in the tooltip.
+		check(list && list->columnCount() == 3 && list->headerItem()->text(0) == "Name",
+		      "the name is the first column, with no Type before it");
+		check(video && !video->icon(0).isNull() &&
+		          video->toolTip(0) == "File from cdn.invalid",
+		      QString("its kind is a mark, said in the tooltip with the host (%1)")
+		          .arg(video ? video->toolTip(0) : QString()));
+		// Shown, since a hidden dialog is told of its size only when it is.
+		dlg.show();
+		dlg.resize(400, 600);
+		QCoreApplication::processEvents();
+		check(list && list->isColumnHidden(1),
+		      QString("Host is hidden on a narrow screen (%1 wide)").arg(dlg.width()));
+		dlg.resize(900, 600);
+		QCoreApplication::processEvents();
+		check(list && !list->isColumnHidden(1), "and shown on a wide one");
+		dlg.hide();
 		const QList<media_item> items = det.items_for("v.invalid");
 		const int pick = media_detector::best_picture(items, 1080);
 		check(pick >= 0 && items[pick].url.toString() == "https://cdn.invalid/1080-avc",
