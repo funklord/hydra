@@ -1,4 +1,5 @@
 #include "filter_dialog.h"
+#include "list_columns.h"
 #include "ai_provider.h"
 #include "filter_signals.h"
 
@@ -165,7 +166,7 @@ void filter_dialog::build_ui() {
 	m_rules->setColumnCount(3);
 	m_rules->setHeaderLabels({"Rule", "Dry run", "Why"});
 	m_rules->setRootIsDecorated(false);
-	m_rules->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+	list_columns::resizable(m_rules, 0);   // the rule
 	m_pages->addWidget(m_rules);
 
 	outer->addWidget(m_pages, 1);

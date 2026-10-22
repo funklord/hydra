@@ -1,4 +1,5 @@
 #include "media_dialog.h"
+#include "list_columns.h"
 
 #include "empty_state.h"
 #include "download_manager.h"
@@ -133,8 +134,7 @@ media_dialog::media_dialog(media_detector *detector, player_launcher *players,
 	m_list->setColumnCount(4);
 	m_list->setHeaderLabels({"Type", "Name", "Host", ""});
 	m_list->setRootIsDecorated(false);
-	m_list->header()->setStretchLastSection(false);
-	m_list->header()->setSectionResizeMode(1, QHeaderView::Stretch);
+	list_columns::resizable(m_list, 1);   // the name
 	outer->addWidget(m_list, 1);
 
 	// **The empty state goes over the rows area, not under it.** It used to be

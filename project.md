@@ -38970,3 +38970,22 @@ locally:
 - its rows arrive in the open dialog;
 - reopening uses the cache without fetching the page again;
 - Refresh runs it again.
+
+## List columns can all be dragged
+
+Asked for by the holder on 2026-10-22. Three lists set their widest,
+most variable column to `QHeaderView::Stretch`: the title in Recent
+Readings, the name in Find Media, and the rule in the filter dialog. A
+stretched column fills the width and can't be dragged, so a long title
+stayed cut off whatever anybody did.
+
+Qt has no mode that both fills and can be dragged.
+`list_columns::resizable` makes every column draggable and sizes the
+chosen one to whatever the others leave. It does this whenever the view
+or a neighbour changes width, until somebody drags that column itself;
+after that the width is theirs.
+
+The other lists were already draggable, with the last column filling the
+rest. The tab tree is the exception: it has no header, so there is
+nothing to drag. Its title still fills the panel, and its history count
+sizes to fit.

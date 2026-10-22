@@ -1,4 +1,5 @@
 #include "readings_dialog.h"
+#include "list_columns.h"
 
 #include "channel_rules.h"
 #include "media_interpretation.h"
@@ -28,7 +29,7 @@ readings_dialog::readings_dialog(reading_log *log, channel_rules *rules,
 	m_list->setRootIsDecorated(false);
 	m_list->setHeaderLabels({ "When", "Kind", "Artist", "Title", "Read by",
 	                          "Checks" });
-	m_list->header()->setSectionResizeMode(3, QHeaderView::Stretch);
+	list_columns::resizable(m_list, 3);   // the title
 	box->addWidget(m_list, 1);
 
 	auto *bb = new QDialogButtonBox(QDialogButtonBox::Close, this);

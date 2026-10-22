@@ -21,6 +21,7 @@
 #include "media_detector.h"
 #include "media_dialog.h"
 #include "media_lookup.h"
+#include "list_columns.h"
 #include "mse_tap.h"
 #include "player_launcher.h"
 #include "stream_assembly.h"
@@ -38,6 +39,7 @@
 #include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QTimeZone>
+#include <QHeaderView>
 #include <QTreeWidget>
 #include <QTimer>
 #include <cstdio>
@@ -296,6 +298,34 @@ int main(int argc, char **argv) {
 	// **A second video on a site listed the first one's streams**: rows were
 	// kept per site and nothing took a lookup's away. Now a page's rows
 	// replace the site's vouched ones, and what detection found stays.
+	// **A long title stayed cut off whatever anybody did**: the column that
+	// held it was stretched, and a stretched column cannot be dragged. The
+	// holder, 2026-10-22.
+	section("every column can be dragged, and one fills what is left");
+	{
+		QTreeWidget list;
+		list.setHeaderLabels({ "Type", "Name", "Host" });
+		list_columns::resizable(&list, 1);
+		list.resize(600, 300);
+		list.show();
+		QCoreApplication::processEvents();
+		QHeaderView *h = list.header();
+		check(h->sectionResizeMode(1) == QHeaderView::Interactive &&
+		          h->sectionResizeMode(0) == QHeaderView::Interactive,
+		      "the filling column is draggable like the rest");
+		const int room = list.viewport()->width();
+		check(h->sectionSize(0) + h->sectionSize(1) + h->sectionSize(2) == room,
+		      QString("and fills the width (%1 of %2)")
+		          .arg(h->sectionSize(0) + h->sectionSize(1) + h->sectionSize(2)).arg(room));
+		h->resizeSection(0, h->sectionSize(0) + 40);
+		check(h->sectionSize(0) + h->sectionSize(1) + h->sectionSize(2) == room,
+		      "widening a neighbour takes the width from it");
+		h->resizeSection(1, 90);
+		list.resize(800, 300);
+		QCoreApplication::processEvents();
+		check(h->sectionSize(1) == 90, "and once dragged itself, it keeps its width");
+	}
+
 	section("a page's looked-up rows replace another page's, and only those");
 	{
 		media_detector det;
