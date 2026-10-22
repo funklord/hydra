@@ -38771,3 +38771,30 @@ lets them go. Before the fix it reproduced the report: an Esc the page
 consumed did not leave, and F did nothing. `try_fullscreen_keys` shows the
 same in the real engine: an unused F leaves, an F typed into a field stays
 there with fullscreen kept, and Esc leaves from the field.
+
+**Android takes the identity through the WebView's own API, 2026-10-22.**
+QtWebEngine does not exist on Android, so the engine patch does not apply
+there. Hydra on Android renders with the system WebView, and the
+`androidx.webkit` 1.12.1 it already builds against has
+`WebSettingsCompat.setUserAgentMetadata` with a brand-version list, behind
+`WebViewFeature.USER_AGENT_METADATA`: the supported route, in the engine,
+for headers, pages and workers alike. `HydraWebView.applyIdentity` starts
+from the platform's own metadata and replaces only the brands (Chromium,
+the grease brand, Google Chrome) and the full version, at the version the
+corrected string claims (`claimedFullVersion` over JNI, from
+`user_agent.h`). For a desktop site it also sets platform Linux, not
+mobile, and no model. It is called wherever the string is set. The
+JavaScript shim, which covered the page only, now steps aside whenever the
+brands hold no "Android WebView", so it remains only as a fallback for a
+WebView without the feature. **Built, not yet run on a device**: the phone
+was not reachable over `adb`, which offered no debugging interface on USB.
+
+The holder's question, whether shipping a patched Qt is right if it cannot
+be upstreamed: the patch adds API and changes nothing existing, so
+programs built against stock Qt keep working on it. Hydra sets the new
+property by name and imports no patched-only symbol (checked with `nm -D`
+on the installed binary), so one hydra binary runs on either engine. But
+`doc/architecture.md` names raw CEF as the fallback when QtWebEngine lacks
+a knob, not a patched Qt, and a private copy of the engine would miss
+Debian's Chromium security updates. Offering the patch to Qt is the
+holder's decision; until then it is a local stopgap.

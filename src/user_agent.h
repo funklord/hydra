@@ -205,6 +205,11 @@ inline QString client_hints_shim() {
 (function () {
   var real = navigator.userAgentData;
   if (!real || !real.brands) return;
+  // A fallback now: a WebView that takes `UserAgentMetadata` already names
+  // Chrome in its brands, header and workers alike, and then this steps
+  // aside rather than wrapping a value that needs no correcting.
+  if (!real.brands.some(function (b) { return b.brand === 'Android WebView'; }))
+    return;
   function fix(list) {
     return (list || []).map(function (b) {
       return b.brand === 'Android WebView'

@@ -30,6 +30,8 @@ import android.widget.FrameLayout;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 import androidx.webkit.ScriptHandler;
+import androidx.webkit.UserAgentMetadata;
+import androidx.webkit.WebSettingsCompat;
 
 import java.io.ByteArrayInputStream;
 import java.util.Collections;
@@ -284,6 +286,48 @@ public class HydraWebView {
 
     /** The same string, rewritten to claim a desktop. See setDesktopSite. */
     public static native String desktopUserAgent(String mobile);
+
+    /** The full Chrome version the corrected string claims, e.g. 140.0.7339.80. */
+    public static native String claimedFullVersion();
+
+    /**
+     * **The client hints, to agree with the string**, through the WebView's own
+     * metadata where it offers it. The string says Chrome while the brand list
+     * said `Android WebView` -- in the `Sec-CH-UA` header on every request, and
+     * in `navigator.userAgentData` in pages and workers -- which reads as two
+     * browsers at once and as "not a browser" to sites like Teams. The
+     * JavaScript shim injected for this covered the page only: not the header,
+     * not workers, and detectably. `UserAgentMetadata` sets it in the engine.
+     *
+     * Started from the platform's own metadata, so the model, the platform
+     * version and anything not named here stay true; only the brands and the
+     * full version are Chrome's at the claimed version, and for a desktop
+     * site the platform, the mobile flag and the model match the desktop
+     * string. False, changing nothing, where the WebView cannot: the shim
+     * then still covers the page, as before.
+     */
+    static boolean applyIdentity(WebSettings s, boolean desktop) {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA))
+            return false;
+        final String full = claimedFullVersion();
+        if (full == null || full.isEmpty())
+            return false;
+        final String major = full.split("\\.")[0];
+        java.util.List<UserAgentMetadata.BrandVersion> brands = new java.util.ArrayList<>();
+        brands.add(new UserAgentMetadata.BrandVersion.Builder()
+                .setBrand("Chromium").setMajorVersion(major).setFullVersion(full).build());
+        brands.add(new UserAgentMetadata.BrandVersion.Builder()
+                .setBrand("Not=A?Brand").setMajorVersion("24").setFullVersion("24.0.0.0").build());
+        brands.add(new UserAgentMetadata.BrandVersion.Builder()
+                .setBrand("Google Chrome").setMajorVersion(major).setFullVersion(full).build());
+        UserAgentMetadata.Builder b =
+            new UserAgentMetadata.Builder(WebSettingsCompat.getUserAgentMetadata(s))
+                .setBrandVersionList(brands).setFullVersion(full);
+        if (desktop)
+            b.setPlatform("Linux").setPlatformVersion("").setModel("").setMobile(false);
+        WebSettingsCompat.setUserAgentMetadata(s, b.build());
+        return true;
+    }
 
     /** True when the shell took a navigation instead -- magnet: and the like. */
     public static native boolean takeExternalUrl(String url);
@@ -668,6 +712,7 @@ public class HydraWebView {
                 final String ua = correctedUserAgent(w.getSettings().getUserAgentString());
                 if (ua != null && !ua.isEmpty())
                     w.getSettings().setUserAgentString(ua);
+                applyIdentity(w.getSettings(), false);
                 // **Cookies, which nothing here had ever configured.**
                 // setAcceptCookie defaults to true, so first-party cookies did
                 // work; it is stated anyway, because the default is what this
@@ -1641,6 +1686,7 @@ public class HydraWebView {
             String ua = on ? desktopUserAgent(base) : base;
             if (ua != null && !ua.isEmpty())
                 s.setUserAgentString(ua);
+            applyIdentity(s, on);
             // **A desktop string without a desktop viewport is half a
             // toggle**, and the half that was missing is the one a page can
             // see. Both of these default to false, and neither was ever set:

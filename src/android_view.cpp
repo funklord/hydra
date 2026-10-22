@@ -375,6 +375,13 @@ Java_se_vibes_hydra_HydraWebView_correctedUserAgent(JNIEnv *env, jclass,
 	return env->NewStringUTF(user_agent::corrected(in).toUtf8().constData());
 }
 
+// The full version the corrected string claims, for the WebView's client-hint
+// metadata to agree with it. Pure, like the correction beside it.
+extern "C" JNIEXPORT jstring JNICALL
+Java_se_vibes_hydra_HydraWebView_claimedFullVersion(JNIEnv *env, jclass) {
+	return env->NewStringUTF(user_agent::claimed_full_version().toUtf8().constData());
+}
+
 // The desktop form of the string, for "request desktop site". Pure, like the
 // correction beside it, so it needs no thread hop either.
 extern "C" JNIEXPORT jstring JNICALL
