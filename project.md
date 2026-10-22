@@ -38860,8 +38860,21 @@ mode. On Android that moves app data, settings and cache under
 `files/qttest` and `cache/qttest` (read in `qstandardpaths_android.cpp`
 of the 6.12 kit). It then empties those directories, refusing any path
 without `qttest` in it, and seeds them from `android/assets/store/`: a
-demo tree and a download history. The WebView's own storage isn't moved
-by this, but nothing in the demo reads it.
+demo tree and a download history. **Test mode moves only what
+`QStandardPaths` names, so what lies outside it was checked (2026-10-22):**
+- **The Android WebView's own profile** (cookies, site storage, cache) is
+  shared with the person's normal use. A demo run loads only
+  `hydra.example`, whose responses come from the package and set nothing.
+  The only thing that clears that profile is the "clear browsing data"
+  action in Settings or kiosk mode's exit, and a demo run reaches neither,
+  because its settings are fresh.
+- **The download directory** (`DownloadLocation`) isn't moved, but a demo
+  run starts no download. The downloads list reads the seeded history, not
+  the directory.
+- **Credentials** live in the desktop's Secret Service, and only a pairing
+  the person starts reaches them.
+- **Session import** reads Firefox and Chromium profiles under the home
+  directory, but only on the person's request, and never on Android.
 
 **The pages are the package's, not anybody's live site.** A live site
 would put its logos and text in the listing, and its content changes
