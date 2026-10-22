@@ -1,0 +1,17 @@
+:root { color-scheme: light dark; --ink: #1f2a30; --soft: #5b6b73; --sea: #2f7f8f; --sand: #f4efe6; --card: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root { --ink: #e6edf0; --soft: #9fb0b8; --sea: #6cc3d1; --sand: #12191c; --card: #1b2428; }
+}
+html { background: var(--sand); }
+body { margin: 0; font: 17px/1.55 sans-serif; color: var(--ink); background: var(--sand); }
+header { padding: 20px 18px 8px; }
+.kicker { color: var(--sea); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+h1 { font-size: 28px; line-height: 1.2; margin: 6px 0 4px; }
+.byline { color: var(--soft); font-size: 14px; }
+figure { margin: 12px 0 0; }
+figure svg { display: block; width: 100%; height: auto; }
+figcaption { color: var(--soft); font-size: 13px; padding: 6px 18px 0; }
+main { padding: 4px 18px 32px; }
+h2 { font-size: 20px; margin: 22px 0 6px; }
+.card { background: var(--card); border-radius: 12px; padding: 12px 14px; margin: 14px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.card b { color: var(--sea); }

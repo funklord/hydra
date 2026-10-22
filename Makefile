@@ -406,6 +406,12 @@ include tool/android.mk
 # waiting for it cost two warnings a build and nothing else.
 ANDROID_ACTIVITY = se.vibes.hydra.HydraActivity
 
+# The Play listing's screenshots, in listing order, for `make
+# android-screenshots`. Each is a view `store_view.h` opens over the demo
+# profile in `android/assets/store/`, never the person's own; chosen by the
+# holder 2026-10-22. A plain `=`, since the fragment defines no default.
+STORE_VIEWS = tabs page media downloads
+
 # **Run against a copy, not the tracked sample.** The app saves its tree on
 # exit, so pointing it at `sample-tree.txt` means merely starting the browser
 # rewrites a file in git -- a page title here, a type changed from suspended to

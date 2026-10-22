@@ -175,6 +175,10 @@ public:
 	// `main()` opening three addresses has to finish on the first of them.
 	void show_node(node *n);
 
+	// Open one of the store screenshots' views over the demo profile. Called
+	// only when the app was started for a screenshot; see `store_view.h`.
+	void show_store_view(const QString &name);
+
 	// Write everything that must survive the process, and suspend the live
 	// views doing it. Called by `closeEvent` and by a shutdown signal, which
 	// are the two ways this browser ends; see the definition for why one list

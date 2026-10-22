@@ -32,6 +32,8 @@
 #include "theme.h"
 #ifdef Q_OS_ANDROID
 #include "android_dialogs.h"
+#include "android_intents.h"
+#include "store_view.h"
 #endif
 #include "policy_engine.h"
 #include "request_filter.h"
@@ -77,6 +79,7 @@
 
 #include <QLocale>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QtGlobal>
 
 int main(int argc, char *argv[]) {
@@ -210,6 +213,19 @@ int main(int argc, char *argv[]) {
 	// Dialogs here were laid out for a desktop and come up wider than a phone
 	// screen, which puts their buttons off the edge with no way to reach them.
 	android_dialogs::install();
+
+	// **A store screenshot run gets the demo profile and nothing else**,
+	// before anything below reads a setting or the tree: what it shows is
+	// published. See `store_view.h`.
+	const QString store = android_intents::store_view();
+	if (!store.isEmpty()) {
+		QString why;
+		if (!store_view::prepare_profile(QStringLiteral("assets:/store"), &why)) {
+			qCritical("store-view: no demo profile, so no %s view: %s",
+			          qPrintable(store), qPrintable(why));
+			return 1;
+		}
+	}
 #endif
 	app.setApplicationName("Hydra");
 	// **The name of the desktop entry, which nothing was saying.**
@@ -620,5 +636,9 @@ int main(int argc, char *argv[]) {
 #endif
 
 	w.show();
+#ifdef Q_OS_ANDROID
+	if (!store.isEmpty())
+		QTimer::singleShot(0, &w, [&w, store] { w.show_store_view(store); });
+#endif
 	return app.exec();
 }

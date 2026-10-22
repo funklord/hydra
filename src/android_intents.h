@@ -46,4 +46,10 @@ bool open_externally(const QUrl &url, QString *error);
 // request as `onNewIntent`, which Qt sets as the current intent.
 QString take_view_url();
 
+// The view a store screenshot run asked for, from the launching intent's
+// `store_view` extra, or an empty string. Read without consuming it: the
+// screenshot target force-stops the app before each view, so every run is a
+// fresh process with its own intent.
+QString store_view();
+
 }  // namespace android_intents

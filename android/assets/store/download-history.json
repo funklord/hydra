@@ -1,0 +1,6 @@
+[
+{"url":"https://hydra.example/media/harbour-at-dusk-1080p.mp4","source":"http","path":"/storage/emulated/0/Download/harbour-at-dusk-1080p.mp4","node":"w1","received":48234496,"total":48234496,"status":"done","public":false},
+{"url":"https://hydra.example/media/folding-a-paper-boat.mp4","source":"http","path":"/storage/emulated/0/Download/folding-a-paper-boat.mp4","node":"w2","received":21495808,"total":21495808,"status":"done","public":false},
+{"url":"https://hydra.example/files/ferry-timetable-winter.pdf","source":"http","path":"/storage/emulated/0/Download/ferry-timetable-winter.pdf","node":"t1","received":612352,"total":612352,"status":"done","public":false},
+{"url":"https://hydra.example/files/tide-tables-2027.pdf","source":"http","path":"/storage/emulated/0/Download/tide-tables-2027.pdf","node":"r1","received":1048576,"total":1048576,"status":"done","public":false}
+]

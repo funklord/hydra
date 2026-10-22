@@ -1,0 +1,11 @@
+- [f0] folder | Reading
+  - [r1] unopened | Tide pools: a field guide | https://hydra.example/ | created=2026-09-02T08:10:00 | seen=2026-10-20T19:40:00
+  - [r2] unopened | Sourdough, slowly | https://hydra.example/sourdough.html | created=2026-09-14T12:05:00 | seen=2026-10-18T09:12:00
+  - [r3] unopened | The night sky in October | https://hydra.example/night-sky.html | created=2026-10-01T21:30:00 | seen=2026-10-19T22:01:00
+- [f1] folder | Trip planning
+  - [t1] unopened | Ferry timetable | https://hydra.example/ferry.html | created=2026-08-21T10:00:00 | seen=2026-10-15T07:45:00
+  - [t2] unopened | Hostel shortlist | https://hydra.example/hostels.html | created=2026-08-21T10:04:00 | seen=2026-10-15T07:50:00
+  - [t3] unopened | Packing list | https://hydra.example/packing.html | created=2026-08-22T18:20:00 | seen=2026-10-16T20:10:00
+- [f2] folder | Watch later
+  - [w1] unopened | Harbour at dusk | https://hydra.example/harbour.html | created=2026-10-05T17:00:00 | seen=2026-10-21T18:30:00
+  - [w2] unopened | Folding a paper boat | https://hydra.example/paper-boat.html | created=2026-10-07T16:15:00 | seen=2026-10-17T16:40:00

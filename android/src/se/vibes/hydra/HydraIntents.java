@@ -107,4 +107,12 @@ public class HydraIntents {
         a.setIntent(i);
         return u.toString();
     }
+
+    /** The `store_view` extra a screenshot run starts the app with, or "". */
+    public static String storeView(final Activity a) {
+        if (a == null || a.getIntent() == null)
+            return "";
+        String v = a.getIntent().getStringExtra("store_view");
+        return v == null ? "" : v;
+    }
 }

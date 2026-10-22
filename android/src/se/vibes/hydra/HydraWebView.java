@@ -680,6 +680,71 @@ public class HydraWebView {
         new java.util.concurrent.ConcurrentHashMap<Long, String>();
 
     /** An empty 200, which is how a WebView says "blocked". */
+    /**
+     * The store screenshots' demo site, served from the package.
+     *
+     * `make android-screenshots` starts the app with a `store_view` extra,
+     * and every picture it takes is published in the Play listing -- so the
+     * pages in them cannot be anybody's live site, whose logos and text would
+     * be in the listing and whose content changes between runs. They are
+     * `assets/store/`, served as `https://hydra.example/`: `.example` is
+     * reserved and resolves nowhere, so nothing real is ever shadowed, and
+     * the answer is given only once C++ has said this run is a demo.
+     */
+    static final String STORE_HOST = "hydra.example";
+    private static volatile boolean storeDemo = false;
+
+    public static void enableStoreDemo() {
+        storeDemo = true;
+    }
+
+    private static WebResourceResponse storeAsset(android.content.Context c, Uri u) {
+        String path = u.getPath() == null ? "" : u.getPath();
+        while (path.startsWith("/"))
+            path = path.substring(1);
+        if (path.isEmpty())
+            path = "index.html";
+        if (path.contains(".."))
+            return blocked();
+        String mime = "application/octet-stream";
+        if (path.endsWith(".html"))
+            mime = "text/html";
+        else if (path.endsWith(".svg"))
+            mime = "image/svg+xml";
+        else if (path.endsWith(".css"))
+            mime = "text/css";
+        try {
+            return new WebResourceResponse(mime, "utf-8", c.getAssets().open("store/" + path));
+        } catch (java.io.IOException e) {
+            Log.w("hydra", "store demo: no asset store/" + path);
+            return blocked();
+        }
+    }
+
+    /**
+     * Log `store-view-ready <name>` once this view's content has been drawn,
+     * which is what the screenshot target waits for. A finished load is not
+     * that: the page may not have been painted yet, and a capture then shows
+     * whatever was there before. `postVisualStateCallback` answers when the
+     * current content is what the next frame shows.
+     */
+    public static void announceWhenDrawn(final long id, final String name) {
+        onUi(new Runnable() {
+            @Override public void run() {
+                WebView w = VIEWS.get(id);
+                if (w == null) {
+                    Log.w("hydra", "store demo: no view to announce " + name);
+                    return;
+                }
+                w.postVisualStateCallback(id, new WebView.VisualStateCallback() {
+                    @Override public void onComplete(long requestId) {
+                        Log.i("hydra", "store-view-ready " + name);
+                    }
+                });
+            }
+        });
+    }
+
     private static WebResourceResponse blocked() {
         return new WebResourceResponse("text/plain", "utf-8",
                                        new ByteArrayInputStream(new byte[0]));
@@ -1238,6 +1303,8 @@ public class HydraWebView {
                                                                       WebResourceRequest req) {
                         if (req == null || req.getUrl() == null)
                             return null;
+                        if (storeDemo && STORE_HOST.equals(req.getUrl().getHost()))
+                            return storeAsset(v.getContext(), req.getUrl());
                         // The main document is not a subresource decision: a
                         // WebView that blocks its own page shows an empty page
                         // with no way back, and the rules are written about what

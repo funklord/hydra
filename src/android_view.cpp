@@ -1579,4 +1579,13 @@ void android_factory::clear_browsing_data(const browsing_data &what,
 	});
 	QJniObject::callStaticMethod<void>(k_cls, "clearCookiesAndSiteData", "()V");
 }
+void android_view::announce_when_drawn(const QString &name) const {
+	QJniObject::callStaticMethod<void>(k_cls, "announceWhenDrawn", "(JLjava/lang/String;)V",
+	                                   jlong(m_id),
+	                                   QJniObject::fromString(name).object<jstring>());
+}
+
+void android_view::enable_store_demo() {
+	QJniObject::callStaticMethod<void>(k_cls, "enableStoreDemo", "()V");
+}
 #endif   // Q_OS_ANDROID

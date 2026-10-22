@@ -38844,3 +38844,47 @@ terminal that writes down its arguments.
 - Terminal resolution, including the fallback.
 - The settings round trip.
 - The whole path through `play()`.
+
+## Store screenshots: the app's half of `make android-screenshots`
+
+Asked for by the holder on 2026-10-22, through `claude-guidelines`, and
+confirmed first-hand. The holder chose the views: the tab tree, a page,
+Find Media and the downloads list (`STORE_VIEWS` in the Makefile). The
+fragment's target starts the app once per view with a `store_view`
+extra. The pictures it captures are published, which shapes every choice
+below.
+
+**The person's own profile is never in them.** Before anything reads a
+setting or the tree, `store_view::prepare_profile` turns on Qt's test
+mode. On Android that moves app data, settings and cache under
+`files/qttest` and `cache/qttest` (read in `qstandardpaths_android.cpp`
+of the 6.12 kit). It then empties those directories, refusing any path
+without `qttest` in it, and seeds them from `android/assets/store/`: a
+demo tree and a download history. The WebView's own storage isn't moved
+by this, but nothing in the demo reads it.
+
+**The pages are the package's, not anybody's live site.** A live site
+would put its logos and text in the listing, and its content changes
+between runs. `HydraWebView` serves `https://hydra.example/` from
+`assets/store/`, and only once C++ says the run is a demo. `.example` is
+reserved and resolves nowhere, so nothing real is shadowed.
+
+**Each view announces itself once drawn, not once loaded.**
+- A page view waits for `postVisualStateCallback`, which answers when the
+  next frame shows the current content.
+- A Qt view waits until its window is exposed and visible, then lets one
+  frame settle.
+- The tab tree and the page wait for the demo page's load first.
+- Find Media is filled with demo rows directly, because detection depends
+  on what a real player fetched and when.
+
+`test/live/try_store_view` runs the Qt half on the desktop:
+- every view says it is drawn;
+- the profile is the demo's, and a stand-in personal tree is left
+  untouched;
+- the downloads view shows the demo's four rows.
+
+**Not yet run on a phone**, because none has been on adb in this session.
+The phone's half is the WebView serving the demo site and announcing a
+drawn page, plus the fragment's device commands, which have only met a
+fake adb. The first real run is the test of both.

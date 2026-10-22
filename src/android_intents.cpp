@@ -90,5 +90,12 @@ QString take_view_url() {
 	return url.isValid() ? url.toString() : QString();
 }
 
+QString store_view() {
+	const QJniObject v = QJniObject::callStaticObjectMethod(
+	  k_cls, "storeView", "(Landroid/app/Activity;)Ljava/lang/String;",
+	  QNativeInterface::QAndroidApplication::context().object());
+	return v.isValid() ? v.toString() : QString();
+}
+
 }  // namespace android_intents
 #endif   // Q_OS_ANDROID

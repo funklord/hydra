@@ -301,6 +301,14 @@ public:
 	// a different answer.
 	const capability_peek &peek() const { return m_capability_peek; }
 
+	// For the store screenshots: log `store-view-ready <name>` once this
+	// view's content has actually been drawn, not merely loaded. See
+	// `store_view.h`.
+	void announce_when_drawn(const QString &name) const;
+	// Serve the store screenshots' demo site, `https://hydra.example/`, from
+	// the package. Off unless a screenshot run asks for it.
+	static void enable_store_demo();
+
 	void set_desktop_site(bool on) override;
 	bool desktop_site() const override { return m_desktop_site; }
 	void set_navigation_decider(navigation_decider fn) override {
