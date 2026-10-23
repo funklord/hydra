@@ -1357,7 +1357,18 @@ void android_view::inject_main_world_script(const QString &name,
 	// The same thing here. Android has one world, so the distinction the desktop
 	// draws between an isolated script and a main-world one does not exist, and
 	// both land in the page's own globals.
-	set_script(name, source);
+	//
+	// **At document start, in every frame**, as the desktop injects it
+	// (`QWebEngineScript::DocumentCreation`, `setRunsOnSubFrames`). This was
+	// a main-frame script, delivered with the batch `onPageStarted` runs --
+	// after the page's inline scripts. YouTube puts the first video's player
+	// data, its ads with it, inline in the page, so scriptlets that arrive
+	// after it can only catch what comes later -- the likeliest reason the
+	// holder saw ads come back on the phone, 2026-10-23, after a first look
+	// had shown none. The frame-script channel is `addDocumentStartJavaScript`
+	// for every origin; where the device's WebView lacks it,
+	// `injected_scripts` still carries these in the late batch, as before.
+	set_script(name, source, /*subframes=*/true);
 }
 
 // **Replace, never append**, for the reason the desktop injector gives: these
