@@ -39340,4 +39340,5 @@ each request through Android's own HTTPS from Java:
   lists.
 - No `tls:` line appeared, because `ensure_backend` is silent when Qt's
   TLS already works, which it did once OpenSSL was unpacked beside it.
-- YouTube without ads is for the holder to confirm.
+- The holder then watched YouTube on the phone and saw no ads, where
+  before every video had them.
