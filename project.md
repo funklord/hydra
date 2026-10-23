@@ -39332,8 +39332,12 @@ each request through Android's own HTTPS from Java:
   Qt's OpenSSL plugin by hand, because Qt does not on Android (measured
   in bbq-predictor), and logs a `tls:` line either way.
 
-**Built, not yet run on the phone:** it dropped off adb before the
-install. What to check there:
-- a `tls: OpenSSL 3.5.7 ...` line in logcat;
-- `files/filters-subscribed/` filling with the six lists;
-- YouTube without ads.
+**Run on the phone, 2026-10-23:**
+- Android's loader logged `libssl_3.so` loading from the app's own
+  library directory.
+- The first subscription check, 60 seconds after start, stored all six
+  lists in `files/filters-subscribed/`: 5.5 MB, EasyList and five uBlock
+  lists.
+- No `tls:` line appeared, because `ensure_backend` is silent when Qt's
+  TLS already works, which it did once OpenSSL was unpacked beside it.
+- YouTube without ads is for the holder to confirm.
