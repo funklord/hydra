@@ -38958,7 +38958,10 @@ because Qt keeps its layout clear of the inset.
 - **Re-hiding:** the bar is hidden again on every
   `QGuiApplication::focusWindowChanged`, since in beerssh a dialog closing
   brought it back. No capture shows it back, but no run here closes a
-  dialog, so the case it guards is untested on hydra.
+  dialog, so the case it guards is untested on hydra. **Tested on the Fold
+  the next day**: Find Media opened as a store view, then closed with
+  Back. The captures before and after both show no status bar, with
+  hydra's window holding focus in each.
 
 ## Find Media looks the page up itself, and keeps the answer per page
 
