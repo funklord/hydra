@@ -6,6 +6,8 @@
 #include "request_filter.h"
 #include "qtwebengine_interceptor.h"
 
+#include <QtWebEngineCore/qtwebenginecoreglobal.h>
+#include <QVersionNumber>
 #include <QWebEngineDownloadRequest>
 #include <QStandardPaths>
 #include <QFileInfo>
@@ -146,14 +148,21 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 	m_profile->setHttpUserAgent(
 	  user_agent::corrected(m_profile->httpUserAgent()));
 	// The hints, to agree with it; the brand list by name, since only a
-	// QtWebEngine carrying engine-patch/0001 has it.
+	// QtWebEngine 6.8 carrying engine-patch/0001 has the property.
 	if (QWebEngineClientHints *hints = m_profile->clientHints()) {
 		hints->setFullVersion(user_agent::claimed_full_version());
 		hints->setFullVersionList(user_agent::claimed_brands(true));
-		if (!hints->setProperty("brandVersionList", user_agent::claimed_brands(false)))
+		// **From Qt 6.10 the full version list sets the brand list too**
+		// (`PopulateBrandVersionLists`, read in the 6.10.0 and 6.12 sources),
+		// so there the patch's property is neither present nor needed, and
+		// only an older engine without it is worth a word.
+		if (!hints->setProperty("brandVersionList", user_agent::claimed_brands(false)) &&
+		    QVersionNumber::fromString(QLatin1String(qWebEngineVersion())) <
+		        QVersionNumber(6, 10))
 			qWarning("identity: this QtWebEngine cannot set the brand list, so "
 			         "Sec-CH-UA and navigator.userAgentData.brands still name the "
-			         "engine's own Chromium (hydra engine-patch 0001 is not in it)");
+			         "engine's own Chromium (hydra engine-patch 0001 is not in it, "
+			         "and Qt sets it itself only from 6.10)");
 	}
 
 	// **And what languages it asks for, which was nothing at all.** Qt sets no

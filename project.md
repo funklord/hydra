@@ -38708,7 +38708,7 @@ world.
 | `--remote-debugging-pipe` | Named in Qt's library; no answer through `QTWEBENGINE_CHROMIUM_FLAGS`. |
 | A debugging port | Would work; **refused**, since any local process, the other account's included, could drive the browser. |
 | A hidden DevTools front end (`setDevToolsPage`), sending `Emulation.setUserAgentOverride` | Every surface says 140, workers and frames too, and it survives navigation. But the page can see it (a console getter fires), `debugger;` paused a page 9.7 s with skip-all-pauses set, pages without it stopped reporting, the probe is blocked, it costs about 142 MB a tab, and it **does not survive detaching**. Rejected. |
-| `QWebEngineClientHints` (Qt 6.8) | Sets the high-entropy hints; the brand list (`Sec-CH-UA`, `navigator.userAgentData.brands`) stayed at 122. Qt's documentation says a set list is always extended with the engine's real Chromium and a random brand, through 6.10. |
+| `QWebEngineClientHints` (Qt 6.8) | Sets the high-entropy hints; the brand list (`Sec-CH-UA`, `navigator.userAgentData.brands`) stayed at 122. Qt's documentation says a set list is always extended with the engine's real Chromium and a random brand. **The code says otherwise from 6.10** (see the 2026-10-23 entry below). |
 | The request interceptor setting `Sec-CH-UA` | **Works**: both the page's and a cross-origin frame's requests arrived as 140. |
 
 So every HTTP surface can be made consistent today: the profile's user
@@ -39377,3 +39377,31 @@ band on the Fold was its camera cutout and nothing else, as
 `ExpandedClientAreaHint` with the safe area predicted. The x86_64 build also has no
 OpenSSL (`tool/build-openssl-android.sh x86_64` would make one), which
 the store views do not need.
+
+## The brand-list patch is upstream already, since Qt 6.10
+
+The holder chose to prepare `engine-patch/0001` for Qt. Porting it to
+QtWebEngine's `dev` branch (2026-10-22, `03006ab`) found it is not needed
+there:
+- **Setting the full version list fills the brand list too.**
+  `ProfileAdapter`'s `PopulateBrandVersionLists` takes the brands given to
+  `fullVersionList` and fills `brand_version_list` from them, each at its
+  major version, in an order shuffled once per Chromium major.
+- **Only the brands given are used.** Qt's documentation still says a set
+  list is "extended by the currently used version of Chromium and a
+  semi-random brand"; the code does not do that.
+- **It shipped in 6.10.0.** Read on Qt's git: present at `v6.10.0`,
+  `v6.10.2` and in the 6.12 kit's sources, absent at `v6.9.0`.
+
+So nothing goes to Qt. hydra already sets `fullVersionList` to the brands
+it claims, so on QtWebEngine 6.10 or newer it gets the right brand list,
+in the header, pages and workers, with no patch. The `brandVersionList`
+property is absent there, and hydra now warns about that only on an engine
+older than 6.10. Debian's backports carry `qt6-webengine` 6.10.2. Moving
+to it would retire the patched 6.8 build and the hold that protects it.
+That move is the holder's to make; until then `engine-patch/0001` stays
+in force. Not yet measured on a 6.10 engine.
+
+The claim this replaces, "no Qt through 6.10 can", was in `user_agent.h`.
+It came from Qt's documentation rather than its code, and is corrected
+there too.
