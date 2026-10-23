@@ -77,3 +77,6 @@ debian/hydra/
 debian/*.substvars
 debian/*.debhelper.log
 debian/debhelper-build-stamp
+
+# OpenSSL built for Android by tool/build-openssl-android.sh: build output.
+deps/

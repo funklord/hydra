@@ -891,8 +891,14 @@ android-build: android-check android-gradle-check
 	ANDROID_SDK_ROOT=$(ANDROID_SDK_ROOT) ANDROID_NDK_ROOT=$(ANDROID_NDK_ROOT) \
 	  JAVA_HOME=$(JAVA_HOME) \
 	  $(MAKE) --no-print-directory -C $(ANDROID_BUILD_DIR) -j$(JOBS)
+	@# **Native libraries unpacked on install**, because Qt's OpenSSL backend
+	@# finds libssl_3.so by scanning a directory, which it cannot do inside
+	@# the APK. androiddeployqt writes legacyPackaging=false into
+	@# gradle.properties and qmake has no setting for it; Gradle lets this
+	@# environment variable override that file. The cost, measured in
+	@# bbq-predictor: every native library on the phone twice.
 	ANDROID_SDK_ROOT=$(ANDROID_SDK_ROOT) ANDROID_NDK_ROOT=$(ANDROID_NDK_ROOT) \
-	  JAVA_HOME=$(JAVA_HOME) \
+	  JAVA_HOME=$(JAVA_HOME) ORG_GRADLE_PROJECT_legacyPackaging=true \
 	  $(MAKE) --no-print-directory -C $(ANDROID_BUILD_DIR) apk
 
 # **The vendored yt-dlp, fetched when it is missing, never moved.** The

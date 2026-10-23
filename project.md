@@ -39302,3 +39302,38 @@ that did not say what they were.
   row**, "Also on this page (n)". This was the holder's choice over hiding
   them or leaving them at the top. With no lookup there is nothing to set
   them apart from, and they stay at the top.
+
+## Android: OpenSSL is bundled, so hydra's own requests work there
+
+The holder saw YouTube ads on the phone, 2026-10-23. The phone had
+subscribed to six filter lists and stored none of them: no
+`files/filters-subscribed/` directory existed. Qt for Android ships its
+OpenSSL plugin but not OpenSSL, and an app may not use the system's copy,
+so every HTTPS request hydra made itself failed. Pages loaded, because the
+WebView has TLS of its own, so nothing looked wrong. Filter lists, and
+anything else hydra fetches itself on Android (AI requests among them),
+never arrived.
+
+The holder chose to bundle OpenSSL, as bbq-predictor did, over routing
+each request through Android's own HTTPS from Java:
+- **`tool/build-openssl-android.sh`**, copied from bbq-predictor, builds
+  OpenSSL from `apt-get source openssl` (3.5.7 here) with the kit's NDK
+  (r27c) into `deps/`, which is build output. It checks the result is
+  aarch64, carries the `_3.so` names Qt's backend asks for, and is 16 KB
+  aligned.
+- **`hydra.pro`** ships `libssl_3.so` and `libcrypto_3.so` when they
+  exist, and warns when they don't.
+- **The Android build sets `ORG_GRADLE_PROJECT_legacyPackaging=true`**,
+  so native libraries are unpacked on install, where Qt's backend can scan
+  for them. `androiddeployqt` writes `legacyPackaging=false` into
+  `gradle.properties`, and the environment variable outranks that file;
+  the built manifest reads `extractNativeLibs=true`.
+- **`android_tls::ensure_backend`**, called first thing in `main`, loads
+  Qt's OpenSSL plugin by hand, because Qt does not on Android (measured
+  in bbq-predictor), and logs a `tls:` line either way.
+
+**Built, not yet run on the phone:** it dropped off adb before the
+install. What to check there:
+- a `tls: OpenSSL 3.5.7 ...` line in logcat;
+- `files/filters-subscribed/` filling with the six lists;
+- YouTube without ads.

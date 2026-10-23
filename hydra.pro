@@ -170,6 +170,22 @@ qtHaveModule(dbus) {
 
 android {
 	ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
+	# **OpenSSL, which Qt for Android does not ship.** Without it every
+	# request hydra makes itself fails -- found 2026-10-23, when the phone
+	# had subscribed to six filter lists and fetched none, so it blocked no
+	# ads. The WebView has TLS of its own, which is why pages loaded and
+	# nothing else looked wrong. Built by tool/build-openssl-android.sh from
+	# the distribution's source; the _3 suffix is the name Qt's OpenSSL
+	# backend asks for. Conditional, so a tree that has not built it still
+	# packages, and says why it cannot fetch.
+	HYDRA_SSL_LIB = $$PWD/deps/android/$$ANDROID_TARGET_ARCH/lib
+	exists($$HYDRA_SSL_LIB/libssl_3.so) {
+		ANDROID_EXTRA_LIBS += $$HYDRA_SSL_LIB/libcrypto_3.so $$HYDRA_SSL_LIB/libssl_3.so
+		message("openssl: bundling $$HYDRA_SSL_LIB")
+	} else {
+		warning("openssl: $$HYDRA_SSL_LIB/libssl_3.so is missing -- the package " \
+		        "will have no TLS. Run tool/build-openssl-android.sh.")
+	}
 	# **Pinned, not left to Qt.** Google Play has accepted only apps
 	# targeting API 36 or later since 2026-08-31. Unset, this came from
 	# Qt 6.12's default, measured as 36 in the built apk with aapt2 -- correct

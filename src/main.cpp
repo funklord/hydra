@@ -33,6 +33,7 @@
 #ifdef Q_OS_ANDROID
 #include "android_dialogs.h"
 #include "android_intents.h"
+#include "android_tls.h"
 #include "store_view.h"
 #endif
 #include "policy_engine.h"
@@ -213,6 +214,8 @@ int main(int argc, char *argv[]) {
 	// Dialogs here were laid out for a desktop and come up wider than a phone
 	// screen, which puts their buttons off the edge with no way to reach them.
 	android_dialogs::install();
+	// TLS before anything fetches: filter lists, AI requests.
+	android_tls::ensure_backend();
 
 	// **A store screenshot run gets the demo profile and nothing else**,
 	// before anything below reads a setting or the tree: what it shows is
