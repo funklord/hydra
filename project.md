@@ -39369,8 +39369,11 @@ A bounded probe on the same AVD found hydra is not the fault:
 The Play skill records beerssh's first emulator run stopping on the same
 dialog.
 
-**Still open:** a clean capture on this AVD, and with it the band
-question from the Fold, whether a display without a cutout shows no
-empty band. That wants a quieter machine. The x86_64 build also has no
+**Captured cleanly the same morning**, when the load dropped to about 14
+for a few minutes: all four views at 1080x1920, the emulator gone
+afterwards. **And it settles the band.** On this display, which has no
+cutout, the menu bar starts at the very top of every picture. The empty
+band on the Fold was its camera cutout and nothing else, as
+`ExpandedClientAreaHint` with the safe area predicted. The x86_64 build also has no
 OpenSSL (`tool/build-openssl-android.sh x86_64` would make one), which
 the store views do not need.
