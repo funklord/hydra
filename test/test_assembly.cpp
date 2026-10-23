@@ -501,11 +501,11 @@ int main(int argc, char **argv) {
 		seen.kind = media_kind::hls;
 		seen.url  = QUrl("https://cdn.invalid/hd/master.m3u8");
 		seen.hint = "hd/master.m3u8";
-		check(media_row_name(seen, "A page", false) == "A page · stream · hd/master.m3u8",
-		      QString("a row seen in the page is named for the page (%1)")
-		          .arg(media_row_name(seen, "A page", false)));
-		check(media_row_name(seen, QString(), false) == "cdn.invalid · stream · hd/master.m3u8",
-		      "and for its host where the page has no title");
+		// **Named by its file, not the page**: the page's title is its
+		// video's, and every sound a page loaded was named as that video.
+		check(media_row_name(seen, "A page", false) == "master.m3u8 · stream · cdn.invalid",
+		      QString("a row seen in the page is named by its file, then kind and "
+		              "host (%1)").arg(media_row_name(seen, "A page", false)));
 		media_item captured;
 		captured.url     = QUrl::fromLocalFile("/tmp/c.webm");
 		captured.origin  = "recorded by Capture";
@@ -526,6 +526,50 @@ int main(int argc, char **argv) {
 		check(media_row_name(looked, "A page", false) == "Odota mua · 1080p60 · H.264 · 258 MB" &&
 		          media_row_name(looked, "A page", true) == "1080p60 · H.264 · 258 MB",
 		      "a looked-up row by its title, and folded under its video without it");
+	}
+
+	// **What is not the video folds away once a lookup found it**, under
+	// one closed row -- the holder, 2026-10-23.
+	section("a page's other media folds under one row beside a found video");
+	{
+		media_detector det;
+		auto seen_file = [](const QString &url) {
+			media_item m;
+			m.url  = QUrl(url);
+			m.hint = QUrl(url).fileName();
+			return m;
+		};
+		det.add_item("v.invalid", seen_file("https://static.invalid/sfx/click.mp3"));
+		det.add_item("v.invalid", seen_file("https://static.invalid/sfx/jingle.mp3"));
+		auto top_texts = [&](media_detector *d) {
+			media_dialog dlg(d, &players, &downloads, &proxy, &tap, &assembly, nullptr);
+			dlg.set_page_title("A video");
+			dlg.set_site("v.invalid", "n1", stream_context{});
+			QStringList out;
+			auto *list = dlg.findChild<QTreeWidget *>();
+			for (int i = 0; list && i < list->topLevelItemCount(); ++i)
+				out << list->topLevelItem(i)->text(0) +
+				         (list->topLevelItem(i)->childCount()
+				            ? QString(" [%1 under it]").arg(list->topLevelItem(i)->childCount())
+				            : QString());
+			return out;
+		};
+		// Newest first, as `add_item` files them.
+		const QStringList alone = { "jingle.mp3 · file · static.invalid",
+		                            "click.mp3 · file · static.invalid" };
+		check(top_texts(&det) == alone,
+		      QString("with nothing looked up, they stand on their own (%1)")
+		          .arg(top_texts(&det).join(" | ")));
+		media_item video;
+		video.url         = QUrl("https://cdn.invalid/v.mp4");
+		video.known_media = true;
+		video.title       = "A video";
+		video.variant     = "720p · H.264";
+		det.replace_vouched("v.invalid", { video });
+		const QStringList with = top_texts(&det);
+		check(with.size() == 2 && with[0] == "A video · 720p · H.264" &&
+		          with[1] == "Also on this page (2) [2 under it]",
+		      QString("beside a found video they fold under one row (%1)").arg(with.join(" | ")));
 	}
 
 	// The cache those rows come from: per page, and only while true.

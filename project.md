@@ -39287,3 +39287,18 @@ parts each row carries (`title`, `variant`, `hint`, `origin`):
   travels in.
 - **The reading's kind and what a row carries** ("picture only, the sound
   is added") go to the row's tooltip, with its type and host.
+
+**Corrected the same night.** Naming a page's rows for the page was wrong.
+A page's title is usually its video's, so every sound effect and jingle
+the page loaded was named as if it were the video. And the two "playing in
+the page" rows, the media tap's, read as more copies of it, with a name
+that did not say what they were.
+
+- **A row seen in the page's requests is named by its file**, then its
+  kind and host: "click.mp3 · file · static.example.com".
+- **A player row says it is the page's player**: "the page's player ·
+  video · 4 MB so far", with a Record button.
+- **Once a lookup has found the video, all of these fold under one closed
+  row**, "Also on this page (n)". This was the holder's choice over hiding
+  them or leaving them at the top. With no lookup there is nothing to set
+  them apart from, and they stay at the top.

@@ -352,6 +352,21 @@ bool media_saving_allowed_on(bool android, const QString &site_host,
 
 QString media_row_name(const media_item &m, const QString &page_title, bool folded) {
 	QStringList parts;
+	// **A row seen in the page's requests is named by its file**, not by the
+	// page: a page's title is usually its video's, and on 2026-10-23 every
+	// sound effect a page loaded was named as if it were that video. Then
+	// what kind it is and where it is served from.
+	if (!m.known_media && !m.hint.isEmpty()) {
+		const QString file = m.url.fileName();
+		parts << (file.isEmpty() ? m.hint : file);
+		parts << (m.kind == media_kind::hls || m.kind == media_kind::dash
+		            ? QStringLiteral("stream")
+		            : m.kind == media_kind::segment ? QStringLiteral("segment")
+		                                            : QStringLiteral("file"));
+		parts << m.url.host();
+		parts.removeAll(QString());
+		return parts.join(QStringLiteral(" · "));
+	}
 	if (!folded)
 		parts << (!m.title.isEmpty() ? m.title
 		          : !page_title.isEmpty() ? page_title

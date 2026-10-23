@@ -95,12 +95,14 @@ struct media_item {
 // when that is not the lookup, then quality, format and size -- whatever
 // is known, nothing guessed. "What it is" is the title a lookup found, or
 // the page's own title. A row folded under its video drops it, since the
-// video's row says it. The parts are joined by a middle dot, written as a
-// slash here to keep the source ASCII:
+// video's row says it. A row seen in the page's requests is the exception:
+// it is named by its file, then its kind and host, since the page's title
+// is usually its video's and that row usually is not. The parts are
+// joined by a middle dot, written as a slash here to keep the source ASCII:
 //
 //     Odota mua / 1080p60 / H.264 / 258 MB
 //     Odota mua / sound only / Opus 160 kbit/s / 4.1 MB
-//     Page title / stream / hd/master.m3u8
+//     click.mp3 / file / static.example.com
 //     Page title / recorded by Capture / 12 MB
 QString media_row_name(const media_item &m, const QString &page_title, bool folded);
 

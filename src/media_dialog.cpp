@@ -415,8 +415,29 @@ void media_dialog::repopulate() {
 	const int top = media_detector::best_picture(items, k_save_max_height);
 	const bool grouped = top >= 0 && !items[top].group.isEmpty();
 	QTreeWidgetItem *video = nullptr;
+	// **What is not the video folds away once a lookup found the video** --
+	// the holder, 2026-10-23, after page sounds and player recordings stood
+	// beside it named as if they were it. Under one closed row, "Also on
+	// this page"; with no lookup there is nothing to set them apart from,
+	// and they stay where they are.
+	const bool looked_up = std::any_of(items.cbegin(), items.cend(),
+	                                   [](const media_item &m) { return m.known_media; });
+	QTreeWidgetItem *also = nullptr;
+	auto also_row = [this, &also] {
+		if (!also) {
+			also = new QTreeWidgetItem(m_list);
+			also->setToolTip(0, "Found on the page itself rather than by the lookup: "
+			                    "sounds, other files, and what its player is playing.");
+		}
+		return also;
+	};
+	QList<int> elsewhere;
 	for (int i = 0; i < items.size(); ++i) {
 		const media_item &item = items[i];
+		if (looked_up && !item.known_media && !item.hint.isEmpty()) {
+			elsewhere << i;   // after the video's rows, under one row
+			continue;
+		}
 		if (!grouped || item.group.isEmpty() || !item.has_video) {
 			add_row(nullptr, item, name_of(item, false));
 			continue;
@@ -442,7 +463,8 @@ void media_dialog::repopulate() {
 					add_row(size, items[k], name_of(items[k], true));
 		}
 	}
-	m_list->setRootIsDecorated(video != nullptr);
+	for (int i : elsewhere)
+		add_row(also_row(), items[i], name_of(items[i], false));
 	// What the tap can see but no URL can name (sec 11.6). These rows are not
 	// streams anyone can fetch -- the bytes exist only inside the player -- so
 	// the one thing offered is to record them.
@@ -456,11 +478,17 @@ void media_dialog::repopulate() {
 		// that can be done with it.
 		if (!media_saving_allowed(m_site, QUrl(), nullptr))
 			continue;
-		auto *row = new QTreeWidgetItem(m_list);
+		auto *row = looked_up ? new QTreeWidgetItem(also_row()) : new QTreeWidgetItem(m_list);
 		row->setIcon(0, mark_icon(row_mark::playing, m_list->palette()));
+		// Named for what it is -- the page's own player, and what it plays
+		// -- since "playing in the page" under the video's title read as
+		// two more copies of the video.
 		media_item playing_row;
-		playing_row.origin  = QStringLiteral("playing in the page");
-		playing_row.variant = QLocale().formattedDataSize(s.bytes) + QStringLiteral(" so far");
+		playing_row.title   = QStringLiteral("the page's player");
+		playing_row.variant = (s.mime.startsWith(QLatin1String("audio")) ? QStringLiteral("audio")
+		                                                                 : QStringLiteral("video")) +
+		                      QStringLiteral(" · ") + QLocale().formattedDataSize(s.bytes) +
+		                      QStringLiteral(" so far");
 		row->setText(0, media_row_name(playing_row, m_page_title, false));
 		row->setText(1, m_site);
 		row->setToolTip(0, QString("Playing in the page as %1, with no address to fetch: "
@@ -469,7 +497,7 @@ void media_dialog::repopulate() {
 		auto *cell   = new QWidget(m_list);
 		auto *layout = new QHBoxLayout(cell);
 		layout->setContentsMargins(0, 0, 0, 0);
-		auto *rec = new QPushButton("⏺ Capture", cell);
+		auto *rec = new QPushButton(narrow ? "⏺" : "⏺ Record", cell);
 		rec->setToolTip("Record what the player is fed. The page reloads first, "
 		                 "so the recording starts from the beginning.");
 		layout->addWidget(rec);
@@ -479,6 +507,10 @@ void media_dialog::repopulate() {
 		});
 		m_list->setItemWidget(row, 2, cell);
 	}
+
+	if (also)
+		also->setText(0, QString("Also on this page (%1)").arg(also->childCount()));
+	m_list->setRootIsDecorated(video != nullptr || also != nullptr);
 
 	// Host and the button cell take the width they need; Name is the
 	// filling column and absorbs whatever is left.
