@@ -39346,3 +39346,28 @@ each request through Android's own HTTPS from Java:
   TLS already works, which it did once OpenSSL was unpacked beside it.
 - The holder then watched YouTube on the phone and saw no ads, where
   before every video had them.
+
+## The shared store emulator, first runs (2026-10-23)
+
+`make android-store-screenshots` now captures on one shared emulator, the
+Nexus 5X AVD `store`, with no display cutout. Its first run for hydra
+failed: "tabs never logged store-view-ready in 120s". The device log held
+no line from hydra after Qt started, not even the `tls:` warning an
+x86_64 build without OpenSSL prints first thing in `main`.
+
+A bounded probe on the same AVD found hydra is not the fault:
+- started normally, it drew its window;
+- started as the `page` store view, it loaded the demo site and logged
+  `store-view-ready page` after about 20 seconds;
+- what stood in front both times was the emulator's own "System UI isn't
+  responding" dialog, with the machine at a load average of about 190
+  from other work and the emulator on software graphics.
+
+The Play skill records beerssh's first emulator run stopping on the same
+dialog.
+
+**Still open:** a clean capture on this AVD, and with it the band
+question from the Fold, whether a display without a cutout shows no
+empty band. That wants a quieter machine. The x86_64 build also has no
+OpenSSL (`tool/build-openssl-android.sh x86_64` would make one), which
+the store views do not need.
