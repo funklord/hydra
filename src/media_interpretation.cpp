@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QTimer>
 
 namespace {
 
@@ -120,6 +121,21 @@ void media_interpretation::start() {
 	}
 	m_waiting = true;
 	m_provider->send(system_prompt(), prompt_for(m_evidence));
+	// **Bounded.** A model that loads only partly onto the GPU, on a busy
+	// machine, crawled through one reading for minutes on 2026-10-23, and
+	// the dialog said "Reading what it is..." all that while. Its answers had
+	// taken 9 and 17 seconds; past the limit the rules' reading stands, and
+	// says why.
+	QTimer::singleShot(m_reply_limit_ms, this, [this] {
+		if (!m_waiting)
+			return;
+		m_waiting = false;
+		if (m_provider)
+			m_provider->cancel();
+		media_reading r = by_rules(m_evidence);
+		r.rejected << QString("model: no answer within %1 seconds").arg(m_reply_limit_ms / 1000.0);
+		emit finished(r);
+	});
 }
 
 void media_interpretation::on_reply(const QString &reply) {

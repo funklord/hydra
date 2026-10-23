@@ -470,7 +470,17 @@ void media_dialog::repopulate() {
 		}
 		if (video)
 			continue;   // the whole group is built once, where it first appears
-		video = add_row(nullptr, items[top], name_of(items[top]));
+		// **The video's row is named for the video** -- the holder,
+		// 2026-10-23: with the title only above the list, the row a person
+		// presses read "1080p" and nothing said it was the video. Its title,
+		// then which version it plays; the sizes under it keep their short
+		// names, and the line above the list is not needed.
+		QString plain = shared;
+		if (plain.startsWith('[') && plain.indexOf("] ") > 0)
+			plain = plain.mid(plain.indexOf("] ") + 2);
+		video = add_row(nullptr, items[top],
+		                plain.isEmpty() ? items[top].label
+		                                : plain + QStringLiteral(" · ") + items[top].variant);
 		// The sizes, largest first, each led by its chosen format.
 		QList<int> lead_rows;
 		for (int j = 0; j < items.size(); ++j)
@@ -487,6 +497,8 @@ void media_dialog::repopulate() {
 		}
 	}
 	m_list->setRootIsDecorated(video != nullptr);
+	if (video)
+		m_title->hide();
 	// What the tap can see but no URL can name (sec 11.6). These rows are not
 	// streams anyone can fetch -- the bytes exist only inside the player -- so
 	// the one thing offered is to record them.

@@ -62,6 +62,11 @@ struct media_reading {
 class media_interpretation : public QObject {
 	Q_OBJECT
 public:
+	// How long a model gets before the rules' reading is used instead.
+	static constexpr int k_reply_limit_ms = 60000;
+	// A shorter one, for a test that cannot wait a minute.
+	void set_reply_limit(int ms) { m_reply_limit_ms = ms; }
+
 	media_interpretation(ai_provider *provider, const media_evidence &evidence,
 	                     QObject *parent = nullptr);
 	~media_interpretation() override;
@@ -90,6 +95,7 @@ signals:
 	void finished(const media_reading &reading);
 
 private:
+	int m_reply_limit_ms = k_reply_limit_ms;
 	void on_reply(const QString &reply);
 	void on_failed(const QString &error);
 

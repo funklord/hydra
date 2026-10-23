@@ -148,7 +148,15 @@ void ollama_provider::send(const QString &system_prompt, const QString &user_pro
 	connect(reply, &QNetworkReply::finished, this, [this, reply] {
 		reply->deleteLater();
 		if (reply->error() != QNetworkReply::NoError) {
-			emit failed(QString("Ollama request failed: %1").arg(reply->errorString()));
+			// **Ollama's own reason, where it gave one.** A 500 said only
+			// "Internal Server Error" while the body said why -- on
+			// 2026-10-23, that the model could not be loaded for want of
+			// GPU memory, which is the one thing a person can act on.
+			const QString reason = QJsonDocument::fromJson(reply->readAll())
+			                           .object().value("error").toString().trimmed();
+			emit failed(reason.isEmpty()
+			              ? QString("Ollama request failed: %1").arg(reply->errorString())
+			              : QString("Ollama could not answer: %1").arg(reason));
 			return;
 		}
 		const QJsonObject o = QJsonDocument::fromJson(reply->readAll()).object();

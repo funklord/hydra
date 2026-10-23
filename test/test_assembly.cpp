@@ -397,14 +397,14 @@ int main(int argc, char **argv) {
 		      QString("two rows: the video and its sound (%1)")
 		          .arg(list ? list->topLevelItemCount() : -1));
 		QTreeWidgetItem *video = list ? list->topLevelItem(0) : nullptr;
-		check(video && video->text(0) == "1080p60 · H.264",
-		      QString("the video's row is what Save takes, the best up to 1080p (%1)")
-		          .arg(video ? video->text(0) : QString()));
-		// **The title once, above the list**, since every row shared it.
+		// **Named for the video, then the version it plays** -- the holder,
+		// 2026-10-23, after the title had stood only above the list.
+		check(video && video->text(0) == "Clip · 1080p60 · H.264",
+		      QString("the video's row is the video, and what Save takes, the best "
+		              "up to 1080p (%1)").arg(video ? video->text(0) : QString()));
 		auto *title = dlg.findChild<QLabel *>("media_title");
-		check(title && !title->isHidden() && title->text() == "Clip (video)",
-		      QString("the shared title is said once, above the rows (%1)")
-		          .arg(title ? title->text() : QString()));
+		check(title && title->isHidden(),
+		      "so no line above the list repeats the title");
 		check(list && list->topLevelItemCount() > 1 &&
 		          list->topLevelItem(1)->text(0) == "opus 160 kbit/s · sound only",
 		      QString("and the sound's row is named without it (%1)")

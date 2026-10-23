@@ -144,6 +144,29 @@ int main(int argc, char **argv) {
 		check(spy.value(0).value(0).toBool(), "carrying the result");
 	}
 
+	// **Ollama's own reason, not the status line's.** On 2026-10-23 a 500 was
+	// reported as "Internal Server Error" while Ollama's body said the model
+	// could not be loaded for want of GPU memory.
+	section("a failed request says Ollama's reason");
+	{
+		ollama_stub stub;
+		const QString url = stub.start();
+		stub.generate_status = 500;
+		stub.generate_body =
+		  R"({"error":"llama runner process has terminated: unable to allocate CUDA0 buffer"})";
+		ollama_provider p;
+		p.set_endpoint(QUrl(url));
+		QString got;
+		QEventLoop loop;
+		QObject::connect(&p, &ai_provider::failed, [&](const QString &e) { got = e; loop.quit(); });
+		QObject::connect(&p, &ai_provider::finished, [&](const QString &) { loop.quit(); });
+		QTimer::singleShot(10000, &loop, &QEventLoop::quit);
+		p.send("system", "prompt");
+		loop.exec();
+		check(got.contains("unable to allocate CUDA0 buffer"),
+		      QString("the reason is said (%1)").arg(got));
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

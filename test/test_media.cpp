@@ -14,6 +14,9 @@
 #include "reading_log.h"
 
 #include <QCoreApplication>
+#include "ai_provider.h"
+#include <QTimer>
+#include <QEventLoop>
 #include <QJsonObject>
 #include <QJsonDocument>
 #include <QDateTime>
@@ -201,6 +204,44 @@ int main(int argc, char **argv) {
 		const QJsonObject o = QJsonDocument::fromJson(R"({"title":"t","age_limit":18})").object();
 		check(media_evidence::from_json(QJsonDocument(o).toJson()).age_limit == 18,
 		      "the rating is read from yt-dlp's answer");
+	}
+
+	// **A model that never answers does not hold the reading for ever.** On
+	// 2026-10-23 Ollama crawled through one for minutes on a busy machine.
+	section("a model that does not answer in time gives way to the rules");
+	{
+		// Says nothing, ever, and records whether it was told to stop.
+		class silent : public ai_provider {
+		public:
+			bool cancelled = false;
+			QString name() const override { return "Silent"; }
+			bool available() const override { return true; }
+			bool is_external() const override { return false; }
+			void send(const QString &, const QString &) override {}
+			void cancel() override { cancelled = true; }
+		};
+		silent quiet;
+		media_evidence ev;
+		ev.title    = "A title";
+		ev.uploader = "Someone";
+		media_interpretation step(&quiet, ev);
+		step.set_reply_limit(200);
+		media_reading got;
+		bool done = false;
+		QObject::connect(&step, &media_interpretation::finished,
+		                 [&](const media_reading &r) { got = r; done = true; });
+		step.start();
+		QEventLoop loop;
+		QTimer::singleShot(3000, &loop, &QEventLoop::quit);
+		QTimer poll;
+		QObject::connect(&poll, &QTimer::timeout, [&] { if (done) loop.quit(); });
+		poll.start(20);
+		loop.exec();
+		check(done && got.title == "A title" &&
+		          got.rejected.join(";").contains("no answer within"),
+		      QString("the rules' reading stands, and says why (%1)")
+		          .arg(got.rejected.join("; ")));
+		check(quiet.cancelled, "and the model is told to stop");
 	}
 
 	section("a title holding the artist's name or a tag is flagged, not rejected");

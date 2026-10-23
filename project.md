@@ -39241,3 +39241,21 @@ name until there is a file, and the address only when there is no name.
 Checked while here: on that site the plain files and the streams both
 answered with ordinary requests and yt-dlp's headers (206 for the first
 kilobyte), so only the page needs impersonation, not the media.
+
+**Then, the same night:**
+- **The video's row is named for the video.** The holder found the title
+  "applied only to the top of the window": the row a person presses read
+  "1080p". It now reads "<title> · <the version it plays>", the sizes
+  under it keep their short names, and the line above the list is not
+  shown when the rows form a video.
+- **A reading waits 60 seconds for the model, then the rules' reading
+  stands**, with "model: no answer within 60 seconds" among the rejected.
+  Ollama's log showed two YouTube readings taking 7 min 51 s and
+  10 min 3 s: the 14B model fitted only partly on the RTX 3060 (2.8 GB on
+  the CPU) on a machine at load 180. Its answers before that had taken 9
+  and 17 seconds.
+- **A failed request says Ollama's reason.** A 500 had reached the person
+  as "Internal Server Error", while Ollama's body said why: the model
+  could not be loaded, `cudaMalloc failed: out of memory` for 8.1 GB. That
+  is the part someone can act on, by freeing the GPU or choosing a smaller
+  routine model in Settings.

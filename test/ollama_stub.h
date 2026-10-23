@@ -27,6 +27,9 @@ class ollama_stub : public QTcpServer {
 public:
 	QStringList models = { QStringLiteral("llama3") };
 	QStringList seen;   // the paths asked for, so a suite can say what ran
+	// What /api/generate answers: 404 unless a suite says otherwise.
+	int        generate_status = 404;
+	QByteArray generate_body;
 
 	// The base url, once listening. Empty when it could not.
 	QString start() {
@@ -57,6 +60,15 @@ protected:
 			  QString::fromUtf8(head.mid(sp, head.indexOf(' ', sp) - sp));
 			seen << path;
 
+			if (path.startsWith(QLatin1String("/api/generate")) && generate_status != 404) {
+				s->write("HTTP/1.1 " + QByteArray::number(generate_status) +
+				          " Status\r\nContent-Type: application/json\r\nContent-Length: " +
+				          QByteArray::number(generate_body.size()) +
+				          "\r\nConnection: close\r\n\r\n" + generate_body);
+				s->flush();
+				s->disconnectFromHost();
+				return;
+			}
 			if (!path.startsWith(QLatin1String("/api/tags"))) {
 				s->write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n"
 				          "Connection: close\r\n\r\n");
