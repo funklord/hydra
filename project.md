@@ -39259,3 +39259,31 @@ kilobyte), so only the page needs impersonation, not the media.
   could not be loaded, `cudaMalloc failed: out of memory` for 8.1 GB. That
   is the part someone can act on, by freeing the GPU or choosing a smaller
   routine model in Settings.
+
+## One name pattern for every row in Find Media
+
+The holder, 2026-10-23: "some entries have names, some don't, some are
+descriptions." There were six sources, each naming its rows its own way:
+- **lookup:** "[kind] Title · variant · carries";
+- **page requests:** a fragment of the address, "hd/master.m3u8";
+- **the site's extractor:** "Learned · hls";
+- **Capture:** "Captured · 12 MB";
+- **playing in the page:** "Playing · video/mp4 · 4 MB buffered";
+- **Watch from the downloads list:** the file's name.
+
+The holder chose one pattern, built in one place, `media_row_name`, from
+parts each row carries (`title`, `variant`, `hint`, `origin`):
+
+> what it is · where it came from (when not the lookup) · quality ·
+> format · size
+
+- **What it is** is the title a lookup found, else the page's own title,
+  else the host.
+- **A row folded under its video** drops the title, because the video's
+  row says it.
+- **Unknown details are left out**, not guessed.
+- **Sound is named by its codec** ("Opus", "AAC", via
+  `ytdlp_resolver::audio_codec_name`), not by the file extension it
+  travels in.
+- **The reading's kind and what a row carries** ("picture only, the sound
+  is added") go to the row's tooltip, with its type and host.

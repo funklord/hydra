@@ -23,6 +23,7 @@ struct media_format {
 	qint64  filesize = -1;   // -1 when unknown
 	double  abr      = 0;    // the sound's bitrate in kbit/s, 0 when unknown
 	QString vcodec;          // "avc1.64002A", "vp09.00.41.08", "av01.0.09M.08"
+	QString acodec;          // "opus", "mp4a.40.2"
 	double  fps      = 0;
 	bool    has_video = true;
 	bool    has_audio = true;
@@ -140,6 +141,8 @@ public:
 	static QString picture_group(const media_format &f);
 	// The codec as a person knows it: "H.264", "VP9", "AV1", "H.265".
 	static QString codec_name(const QString &vcodec);
+	// The same for sound: "Opus", "AAC", "Vorbis", "MP3"; empty when unknown.
+	static QString audio_codec_name(const QString &acodec);
 	// Which format of each group leads, as indexes into `formats`. **The
 	// most compatible, by the holder's choice**: a file over a stream, then
 	// H.264, VP9, AV1 -- H.264 plays everywhere and joins M4A sound without

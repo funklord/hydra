@@ -2441,6 +2441,7 @@ void main_window::open_media() {
 				toggle_capture();
 		});
 	});
+	dlg.set_page_title(v->page_title());
 	dlg.set_site(v->url().host(), node_id, ctx);
 	// Looked up as it opens, from the cache where the answer is still good.
 	look_up_media(false);
@@ -7131,6 +7132,7 @@ int main_window::apply_extractor(const QString &host, const QUrl &page) {
 	item.site_host = host;
 	item.headers   = v.result.headers;   // the whole point of asking for them
 	item.label     = QString("Learned · %1").arg(v.result.kind);
+	item.origin    = QStringLiteral("from this site's extractor");
 	m_media->add_item(host, item);
 	return 1;
 }
@@ -7268,6 +7270,8 @@ void main_window::toggle_capture() {
 		item.site_host = v->url().host();
 		item.label     = QString("Captured · %1")
 		                     .arg(QLocale().formattedDataSize(got));
+		item.origin    = QStringLiteral("recorded by Capture");
+		item.variant   = QLocale().formattedDataSize(got);
 		m_media->add_item(item.site_host, item);
 		m_status->showMessage(QString("Captured %1 to %2")
 		                          .arg(QLocale().formattedDataSize(got),
@@ -7733,8 +7737,13 @@ void main_window::list_resolved_media(const QString &host, const QUrl &page,
 				what << ytdlp_resolver::codec_name(f.vcodec) +
 				          (stream ? QStringLiteral(" stream") : QString());
 			} else {
-				what << f.ext + (f.abr > 0 ? QString(" %1 kbit/s").arg(qRound(f.abr))
-				                           : QString());
+				// The sound by its codec, as the picture is: "Opus 160
+				// kbit/s" rather than the file extension it happens to
+				// travel in.
+				const QString codec = ytdlp_resolver::audio_codec_name(f.acodec);
+				what << (codec.isEmpty() ? f.ext : codec) +
+				          (f.abr > 0 ? QString(" %1 kbit/s").arg(qRound(f.abr)) : QString()) +
+				          (stream ? QStringLiteral(" stream") : QString());
 			}
 			if (f.filesize > 0)
 				what << QLocale().formattedDataSize(f.filesize);
@@ -7745,6 +7754,11 @@ void main_window::list_resolved_media(const QString &host, const QUrl &page,
 			item.label      = QString("[%1] %2 · %3%4")
 			                      .arg(kind, m.title.isEmpty() ? host : m.title,
 			                           item.variant, carries);
+			// The parts the row's name is made of (`media_row_name`); what
+			// the reading thinks it is, and what the row carries, go to the
+			// tooltip.
+			item.title = m.title.isEmpty() ? host : m.title;
+			item.about = QString("Read as %1%2.").arg(kind, carries);
 			rows << item;
 			++added;
 		}

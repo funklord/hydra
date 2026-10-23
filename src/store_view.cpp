@@ -196,6 +196,8 @@ void main_window::show_store_view(const QString &name) {
 			m.variant     = QString("%1p · %2 · %3").arg(d.height).arg(d.codec, d.size);
 			m.label       = QString("[video] Harbour at dusk · %1 · picture only, the "
 			                        "sound is added").arg(m.variant);
+			m.title       = "Harbour at dusk";
+			m.about       = "Read as video · picture only, the sound is added.";
 			m.rank        = 200000 + d.height * 4 + (d.lead ? 2 : 0);
 			found << m;
 		}
@@ -206,8 +208,9 @@ void main_window::show_store_view(const QString &name) {
 		s.file_name   = "harbour-at-dusk.m4a";
 		s.has_video   = false;
 		s.known_media = true;
-		s.variant     = "m4a 129 kbit/s · 4.1 MB";
+		s.variant     = "AAC 129 kbit/s · 4.1 MB";
 		s.label       = "[video] Harbour at dusk · " + s.variant + " · sound only";
+		s.title       = "Harbour at dusk";
 		s.rank        = 100000;
 		found << s;
 		m_lookups.finish(QUrl(QString("https://%1/harbour.html").arg(store_view::host())),

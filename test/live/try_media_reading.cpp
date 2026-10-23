@@ -183,7 +183,7 @@ int main(int argc, char *argv[]) {
 						for (int i = 0; i < list->topLevelItemCount(); ++i) {
 							QTreeWidgetItem *row = list->topLevelItem(i);
 							if (!row->toolTip(0).startsWith("File") ||
-							    !row->text(0).contains("the sound is added"))
+							    !row->toolTip(0).contains("the sound is added"))
 								continue;
 							if (QWidget *cell = list->itemWidget(row, 2))
 								for (QPushButton *b : cell->findChildren<QPushButton *>())

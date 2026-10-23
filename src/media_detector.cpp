@@ -151,6 +151,7 @@ void media_detector::on_request(const request_context &ctx, const request_decisi
 				item.label = segs.last();
 			else
 				item.label = ctx.url.host();
+			item.hint = item.label;
 			list.push_back(item);
 			count = list.size();
 		}
@@ -349,3 +350,26 @@ bool media_saving_allowed_on(bool android, const QString &site_host,
 	return false;
 }
 
+QString media_row_name(const media_item &m, const QString &page_title, bool folded) {
+	QStringList parts;
+	if (!folded)
+		parts << (!m.title.isEmpty() ? m.title
+		          : !page_title.isEmpty() ? page_title
+		                                  : m.url.host());
+	if (!folded && m.known_media && !m.has_video)
+		parts << QStringLiteral("sound only");
+	if (!m.origin.isEmpty())
+		parts << m.origin;
+	if (!m.variant.isEmpty()) {
+		parts << m.variant;
+	} else {
+		parts << (m.kind == media_kind::hls || m.kind == media_kind::dash
+		            ? QStringLiteral("stream")
+		            : m.kind == media_kind::segment ? QStringLiteral("segment")
+		                                            : QStringLiteral("file"));
+		if (!m.hint.isEmpty())
+			parts << m.hint;
+	}
+	parts.removeAll(QString());
+	return parts.join(QStringLiteral(" · "));
+}

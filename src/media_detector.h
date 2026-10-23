@@ -79,7 +79,30 @@ struct media_item {
 	QString group;
 	bool    group_lead = false;
 	QString variant;
+
+	// **The parts a row's name is made of**, put together in one place
+	// (`media_row_name`) rather than written out by each of the six things
+	// that find media -- the holder, 2026-10-23, finding names, addresses
+	// and descriptions side by side in one list. `label` stays for the
+	// places that want a file name out of it.
+	QString title;    // what it is, where a lookup knows: the video's title
+	QString hint;     // for a row seen in the page: what tells its address apart
+	QString origin;   // where it came from, when not a lookup or the page's requests
+	QString about;    // said in the tooltip only: the reading's kind, what it carries
 };
+
+// **One name for every row of Find Media**: what it is, where it came from
+// when that is not the lookup, then quality, format and size -- whatever
+// is known, nothing guessed. "What it is" is the title a lookup found, or
+// the page's own title. A row folded under its video drops it, since the
+// video's row says it. The parts are joined by a middle dot, written as a
+// slash here to keep the source ASCII:
+//
+//     Odota mua / 1080p60 / H.264 / 258 MB
+//     Odota mua / sound only / Opus 160 kbit/s / 4.1 MB
+//     Page title / stream / hd/master.m3u8
+//     Page title / recorded by Capture / 12 MB
+QString media_row_name(const media_item &m, const QString &page_title, bool folded);
 
 // The media type to hand a system player along with the URL.
 //

@@ -36,6 +36,9 @@ public:
 	// What the lookup is doing or found, in a line of its own so the list's
 	// own status is not overwritten by it.
 	void set_lookup_note(const QString &text);
+	// The page's own title, which names any row a lookup has not. Before
+	// `set_site`, which builds the rows.
+	void set_page_title(const QString &title);
 
 	// Below this width the Host column is hidden; `main_window`'s drawer
 	// threshold, so "narrow" means one thing in this program.
@@ -88,7 +91,7 @@ private:
 
 	QTreeWidget *m_list   = nullptr;
 	QLabel      *m_status = nullptr;
-	QLabel      *m_title  = nullptr;   // the rows' shared title, when they have one
+	QString      m_page_title;         // names a row nothing better names
 	bool         m_narrow = false;     // what the rows were last built for
 	QLabel      *m_lookup = nullptr;
 	QPushButton *m_save   = nullptr;   // shown when yt-dlp's rows are listed

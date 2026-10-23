@@ -405,6 +405,7 @@ resolved_media ytdlp_resolver::parse(const QByteArray &json) {
 		else if (f.value("filesize_approx").isDouble())
 			m.filesize = qint64(f.value("filesize_approx").toDouble());
 		m.vcodec = f.value("vcodec").toString();
+		m.acodec = f.value("acodec").toString();
 		m.fps    = f.value("fps").toDouble();
 		// The sound's own bitrate, or the whole stream's where that is all
 		// there is; for a sound-only format the two are the same thing.
@@ -618,4 +619,27 @@ QSet<int> ytdlp_resolver::picture_leads(const QList<media_format> &formats) {
 			lead.insert(g, i);
 	}
 	return QSet<int>(lead.cbegin(), lead.cend());
+}
+
+QString ytdlp_resolver::audio_codec_name(const QString &acodec) {
+	const QString c = acodec.toLower();
+	if (c.isEmpty() || c == QLatin1String("none"))
+		return QString();
+	if (c.startsWith("opus"))
+		return QStringLiteral("Opus");
+	if (c == QLatin1String("mp4a.40.34") || c == QLatin1String("mp4a.6b"))
+		return QStringLiteral("MP3");
+	if (c.startsWith("mp4a") || c.startsWith("aac"))
+		return QStringLiteral("AAC");
+	if (c.startsWith("vorbis"))
+		return QStringLiteral("Vorbis");
+	if (c.startsWith("mp3"))
+		return QStringLiteral("MP3");
+	if (c.startsWith("flac"))
+		return QStringLiteral("FLAC");
+	if (c.startsWith("ac-3") || c.startsWith("ac3"))
+		return QStringLiteral("AC-3");
+	if (c.startsWith("ec-3") || c.startsWith("eac3"))
+		return QStringLiteral("E-AC-3");
+	return acodec.section('.', 0, 0);
 }

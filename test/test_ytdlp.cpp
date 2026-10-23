@@ -510,6 +510,11 @@ int main(int argc, char **argv) {
 		check(lead_of.value("1440p60") == "308" && lead_of.value("2160p60") == "315",
 		      QString("VP9 as a file above it, never AV1 or a stream (1440p60: %1)")
 		          .arg(lead_of.value("1440p60")));
+		check(ytdlp_resolver::audio_codec_name("opus") == "Opus" &&
+		          ytdlp_resolver::audio_codec_name("mp4a.40.2") == "AAC" &&
+		          ytdlp_resolver::audio_codec_name("mp4a.40.34") == "MP3" &&
+		          ytdlp_resolver::audio_codec_name("none").isEmpty(),
+		      "and sound by its codec, not the file it travels in");
 		check(ytdlp_resolver::codec_name("avc1.64002A") == "H.264" &&
 		          ytdlp_resolver::codec_name("vp09.00.41.08") == "VP9" &&
 		          ytdlp_resolver::codec_name("vp9") == "VP9" &&

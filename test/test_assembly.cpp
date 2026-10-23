@@ -374,6 +374,7 @@ int main(int argc, char **argv) {
 			m.group_lead  = lead;
 			m.variant     = variant;
 			m.label       = "[video] Clip · " + variant;
+			m.title       = "Clip";
 			return m;
 		};
 		media_item sound;
@@ -382,6 +383,7 @@ int main(int argc, char **argv) {
 		sound.has_video   = false;
 		sound.variant     = "opus 160 kbit/s";
 		sound.label       = "[video] Clip · opus 160 kbit/s · sound only";
+		sound.title       = "Clip";
 		// In the order an answer lists them, worst first and mixed.
 		det.replace_vouched("v.invalid", {
 			row("https://cdn.invalid/720-vp9", 720, "720p60", false, "720p60 · VP9"),
@@ -402,12 +404,9 @@ int main(int argc, char **argv) {
 		check(video && video->text(0) == "Clip · 1080p60 · H.264",
 		      QString("the video's row is the video, and what Save takes, the best "
 		              "up to 1080p (%1)").arg(video ? video->text(0) : QString()));
-		auto *title = dlg.findChild<QLabel *>("media_title");
-		check(title && title->isHidden(),
-		      "so no line above the list repeats the title");
 		check(list && list->topLevelItemCount() > 1 &&
-		          list->topLevelItem(1)->text(0) == "opus 160 kbit/s · sound only",
-		      QString("and the sound's row is named without it (%1)")
+		          list->topLevelItem(1)->text(0) == "Clip · sound only · opus 160 kbit/s",
+		      QString("and the sound's row in the same pattern (%1)")
 		          .arg(list && list->topLevelItemCount() > 1 ? list->topLevelItem(1)->text(0)
 		                                                     : QString()));
 		QStringList sizes;
@@ -492,6 +491,41 @@ int main(int argc, char **argv) {
 		      "and one that lapsed while closed is not read back");
 		media_lookups none;
 		check(none.load(dir.filePath("absent.json"), now), "an absent file is an empty cache");
+	}
+
+	// **One pattern for every row**, whatever found it -- the holder,
+	// 2026-10-23, finding names, addresses and descriptions side by side.
+	section("every row is named in one pattern");
+	{
+		media_item seen;
+		seen.kind = media_kind::hls;
+		seen.url  = QUrl("https://cdn.invalid/hd/master.m3u8");
+		seen.hint = "hd/master.m3u8";
+		check(media_row_name(seen, "A page", false) == "A page · stream · hd/master.m3u8",
+		      QString("a row seen in the page is named for the page (%1)")
+		          .arg(media_row_name(seen, "A page", false)));
+		check(media_row_name(seen, QString(), false) == "cdn.invalid · stream · hd/master.m3u8",
+		      "and for its host where the page has no title");
+		media_item captured;
+		captured.url     = QUrl::fromLocalFile("/tmp/c.webm");
+		captured.origin  = "recorded by Capture";
+		captured.variant = "12 MB";
+		check(media_row_name(captured, "A page", false) == "A page · recorded by Capture · 12 MB",
+		      QString("a capture says so after the name (%1)")
+		          .arg(media_row_name(captured, "A page", false)));
+		media_item learned;
+		learned.kind   = media_kind::dash;
+		learned.origin = "from this site's extractor";
+		check(media_row_name(learned, "A page", false) ==
+		          "A page · from this site's extractor · stream",
+		      "and so does what this site's extractor found");
+		media_item looked;
+		looked.known_media = true;
+		looked.title   = "Odota mua";
+		looked.variant = "1080p60 · H.264 · 258 MB";
+		check(media_row_name(looked, "A page", false) == "Odota mua · 1080p60 · H.264 · 258 MB" &&
+		          media_row_name(looked, "A page", true) == "1080p60 · H.264 · 258 MB",
+		      "a looked-up row by its title, and folded under its video without it");
 	}
 
 	// The cache those rows come from: per page, and only while true.

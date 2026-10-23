@@ -130,6 +130,10 @@ QJsonObject to_json(const media_item &m) {
 		{ "group", m.group },
 		{ "lead", m.group_lead },
 		{ "variant", m.variant },
+		{ "title", m.title },
+		{ "hint", m.hint },
+		{ "origin", m.origin },
+		{ "about", m.about },
 	};
 }
 
@@ -156,6 +160,10 @@ media_item from_json(const QJsonObject &o) {
 	m.group            = o.value("group").toString();
 	m.group_lead       = o.value("lead").toBool();
 	m.variant          = o.value("variant").toString();
+	m.title            = o.value("title").toString();
+	m.hint             = o.value("hint").toString();
+	m.origin           = o.value("origin").toString();
+	m.about            = o.value("about").toString();
 	return m;
 }
 
