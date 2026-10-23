@@ -251,6 +251,37 @@ int main(int argc, char **argv) {
 		         .arg(tw ? tw->header()->sectionSize(0) : 0).arg(natural));
 	}
 
+	// **A download named from its video showed its CDN address** until the
+	// file was written, and for ever if it never was. The holder,
+	// 2026-10-23. Before a source says where the file is, the row shows
+	// the name the job was given.
+	std::printf("\n-- a download shows the name it was given before its file exists\n");
+	{
+		download_manager dm;
+		auto *src = new fake_plain_source;
+		dm.add_source(src);
+		QString e;
+		const int named = dm.enqueue(QUrl("https://cdn.invalid/v/1080P_4000K_383.mp4?validfrom=1&hash=x"),
+		                             QString(), &e, {}, "Artist_-_A_title_[abc].mp4");
+		dm.enqueue(QUrl("https://cdn.invalid/plain.bin"), QString(), &e);
+		downloads_dialog dlg(&dm, &players, &proxy);
+		dlg.show();
+		spin(300);
+		auto *tw = dlg.findChild<QTreeWidget *>();
+		auto row_text = [&](int i) {
+			return tw && tw->topLevelItemCount() > i ? tw->topLevelItem(i)->text(0)
+			                                          : QString("(none)");
+		};
+		check(row_text(0) == "Artist_-_A_title_[abc].mp4",
+		      QString("the given name, not the address (%1)").arg(row_text(0)));
+		check(row_text(1) == "https://cdn.invalid/plain.bin",
+		      QString("and the address only where no name was given (%1)").arg(row_text(1)));
+		src->set(named, download_state::running, 10, 100, "/tmp/written.mp4", QString());
+		spin(300);
+		check(row_text(0) == "written.mp4",
+		      QString("and once there is a file, the file's own name (%1)").arg(row_text(0)));
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

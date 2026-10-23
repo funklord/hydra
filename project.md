@@ -39218,3 +39218,26 @@ signature from its authors that hydra could check.
 with it lists its impersonation targets as available rather than
 "(unavailable)". `test_ytdlp` checks that a half-made environment, never
 marked, is not used.
+
+## An 18+ rating decides the kind; a download shows its name from the start
+
+Reported by the holder 2026-10-23, from the first video yt-dlp could read
+with impersonation.
+
+**The kind.** The model read a video yt-dlp reports as `age_limit: 18`
+as "gaming". There was no kind it fitted, and the rating, which the site
+states, was never passed on. `media_evidence` now reads `age_limit`, and
+there is a kind `adult`. The rules choose it for 18+ before anything they
+guess from words, and the model is told the rating. If the model still
+answers otherwise, the kind is overruled and the answer recorded among
+the rejected, so the tally counts it against the model.
+
+**The name.** Until a source said where a file was, the downloads list
+showed a job's address, even when Find Media had given the job a name
+worked out from the video's title. If the download stalled before
+writing, the address was all anyone saw. The list now shows the given
+name until there is a file, and the address only when there is no name.
+
+Checked while here: on that site the plain files and the streams both
+answered with ordinary requests and yt-dlp's headers (206 for the first
+kilobyte), so only the page needs impersonation, not the media.

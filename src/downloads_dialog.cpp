@@ -392,12 +392,18 @@ void downloads_dialog::refresh() {
 			m_rows.insert(j.id, row);
 		}
 
-		// Before a source knows a filename there is nothing better than the
-		// address itself -- and it must be the *whole* address, since stripping
-		// the query off a magnet link leaves the useless string "magnet:".
+		// Before a source knows a filename, the name the job was given --
+		// the title a lookup worked out -- and only without one the address
+		// itself, which must then be the *whole* address, since stripping the
+		// query off a magnet link leaves the useless string "magnet:".
 		// Elision is the view's job, not ours.
-		const QString name = j.path.isEmpty() ? j.url.toString()
-		                                      : QFileInfo(j.path).fileName();
+		//
+		// **The given name used to be skipped**, so a download Find Media had
+		// named from the video's title showed its CDN address until the file
+		// was written, and for ever if it never was. The holder, 2026-10-23.
+		const QString name = !j.path.isEmpty()      ? QFileInfo(j.path).fileName()
+		                   : !j.file_name.isEmpty() ? j.file_name
+		                                            : j.url.toString();
 		row->setText(col_name, name);
 		row->setToolTip(col_name, j.url.toString());
 

@@ -36,6 +36,10 @@ struct media_evidence {
 	qint64      timestamp = -1;  // upload, seconds since the epoch, UTC
 	QString     upload_date;     // YYYYMMDD
 	int         release_year = -1;
+	// The site's own age rating, as yt-dlp reports it: 18 for adult
+	// content, 0 or absent otherwise. A fact the site states, which a model
+	// reading titles and tags can only guess at.
+	int         age_limit = 0;
 	QString     live_status;     // "not_live", "was_live", ...
 	QString     description;     // capped at k_description_cap characters
 

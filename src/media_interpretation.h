@@ -25,7 +25,7 @@ class ai_provider;
 struct media_reading {
 	// The agreed categories. A wide spread of small kinds goes to misc.
 	enum class kind { music, movie, episode, talk, learning, news, gaming,
-	                  short_clip, misc };
+	                  short_clip, adult, misc };
 	kind    what = kind::misc;
 	QString artist;          // who it is by, as the name to file it under
 	QString title;           // what it is called, as the track

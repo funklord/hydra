@@ -117,6 +117,7 @@ media_evidence media_evidence::from_json(const QByteArray &json) {
 	ev.upload_date  = o.value("upload_date").toString();
 	if (o.value("release_year").isDouble())
 		ev.release_year = o.value("release_year").toInt();
+	ev.age_limit = o.value("age_limit").toInt();
 	ev.live_status  = o.value("live_status").toString();
 	ev.description  = o.value("description").toString().left(k_description_cap);
 

@@ -9,7 +9,7 @@
 namespace {
 
 const char *const k_kinds[] = { "music", "movie", "episode", "talk", "learning",
-                                "news", "gaming", "short", "misc" };
+                                "news", "gaming", "short", "adult", "misc" };
 
 QString normal(const QString &s) {
 	return s.simplified().toCaseFolded();
@@ -151,6 +151,7 @@ QString media_interpretation::system_prompt() {
 	  "  talk: podcasts, interviews, lectures, long commentary.\n"
 	  "  learning: tutorials, how-to, explainers.  news: news reports.\n"
 	  "  gaming: game play.  short: a very short clip, under a minute.\n"
+	  "  adult: pornography or other content rated 18+.\n"
 	  "  misc: anything else.\n"
 	  "artist: who it is by -- for music the performing artist, or for a set "
 	  "or compilation whoever made or curated it; otherwise the person or "
@@ -186,6 +187,8 @@ QString media_interpretation::prompt_for(const media_evidence &ev) {
 	if (ev.width > 0 && ev.height > 0)
 		line("frame", QString("%1x%2").arg(ev.width).arg(ev.height));
 	line("live", ev.live_status);
+	if (ev.age_limit > 0)
+		line("age limit", QString::number(ev.age_limit));
 	p += "\ndescription:\n" + ev.description.left(1500) + "\n";
 	p += "\ncandidate tracklists:\n";
 	if (ev.tracklists.isEmpty())
@@ -278,7 +281,13 @@ media_reading media_interpretation::by_rules(const media_evidence &ev) {
 	                   ev.release_year > 0 ||
 	                   ev.title.contains(QLatin1String("full movie"),
 	                                     Qt::CaseInsensitive));
-	if (music)
+	// **The site's own rating first.** A video rated 18+ was read as
+	// "gaming" by a model on 2026-10-23, there being no category it fitted:
+	// the age rating is a fact the site states, so it decides the kind
+	// before anything that is guessed from words.
+	if (ev.age_limit >= 18)
+		r.what = media_reading::kind::adult;
+	else if (music)
 		r.what = media_reading::kind::music;
 	else if (!ev.series.isEmpty())
 		r.what = media_reading::kind::episode;
@@ -312,7 +321,12 @@ media_reading media_interpretation::checked(const QString &reply,
 	r.confidence = qBound(0.0, a.value("confidence").toDouble(), 1.0);
 
 	media_reading::kind k;
-	if (media_reading::kind_from(a.value("kind").toString(), &k)) {
+	if (media_reading::kind_from(a.value("kind").toString(), &k) && ev.age_limit >= 18 &&
+	    k != media_reading::kind::adult) {
+		// Overruled by the site's rating, and counted against the model.
+		r.rejected << QString("kind: \"%1\", but the site rates it %2+")
+		                  .arg(a.value("kind").toString()).arg(ev.age_limit);
+	} else if (media_reading::kind_from(a.value("kind").toString(), &k)) {
 		r.what = k;
 		r.from_model << QStringLiteral("kind");
 	} else {

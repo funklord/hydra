@@ -14,6 +14,8 @@
 #include "reading_log.h"
 
 #include <QCoreApplication>
+#include <QJsonObject>
+#include <QJsonDocument>
 #include <QDateTime>
 #include <QFile>
 #include <QFileInfo>
@@ -167,6 +169,40 @@ int main(int argc, char **argv) {
 	// scored 3B models' bad titles were all real strings from the metadata,
 	// so grounding passed them and the tally counted them kept. Both ways:
 	// every bad title they gave is flagged, and no title the labels accept is.
+	// **The site's age rating decides the kind.** A video rated 18+ was read
+	// as "gaming" on 2026-10-23: there was no category it fitted, and the
+	// rating, which the site states, was never passed on.
+	section("a site's 18+ rating makes it adult, whatever the model says");
+	{
+		media_evidence ev;
+		ev.title      = "A video";
+		ev.uploader   = "Someone";
+		ev.categories = { "HD", "Toys" };
+		ev.age_limit  = 18;
+		check(media_interpretation::by_rules(ev).what == media_reading::kind::adult,
+		      "the rules read it as adult");
+		check(media_interpretation::prompt_for(ev).contains("age limit: 18"),
+		      "and the model is told the rating");
+		const media_reading r = media_interpretation::checked(
+		  "{\"kind\":\"gaming\",\"artist\":\"Someone\",\"title\":\"A video\","
+		  "\"is_set\":false,\"tracklist\":\"\",\"confidence\":0.8}", ev);
+		check(r.what == media_reading::kind::adult && !r.from_model.contains("kind") &&
+		          r.rejected.join(";").contains("rates it 18+"),
+		      QString("a model saying otherwise is overruled, and that counted "
+		              "against it (%1)").arg(r.rejected.join("; ")));
+		const media_reading agreed = media_interpretation::checked(
+		  "{\"kind\":\"adult\",\"artist\":\"Someone\",\"title\":\"A video\","
+		  "\"is_set\":false,\"tracklist\":\"\",\"confidence\":0.8}", ev);
+		check(agreed.from_model.contains("kind") && agreed.rejected.isEmpty(),
+		      "and one that agrees is kept");
+		ev.age_limit = 0;
+		check(media_interpretation::by_rules(ev).what != media_reading::kind::adult,
+		      "without the rating, nothing is read as adult by the rules");
+		const QJsonObject o = QJsonDocument::fromJson(R"({"title":"t","age_limit":18})").object();
+		check(media_evidence::from_json(QJsonDocument(o).toJson()).age_limit == 18,
+		      "the rating is read from yt-dlp's answer");
+	}
+
 	section("a title holding the artist's name or a tag is flagged, not rejected");
 	{
 		struct seen { const char *title; const char *artist; };
