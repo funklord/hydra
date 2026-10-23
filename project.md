@@ -38326,9 +38326,9 @@ it, showed `Video --vid=1 (vp9 1920x1080)`, and had no audio track at all.
   when the reading says music.
 - **The row says what it carries**: "sound only", "picture only", or
   "picture only, Watch adds the sound". The last matters for Download,
-  which still fetches the one stream: a picture-only download is silent,
-  and only the label says so in advance. Saving picture and sound as one
-  file is still to do.
+  which then fetched the one stream: a picture-only download was silent,
+  and only the label said so in advance. Saving picture and sound as one
+  file followed in `8d34d71` (`download_manager::enqueue_pair`).
 
 **Measured live, through the real proxy, with mpv muted**: a sound-only
 row played (`AO: alsa`). The 2160p picture row opened as `vp9 3840x2160`
@@ -38514,10 +38514,11 @@ the same call for every video of a channel.
 one, reading the set through the real menu took the rule's artist and
 recorded "your rule for Groovix (…)".
 
-**Open: a correction does not yet count against the model's tally.** It is
-exactly the evidence the tally exists for, but the reading's answers were
-already counted as kept when it ran, so counting the correction needs the
-earlier entry undone rather than a second one added.
+**A correction counts against the model's tally** (`5abd993`, the same
+day). It is exactly the evidence the tally exists for. Because the
+reading's answers were already counted as kept when it ran, the kept
+answer is turned into a rejected one, not counted twice. Only tasks the
+model answered and the person changed count, once per reading.
 
 ## Watch through the proxy: the sound was throttled, and nothing held upstream back
 
@@ -38620,7 +38621,10 @@ and downloads; each is documented in its file's header. The style-gate
 files under `tool/` carry another session's uncommitted changes and were
 left alone throughout.
 
-## The scriptlet script is the whole cost of the lists, and the cause is open
+## The scriptlet script is the whole cost of the lists, and what it cost
+
+The cause was found and halved within this entry (`bd8da8e`, `eef0d95`,
+`99e7fa8`); the heading said "open" until 2026-10-23.
 
 Measured 2026-10-15 with `try_scriptlet_cost`, as medians of seven loads of
 a local page. Every number below is a page load in ms, without lists → with
