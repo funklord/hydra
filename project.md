@@ -33930,6 +33930,19 @@ is the one the rule was written about. The host test is exact-or-subdomain, the
 same one `cosmetic_filters` applies to a scoped selector, and a host merely
 ending in the scope's letters is asserted not to match.
 
+**On Android this was true only of the desktop until 2026-10-23.**
+`android_view::inject_main_world_script` stored its script for the main
+frame alone, and those go out in the batch `onPageStarted` runs -- after
+the page's inline scripts. YouTube carries the first video's player data,
+ads included, inline, so the holder saw ads come back on the phone after a
+first look had shown none. It now goes through the frame-script channel
+(`addDocumentStartJavaScript` for every origin), as the desktop does;
+the late batch skips what that channel carries and still carries all of it
+where the WebView has no document-start support. Seen on the phone: the
+frame script is armed before the first load, and the holder's first
+session on YouTube after it showed no ad. A first clean session is also
+what preceded the regression, so it is not yet a closed finding.
+
 The shield's escape hatch is applied per scope in C++ rather than asked of the
 page: a scriptlet names the site it patches, so a site whose `ads` setting is
 allow has its calls dropped before the script is built. The set is re-injected
@@ -39397,10 +39410,55 @@ So nothing goes to Qt. hydra already sets `fullVersionList` to the brands
 it claims, so on QtWebEngine 6.10 or newer it gets the right brand list,
 in the header, pages and workers, with no patch. The `brandVersionList`
 property is absent there, and hydra now warns about that only on an engine
-older than 6.10. Debian's backports carry `qt6-webengine` 6.10.2. Moving
-to it would retire the patched 6.8 build and the hold that protects it.
-That move is the holder's to make; until then `engine-patch/0001` stays
-in force. Not yet measured on a 6.10 engine.
+older than 6.10. Debian's backports carry `qt6-webengine` 6.10.2.
+
+### Moving to QtWebEngine 6.10.2
+
+The holder asked for the plan 2026-10-22. Measured on this machine
+2026-10-23; the move itself is the holder's, by apt.
+
+- **Measured on a 6.10 engine, without installing it.** The backports
+  debs were unpacked into a scratch root and hydra (built against 6.8)
+  run on them with `LD_LIBRARY_PATH`; `ldd` confirmed the 6.10 libraries
+  were the ones loaded. `try_cdp hints` read `Google Chrome 140,
+  Chromium 140, Not=A?Brand 24` in the header, page, frame and worker,
+  before and after a cross-origin navigation, with no patch. Three tabs
+  took 718 MB.
+- **Only the engine moves.** `qt6-webengine` 6.10.2 in backports is built
+  against `qt6-base-private-abi (= 6.8.2)`, so qtbase stays where it is
+  and the fifteen packages carrying `+hydra1` are the whole change:
+  `libqt6pdf6 libqt6pdfquick6 libqt6pdfwidgets6 libqt6webengine6-data
+  libqt6webenginecore6 libqt6webenginecore6-bin libqt6webenginequick6
+  libqt6webenginewidgets6 qml6-module-qtquick-pdf qml6-module-qtwebengine
+  qml6-module-qtwebengine-controlsdelegates qt6-image-formats-plugin-pdf
+  qt6-pdf-dev qt6-webengine-dev qt6-webengine-dev-tools`.
+- **Nothing protects the patched 6.8 build, and a plain upgrade already
+  moves it -- partly.** No package is held but `ssacli`, and backports and
+  the installed `+hydra1` both sit at priority 100, so 6.10.2 is the
+  candidate. `apt-get -s upgrade` (apt 3.0.3) installs 11 of the 15 at
+  6.10.2 and leaves `libqt6pdf6`, `libqt6pdfquick6`,
+  `qml6-module-qtquick-pdf` and `qt6-image-formats-plugin-pdf` at
+  6.8.2+hydra1: one source package at two versions. Its "kept back" list
+  names the engine and is not the result. An earlier version of this
+  entry spoke of "the hold that protects it"; there was none.
+
+So there are two choices, and neither is to leave it as it is:
+
+1. **Stay on 6.8 for now:** `sudo apt-mark hold` the fifteen above.
+2. **Move:** `sudo apt-get install -t excalibur-backports` the fifteen
+   together, so the PDF half does not stay behind. Then rebuild and run
+   `make test` against it, rerun `try_cdp hints` on the installed engine,
+   and build the deb, which will then require 6.10. Once that holds,
+   `engine-patch/0001` and the `brandVersionList` path retire.
+
+**Rollback** is the 34 patched debs in `~/src/qt6-webengine/` (the
+fifteen, their `-dbgsym`, docs, examples and `qt6-webengine-private-dev`):
+`sudo apt-get install` the fifteen by path, then hold them, or the next
+upgrade undoes the rollback for the reason above.
+
+Unknown until installed: whether anything else on the machine that uses
+QtWebEngine or QtPdf minds 6.10. QTBUG-144207 above is open against
+6.10.2, but in the Android platform plugin, which the desktop never loads.
 
 The claim this replaces, "no Qt through 6.10 can", was in `user_agent.h`.
 It came from Qt's documentation rather than its code, and is corrected
