@@ -1271,7 +1271,12 @@ public class HydraWebView {
                         // a video drops the notification rather than stranding
                         // it on a page that no longer exists.
                         notePlaying(id, false);
-                        v.evaluateJavascript(MEDIA_WATCH, null);
+                        // Where document-start scripts run, the watcher is in
+                        // the C++ bundle, which takes the bridge out of the
+                        // page before the page runs -- this one would find no
+                        // `hydraNative` to report through.
+                        if (!documentStartSupported())
+                            v.evaluateJavascript(MEDIA_WATCH, null);
                     }
 
                     // Asked about every navigation, and silence is consent: a

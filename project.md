@@ -37883,25 +37883,42 @@ and twelve more names (`__hydraPicker*`, `__hydraAutofill`,
 injected scripts can find each other. On the desktop that is the isolated
 world's business; on Android it is the page's.
 
-Options, not yet chosen -- the holder's decision:
+**Chosen and done the same day: the bridge is taken out of the page.**
+The holder chose the first of three options -- the others were moving to
+`addWebMessageListener`, which reports the sender's origin but leaves the
+page's own main-frame scripts able to call, and renaming only, which hides
+the word and changes nothing about who can call.
 
-1. **Take the bridge out of the page at document start.** Where the
-   WebView supports document-start scripts (every device measured here),
-   run hydra's scripts as one document-start evaluation per frame that
-   captures `hydraNative`, deletes it from `window`, and hands the channel
-   to the scripts lexically. No page script runs before it, so none sees
-   or calls the bridge. Needs: whether the injected object can be deleted
-   (to measure), the per-page permissions shim and every script moved into
-   that evaluation, and the globals above turned into lexical names on
-   Android. Devices without document-start keep today's exposure.
-2. **Move to `WebViewCompat.addWebMessageListener`**, which tells the
-   listener the sender's origin and whether it is the main frame, so the
-   shell can refuse subframes and other origins. Asynchronous where the
-   Android proxies are synchronous today (the desktop's are already
-   callback-based); the page's own main-frame scripts could still call it.
-3. **Rename only:** a per-process random name for the object and the
-   globals. Hides "hydra" from a page that looks for it; changes nothing
-   about who can call what.
+Measured first, on the phone: the injected `hydraNative` is a
+configurable property, `delete` removes it (`'hydraNative' in window` is
+false afterwards), and a reference taken before the delete keeps working.
+So where the WebView runs document-start scripts, `frame_scripts` now
+builds one bundle per frame: it takes the bridge and deletes it from
+`window`, keeps the channel and the bridge registry as locals, runs every
+script -- those for the top frame alone behind a top-frame check, which is
+what the late batch gave them -- and the media watcher, which the Java side
+had injected late through the global. `bundled()` rewrites a script's
+`window.hydraChannel` and `window.__hydra*` to the closure's names, so the
+scripts written for the desktop's isolated world run unchanged in
+substance. The late batch keeps only the permissions shim, which needs no
+bridge. A device without document-start keeps the old exposure.
+
+On the phone afterwards, on `m.youtube.com`: `hydraNative` undefined, no
+global naming this browser, all six bridges registering in the bundle
+(checked with a temporary note, cold start included, then removed), and
+the cosmetic sheet in place. Two more tells turned up and are closed on
+both platforms: the permissions and device-label shims set plain functions
+as own properties of `navigator.permissions` and `mediaDevices`, and are
+now Proxies on `Permissions.prototype` and `MediaDevices.prototype` that
+answer with the engine's source; and the cosmetic sheet was
+`<style id="hydra-cosmetic">` in every page's DOM -- the DOM is shared even
+where the script's world is not -- and is now unmarked, held by the script.
+
+**What a page on Android can still see:** the bundle runs in its world,
+so `postMessage` traffic between frames (consent, sponsor) carries
+`__hydra_` keys a page's message listener could read, and the MSE hook
+still reports through a `hydra-mse` DOM event. Neither is named in a
+global or readable without listening for it.
 
 **Proved three ways.** A differential run against uBlock's own
 `jsonpath.js` under node, used only as an oracle: 318 query-and-document

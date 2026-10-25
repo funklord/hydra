@@ -36,13 +36,53 @@ namespace permissions_shim {
 // the failure this project keeps recording under other names, and this one
 // would be worse than most: the two platforms would answer the same question
 // differently and the difference would only show on somebody's phone.
+//
+// **Patched on the prototype, through a Proxy that answers as the original.**
+// Until 2026-10-25 both shims set a plain function as an own property of the
+// object -- `navigator.permissions.query`, `mediaDevices.enumerateDevices` --
+// where the engine keeps them on the prototype, and a page asking either for
+// its source got this file's code. Measured on a YouTube page through the
+// phone's WebView DevTools. `prototype_wrap` puts a Proxy of the engine's
+// method on the prototype and teaches `Function.prototype.toString` to
+// answer for it with the original's source, so neither difference shows.
+inline QString prototype_wrap() {
+	return QStringLiteral(R"JS(
+(function () {
+  return function (proto, key, apply) {
+    if (typeof Proxy !== 'function' || typeof Reflect !== 'object' ||
+        typeof WeakMap !== 'function' || !proto || typeof proto[key] !== 'function')
+      return false;
+    var real = proto[key];
+    var map = new WeakMap();
+    var source_of = Function.prototype.toString;
+    var answer = new Proxy(source_of, {
+      apply: function (t, self, args) {
+        var f = self;
+        while (map.has(f)) f = map.get(f);
+        return Reflect.apply(t, f, args);
+      }
+    });
+    map.set(answer, source_of);
+    var wrapped = new Proxy(real, { apply: apply });
+    map.set(wrapped, real);
+    try {
+      Function.prototype.toString = answer;
+      proto[key] = wrapped;
+    } catch (e) { return false; }
+    return true;
+  };
+})()
+)JS");
+}
+
 inline QString source(const QString &camera, const QString &microphone) {
 	return QStringLiteral(R"JS(
 (function () {
-  if (!navigator.permissions || !navigator.permissions.query) return;
-  var real = navigator.permissions.query.bind(navigator.permissions);
+  var prototype_wrap = /*PROTOTYPE_WRAP*/null;
+  if (!window.Permissions) return;
   var states = { camera: "%1", microphone: "%2" };
-  navigator.permissions.query = function (desc) {
+  prototype_wrap(Permissions.prototype, 'query', function (target, self, args) {
+    var desc = args[0];
     var n = desc && desc.name;
     if (n && Object.prototype.hasOwnProperty.call(states, n)) {
       // Shaped like a PermissionStatus, because that is what callers touch:
@@ -55,10 +95,11 @@ inline QString source(const QString &camera, const QString &microphone) {
         dispatchEvent: function () { return false; }
       });
     }
-    return real(desc);
-  };
+    return Reflect.apply(target, self, args);
+  });
 })();
-)JS").arg(camera, microphone);
+)JS").arg(camera, microphone)
+	    .replace(QLatin1String("/*PROTOTYPE_WRAP*/null"), prototype_wrap());
 }
 
 
@@ -89,13 +130,12 @@ inline QString source(const QString &camera, const QString &microphone) {
 inline QString device_labels() {
 	return QStringLiteral(R"JS(
 (function () {
-  var md = navigator.mediaDevices;
-  if (!md || !md.enumerateDevices) return;
-  var real = md.enumerateDevices.bind(md);
+  var prototype_wrap = /*PROTOTYPE_WRAP*/null;
+  if (!window.MediaDevices) return;
   var names = { audioinput: "Microphone", audiooutput: "Speaker",
                 videoinput: "Camera" };
-  md.enumerateDevices = function () {
-    return real().then(function (list) {
+  prototype_wrap(MediaDevices.prototype, 'enumerateDevices', function (target, self, args) {
+    return Reflect.apply(target, self, args).then(function (list) {
       var blanks = {};
       list.forEach(function (d) {
         if (!d.label) blanks[d.kind] = (blanks[d.kind] || 0) + 1;
@@ -116,9 +156,9 @@ inline QString device_labels() {
         });
       });
     });
-  };
+  });
 })();
-)JS");
+)JS").replace(QLatin1String("/*PROTOTYPE_WRAP*/null"), prototype_wrap());
 }
 
 }  // namespace permissions_shim

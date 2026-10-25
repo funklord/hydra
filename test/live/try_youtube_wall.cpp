@@ -106,8 +106,22 @@ static const char *k_probe = R"JS(
 		'MediaSource.prototype.addSourceBuffer':
 			src(window.MediaSource && MediaSource.prototype.addSourceBuffer),
 		'SourceBuffer.prototype.appendBuffer':
-			src(window.SourceBuffer && SourceBuffer.prototype.appendBuffer)
+			src(window.SourceBuffer && SourceBuffer.prototype.appendBuffer),
+		'Permissions.prototype.query':
+			src(window.Permissions && Permissions.prototype.query),
+		'MediaDevices.prototype.enumerateDevices':
+			src(window.MediaDevices && MediaDevices.prototype.enumerateDevices)
 	};
+	// Own properties where the engine keeps the method on the prototype.
+	try {
+		out.own_shims = [
+			navigator.permissions && Object.prototype.hasOwnProperty.call(navigator.permissions, 'query') ? 'permissions.query' : '',
+			navigator.mediaDevices && Object.prototype.hasOwnProperty.call(navigator.mediaDevices, 'enumerateDevices') ? 'mediaDevices.enumerateDevices' : ''
+		].filter(Boolean).join(',') || 'none';
+	} catch (e) { out.own_shims = 'throws'; }
+	// Anything in the DOM that names this browser.
+	out.named_elements = Array.prototype.filter.call(document.querySelectorAll('[id],[class]'),
+		function (e) { return /hydra/i.test(e.id + ' ' + e.className); }).length;
 	// A buffer of the page's own making, asked what it carries of its own.
 	try {
 		var ms = new MediaSource();

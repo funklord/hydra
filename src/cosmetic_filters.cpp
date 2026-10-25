@@ -100,6 +100,7 @@ QString cosmetic_filters::script_source() {
 (function () {
   // Named, not `arguments.callee`: that is a syntax error under strict mode, and
   // the injected world is not guaranteed to be sloppy.
+  var sheet_el = null;
   var start = function () {
     if (!window.hydraChannel) return setTimeout(start, 50);
     window.hydraChannel(function (objs) {
@@ -111,13 +112,15 @@ QString cosmetic_filters::script_source() {
       if (!sel || !sel.length) return;
       var apply = function () {
         if (!document.documentElement) return setTimeout(apply, 10);
-        // One stylesheet, not one per selector, and marked so a second run on
-        // the same document replaces rather than stacks.
-        var id = 'hydra-cosmetic';
-        var el = document.getElementById(id);
-        if (!el) {
-          el = document.createElement('style');
-          el.id = id;
+        // One stylesheet, not one per selector. **Unmarked**: it carried the
+        // id `hydra-cosmetic`, which put this browser's name in every page's
+        // DOM for any script to find -- the DOM is shared even where this
+        // script's world is not. The element is held here instead, which is
+        // all "a second run replaces rather than stacks" needed, since the
+        // selectors arrive once per document.
+        var el = sheet_el;
+        if (!el || !el.isConnected) {
+          el = sheet_el = document.createElement('style');
           (document.head || document.documentElement).appendChild(el);
         }
         // **One rule per selector, through the CSS parser.**

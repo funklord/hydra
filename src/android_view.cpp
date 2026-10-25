@@ -85,6 +85,97 @@ const char *k_bridge_bootstrap = R"JS(
 )JS";
 
 
+// **The document-start bundle: hydra's scripts with the bridge kept out of
+// the page.** Android has no isolated world, so `addJavascriptInterface`
+// puts `hydraNative` in the page's own globals, in every frame, a
+// third-party one included -- and a `@JavascriptInterface` method cannot
+// tell which frame called it. Measured 2026-10-25 through the WebView's
+// DevTools: every page could see it, and any frame could call any bridge
+// through it, one consent call writing a lasting rule that allows cookies
+// for the tab's site.
+//
+// So where the WebView runs document-start scripts, every script hydra
+// injects runs in this one evaluation per frame, before any of the page's:
+// the bridge object is taken and deleted from `window` (it is configurable,
+// and a reference taken first keeps working -- both measured on the phone),
+// the channel is a local of this closure, and the scripts are handed it
+// lexically. Nothing of it is left where a page could find it. The locals
+// carry a `__h_` prefix so a script's own variables cannot shadow them.
+const char *k_bundle_open = R"JS(
+(function () {
+  var __h_native = window.hydraNative;
+  try { delete window.hydraNative; } catch (e) {}
+  if (!__h_native) return;
+  var __h_top = window.top === window;
+  var __h_private = {};
+  var __h_objects = {};
+  var hydraChannel = function (cb) {
+    try { cb(__h_objects); } catch (e) {}
+  };
+  var hydraRegisterBridge = function (name) {
+    var d;
+    try { d = JSON.parse(__h_native.describe(name)); } catch (e) { return; }
+    if (!d || !d.ok) return;
+    var proxy = {};
+    d.value.methods.forEach(function (m) {
+      proxy[m.name] = function () {
+        var args = Array.prototype.slice.call(arguments);
+        // A trailing function is the desktop's result callback, not an argument.
+        var cb = (args.length > m.args && typeof args[args.length - 1] === 'function')
+                   ? args.pop() : null;
+        var out;
+        try {
+          out = JSON.parse(__h_native.call(name, m.name, JSON.stringify(args)));
+        } catch (e) { out = { ok: false }; }
+        if (cb && out && out.ok) { try { cb(out.value); } catch (e) {} }
+        return out && out.ok ? out.value : undefined;
+      };
+    });
+    __h_objects[name] = proxy;
+  };
+  /*BUNDLE*/
+})();
+)JS";
+
+// What tells the shell a page is playing, so the media notification can
+// follow it. The Java side injected this late, through the global; in the
+// bundle it uses the captured bridge. Listeners on the capture phase,
+// because media events do not bubble.
+const char *k_bundle_media = R"JS(
+(function () {
+    if (!__h_top) return;
+    var s = function () {
+      try {
+        var m = document.querySelectorAll('video,audio'), a = false;
+        for (var i = 0; i < m.length; i++) {
+          var e = m[i];
+          if (!e.paused && !e.ended && !e.muted && e.readyState > 2) a = true;
+        }
+        __h_native.mediaState(a);
+      } catch (x) {}
+    };
+    ['playing', 'pause', 'ended', 'emptied', 'volumechange'].forEach(function (n) {
+      document.addEventListener(n, s, true);
+    });
+    s(); setTimeout(s, 700); setTimeout(s, 3000);
+  })();
+)JS";
+
+
+// A script written for the desktop's isolated world, made to run in the
+// bundle: its window globals become locals of the closure. `hydraChannel`
+// and `hydraRegisterBridge` are the bundle's; every `__hydra` guard and
+// handle goes into a private object, so separately written scripts still
+// find each other there and nowhere a page can look.
+QString bundled(const QString &source) {
+	QString s = source;
+	s.replace(QLatin1String("window.hydraChannel"), QLatin1String("hydraChannel"));
+	s.replace(QLatin1String("window.hydraRegisterBridge"),
+	          QLatin1String("hydraRegisterBridge"));
+	s.replace(QLatin1String("window.__hydra"), QLatin1String("__h_private.__hydra"));
+	return s;
+}
+
 // One id per view, so the Java side can keep more than one WebView and the C++
 // side never holds a Java reference across threads.
 qint64 next_id() {
@@ -833,6 +924,11 @@ QString android_view::injected_scripts(qint64 id) {
 	// A script that ran before its bridge existed would see hydraChannel hand it
 	// an object without the method it wants, which is the kind of failure that
 	// looks like a bug in the script.
+	// **Where the bundle runs, only the permissions shim is left here**: it
+	// is built per address, uses no bridge, and the bridge is no longer in
+	// the page for anything here to reach.
+	if (document_start_supported())
+		return build_permissions_shim(v, v->url());
 	QString out = QString::fromUtf8(k_bridge_bootstrap);
 	for (const QString &name : v->m_bridges.names())
 		out += QStringLiteral("\nwindow.hydraRegisterBridge(%1);\n").arg(js_literal(name));
@@ -1386,20 +1482,17 @@ void android_view::set_script(const QString &name, const QString &source,
 		m_script_sources << source;
 		m_script_frames << subframes;
 	}
-	if (subframes)
-		push_frame_scripts();
+	push_frame_scripts();   // every script is in the bundle, not only subframes
 }
 
 void android_view::remove_script(const QString &name) {
 	const int at = m_script_names.indexOf(name);
 	if (at < 0)
 		return;
-	const bool was_frame = m_script_frames.value(at, false);
 	m_script_names.removeAt(at);
 	m_script_sources.removeAt(at);
 	m_script_frames.removeAt(at);
-	if (was_frame)
-		push_frame_scripts();
+	push_frame_scripts();
 }
 
 // **Asked once and cached.** `DOCUMENT_START_SCRIPT` depends on the WebView
@@ -1417,18 +1510,21 @@ QString android_view::frame_scripts(qint64 id) {
 	android_view *v = s_views.value(id);
 	if (!v || !document_start_supported())
 		return QString();
+	// Every script, not only those marked for subframes: the late batch is
+	// where the bridge was in the page, and with it gone a script there
+	// would have no channel. A script for the top frame alone is run there
+	// alone, which is what the late batch gave it.
 	QString out;
+	for (const QString &name : v->m_bridges.names())
+		out += QStringLiteral("  hydraRegisterBridge(%1);\n").arg(js_literal(name));
 	for (int i = 0; i < v->m_script_sources.size(); ++i) {
-		if (!v->m_script_frames.value(i, false))
-			continue;
-		// **No bridge bootstrap and no permissions shim.** A subframe copy
-		// needs neither: the script's own non-top path talks to the top frame
-		// rather than to C++, and the top frame's copy waits for
-		// `window.hydraChannel` to turn up, which the `onPageStarted` batch
-		// still installs.
-		out += "\n;(function(){\n" + v->m_script_sources[i] + "\n})();\n";
+		const bool frames = v->m_script_frames.value(i, false);
+		out += frames ? QStringLiteral("\n;(function(){\n")
+		              : QStringLiteral("\nif (__h_top) (function(){\n");
+		out += bundled(v->m_script_sources[i]) + QStringLiteral("\n})();\n");
 	}
-	return out;
+	out += QString::fromUtf8(k_bundle_media);
+	return QString::fromUtf8(k_bundle_open).replace(QLatin1String("/*BUNDLE*/"), out);
 }
 
 void android_view::push_frame_scripts() {
@@ -1442,6 +1538,7 @@ void android_view::push_frame_scripts() {
 
 void android_view::set_script_bridge(QObject *object, const QString &name) {
 	m_bridges.add(name, object);
+	push_frame_scripts();   // the bundle registers it
 }
 
 QByteArray android_view::save_state() const {
