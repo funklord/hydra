@@ -825,6 +825,15 @@ public class HydraWebView {
                 w.setLayerType(force_software
                                  ? android.view.View.LAYER_TYPE_SOFTWARE
                                  : android.view.View.LAYER_TYPE_NONE, null);
+                // **Inspectable over adb, in a debuggable build only.** What a
+                // page can see of this browser can only be measured from inside
+                // a page, and on a phone the one way in is the WebView's
+                // DevTools socket. Android lets adb and root connect to it and
+                // no other app, and a release build -- the one Play ships --
+                // is not debuggable, so it stays off there.
+                if ((w.getContext().getApplicationInfo().flags
+                     & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
+                    WebView.setWebContentsDebuggingEnabled(true);
                 // Before any load, so a page cannot start without it.
                 w.addJavascriptInterface(new Native(id), "hydraNative");
                 // **Reported only when the count is settled.** WebView calls

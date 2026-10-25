@@ -37846,7 +37846,62 @@ none of them an ad host), so a blocked detection request is not what this
 session shows; whether the person's own session differs is not known.
 On Android, the isolated world does not exist: the MSE relay's
 `__hydra_mse_relay`, `hydraChannel` and the client-hints shim are all in
-the page's world there. Not yet looked at.
+the page's world there.
+
+### On Android every page can see the bridge, and call it
+
+Looked at 2026-10-25 at the holder's word. Measured on the phone through
+the WebView's DevTools socket, which a debuggable build now enables
+(`setWebContentsDebuggingEnabled`, gated on `FLAG_DEBUGGABLE`; Android
+lets only adb and root connect, and a release build is not debuggable):
+on every page, the error page included, the page's own world has
+`hydraNative` (methods `call`, `describe`, `mediaState`), `__hydra_consent`,
+`__hydra_sponsor_frame` and `__hydra_media`. The scriptlet patches read as
+native there too. The YouTube half of the probe is not measured yet: the
+phone's DNS failed for `m.youtube.com`, and then it dozed, which suspends
+the WebView.
+
+**It is a security question before it is a detection one.**
+`hydraNative` comes from `addJavascriptInterface`, which puts it in every
+frame -- a third-party iframe included -- and a `@JavascriptInterface`
+method cannot tell which frame called it. Through it any frame can call
+any registered bridge's slots:
+
+- `hydraConsent.report_dismissed` writes a lasting per-site rule allowing
+  first-party cookies for the site in the tab. The host is the shell's, so
+  a frame cannot name another site -- but an ad frame on a page can lift
+  the person's cookie block for that page's site.
+- `hydraAutofill.request_credentials` is refused today because KeePassXC
+  is a desktop socket, so no password can leave this way. It would the day
+  Android gained a credential source, from any frame, with no click.
+- `hydraCosmetic.selectors_json` and `hydraConsent.rules_json` hand out
+  the lists; `hydraSponsor.ask` sends a lookup for a url the page names.
+
+**And the scripts depend on globals throughout:** `hydraChannel` 19 times,
+and twelve more names (`__hydraPicker*`, `__hydraAutofill`,
+`__hydraRequestFill`, `__hydra_*` guards) that exist so separately
+injected scripts can find each other. On the desktop that is the isolated
+world's business; on Android it is the page's.
+
+Options, not yet chosen -- the holder's decision:
+
+1. **Take the bridge out of the page at document start.** Where the
+   WebView supports document-start scripts (every device measured here),
+   run hydra's scripts as one document-start evaluation per frame that
+   captures `hydraNative`, deletes it from `window`, and hands the channel
+   to the scripts lexically. No page script runs before it, so none sees
+   or calls the bridge. Needs: whether the injected object can be deleted
+   (to measure), the per-page permissions shim and every script moved into
+   that evaluation, and the globals above turned into lexical names on
+   Android. Devices without document-start keep today's exposure.
+2. **Move to `WebViewCompat.addWebMessageListener`**, which tells the
+   listener the sender's origin and whether it is the main frame, so the
+   shell can refuse subframes and other origins. Asynchronous where the
+   Android proxies are synchronous today (the desktop's are already
+   callback-based); the page's own main-frame scripts could still call it.
+3. **Rename only:** a per-process random name for the object and the
+   globals. Hides "hydra" from a page that looks for it; changes nothing
+   about who can call what.
 
 **Proved three ways.** A differential run against uBlock's own
 `jsonpath.js` under node, used only as an oracle: 318 query-and-document
