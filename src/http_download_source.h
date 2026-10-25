@@ -51,7 +51,8 @@ private:
 		QFile   *file = nullptr;
 		QPointer<QNetworkReply> reply;
 		qint64   base = 0;        // bytes already on disk when we resumed
-		QString  path;
+		QString  path;            // the finished file's name
+		QString  part;            // what is written until then: path + ".part"
 		bool     cancelled = false;
 		// Whether the answer to "did the server honour our Range" has been read
 		// yet. Asked once per transfer, from whichever of metaDataChanged,

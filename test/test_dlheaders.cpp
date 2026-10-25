@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
 		// A partial file on disk means the source must ask for the rest -- and a
 		// caller naming Range itself must not be able to move that offset.
 		const QString path = QDir(dir).filePath("resume.mp4");
-		{ QFile f(path); f.open(QIODevice::WriteOnly); f.write(QByteArray(500, 'x')); }
+		{ QFile f(path + ".part"); f.open(QIODevice::WriteOnly); f.write(QByteArray(500, 'x')); }
 
 		QMap<QString, QString> h;
 		h.insert("Referer", "https://site.example/2");

@@ -4,6 +4,7 @@
 #include "media_remux.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -460,6 +461,27 @@ static void test_pairs(const QString &dir) {
 	check(said.contains("Video:") && said.contains("Audio:"),
 	      "and it holds a picture and a sound");
 
+	// **Asked for again, the pair is refused.** Its halves are gone, so only
+	// the combined name can say it was saved -- and a second combine that
+	// failed would remove its output, which is this file.
+	{
+		download_manager again;
+		again.add_source(new fake_plain_source);
+		again.set_directory(dir);
+		const QByteArray before = [&] { QFile f(out); f.open(QIODevice::ReadOnly);
+		                                return f.readAll(); }();
+		QString why;
+		const int refused = again.enqueue_pair(
+		    QUrl("http://cdn.test/v"), QUrl("http://cdn.test/a"), QString(), &why, {},
+		    "y.picture.mp4", "y.sound.m4a", "y.mp4");
+		QFile f(out);
+		f.open(QIODevice::ReadOnly);
+		check(refused == 0 && why.contains("Already saved") && again.jobs().isEmpty(),
+		      QString("a pair whose combined file exists is refused, no job made (%1)")
+		          .arg(why));
+		check(f.readAll() == before, "and the combined file is untouched");
+	}
+
 	// **With the tracklist**, as a set's download carries it.
 	const QString chapters = media_remux::ffmetadata(
 	    { { 0, "One" }, { 0.4, "Two" }, { 0.7, "Three" } }, 1);
@@ -694,7 +716,7 @@ static void test_chunked(const QString &tmp) {
 
 	// And a resume through one: the hop's status emptied the partial file.
 	{
-		QFile part(tmp + "/resumed.mp4");
+		QFile part(tmp + "/resumed.mp4.part");
 		part.open(QIODevice::WriteOnly);
 		part.write(range_server::body().left(12345));
 	}
@@ -741,8 +763,9 @@ static void test_resume_against_a_server_that_ignores_range(const QString &tmp) 
 	// A fixture that cannot be built is reported as that and nothing else is
 	// claimed.
 	QFile::remove(tmp + "/clip.mp4");
+	QFile::remove(tmp + "/clip.mp4.part");
 	{
-		QFile f(tmp + "/clip.mp4");
+		QFile f(tmp + "/clip.mp4.part");
 		if (!f.open(QIODevice::WriteOnly)) {
 			check(false, QString("could not create the half-finished file in "
 			                      "%1 (%2), so nothing below was measured")
@@ -813,12 +836,14 @@ static void test_http_against_server(const QString &base, const QString &tmp) {
 	check(QFileInfo(j->path).size() == 65536, "and the bytes are on disk");
 	check(j->node_id == "node-3", "and it remembers the node it came from");
 	check(j->source_id == "http", "attributed to the http source");
+	// Copied: `j` points into the job list, which the jobs below reallocate.
+	const QString saved_path = j->path;
 
 	// Resume: leave a partial file and download again.
 	section("http source: resume via Range still works");
 	QFile::remove(tmp + "/partial.mp4");
 	{
-		QFile f(tmp + "/partial.mp4");
+		QFile f(tmp + "/partial.mp4.part");
 		f.open(QIODevice::WriteOnly);
 		f.write(QByteArray(30000, 'x'));
 		f.close();
@@ -831,6 +856,41 @@ static void test_http_against_server(const QString &base, const QString &tmp) {
 	check(rj->status == download_state::done, "the resumed job completes");
 	check(QFileInfo(rj->path).size() == 65536,
 	      "and the file ends up the right size, not appended twice");
+	check(!QFileInfo::exists(rj->path + ".part"), "and its .part is gone");
+
+	// **Saving the same file twice.** Reported 2026-10-25: the second run
+	// took the finished file for a partial one, asked for the bytes after
+	// its end, and wrote the server's refusal over it.
+	section("http source: a file already saved is refused, not overwritten");
+	QFile first(saved_path);
+	first.open(QIODevice::ReadOnly);
+	const QByteArray before = first.readAll();
+	first.close();
+	const QDateTime stamp = QFileInfo(saved_path).lastModified();
+	// By the address's own name: only the source knows it, so the job is
+	// made and then refused when it starts.
+	err.clear();
+	const int again = m.enqueue(QUrl(base + "/payload.mp4"), QString(), &err);
+	t.restart();
+	while (again && !job_by_id(m, again)->terminal() && t.elapsed() < 8000)
+		spin(20);
+	const download_job *aj = again ? job_by_id(m, again) : nullptr;
+	check(aj && aj->status == download_state::failed &&
+	      aj->error.contains("Already saved"),
+	      QString("asked again by address, it fails saying so (%1)")
+	          .arg(aj ? aj->error : err));
+	// By a given name, as Find Media asks: refused before any job is made.
+	err.clear();
+	const int named = m.enqueue(QUrl(base + "/other.mp4"), QString(), &err, {},
+	                            QFileInfo(saved_path).fileName());
+	check(named == 0 && err.contains("Already saved"),
+	      QString("asked again by name, it is refused where it was asked (%1)")
+	          .arg(err));
+	QFile after(saved_path);
+	after.open(QIODevice::ReadOnly);
+	check(after.readAll() == before && QFileInfo(saved_path).lastModified() == stamp,
+	      "and the first copy is exactly as it was");
+	check(!QFileInfo::exists(saved_path + ".part"), "with no .part left beside it");
 }
 
 int main(int argc, char **argv) {

@@ -96,6 +96,15 @@ download_manager::names_for_pair(const QString &picture_name,
 	         stem + '.' + combined_ext };
 }
 
+bool download_manager::saved(const QString &file_name, QString *error) const {
+	const QString name = QFileInfo(file_name).fileName();
+	if (name.isEmpty() || !QFileInfo::exists(QDir(m_dir).filePath(name)))
+		return false;
+	if (error)
+		*error = QString("Already saved as %1; nothing was overwritten.").arg(name);
+	return true;
+}
+
 int download_manager::enqueue_pair(const QUrl &picture, const QUrl &sound,
                                    const QString &node_id, QString *error,
                                    const QMap<QString, QString> &headers,
@@ -109,6 +118,12 @@ int download_manager::enqueue_pair(const QUrl &picture, const QUrl &sound,
 		for (const download_job &j : m_jobs)
 			if (j.url == picture && j.sound_job && !j.terminal())
 				return j.id;
+	// **Already combined, so refused.** Its two parts were removed when they
+	// became one file, so neither part's name can say so; only the combined
+	// name can. And combining again would be worse than wasted: a combine
+	// that fails removes its output, which here is the earlier copy.
+	if (!combined_name.isEmpty() && saved(combined_name, error))
+		return 0;
 	// **Its own sound, always.** The same address is otherwise one download,
 	// so a pair asked for while that sound was saving alone took over that
 	// job -- and the combine then removed the file the person had asked for.
@@ -273,6 +288,11 @@ int download_manager::enqueue(const QUrl &url, const QString &node_id,
 		for (const download_job &j : m_jobs)
 			if (j.url == url && !j.terminal())
 				return j.id;
+
+	// Said here rather than only by the source, which refuses too: here it
+	// is an answer the person sees where they asked, not a failed row.
+	if (!file_name.isEmpty() && saved(file_name, error))
+		return 0;
 
 	// First source that accepts wins. If none does, report the most specific
 	// reason offered rather than a generic refusal -- the sources know why.

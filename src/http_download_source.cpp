@@ -107,24 +107,43 @@ bool http_download_source::start(const download_request &req, QString *error) {
 	// Never let a remote path escape the download directory.
 	name = QFileInfo(name).fileName();
 
+	const QString path = QDir(req.directory).filePath(name);
+
+	// **A finished file is never written to again.** Reported 2026-10-25:
+	// saving the same video twice from Find Media overwrote the first copy
+	// with garbage. Anything at the name was taken for a partial download,
+	// so the second run asked for the bytes after its end; the server
+	// answered that range with an error rather than a 206, the resume was
+	// abandoned, the file emptied, and the error's body written into it.
+	// So the bytes go to `<name>.part` until they are complete, and a file
+	// under the name itself is something already saved -- refused, and left
+	// exactly as it was.
+	if (QFileInfo::exists(path)) {
+		if (error)
+			*error = QString("Already saved as %1; nothing was overwritten.")
+			             .arg(name);
+		return false;
+	}
+
 	auto *t = new transfer;
 	t->id   = req.id;
-	t->path = QDir(req.directory).filePath(name);
+	t->path = path;
+	t->part = path + QStringLiteral(".part");
 
 	t->url     = req.url;
 	t->headers = req.headers;
 	t->chunk   = req.chunk_size;
 
-	// Resume: if a partial file is already there, ask for the rest.
-	const QFileInfo fi(t->path);
+	// Resume: an interrupted download left its `.part`; ask for the rest.
+	const QFileInfo fi(t->part);
 	const qint64 have = fi.exists() ? fi.size() : 0;
 	t->base = have;
 
-	t->file = new QFile(t->path);
+	t->file = new QFile(t->part);
 	if (!t->file->open(have > 0 ? (QIODevice::Append | QIODevice::WriteOnly)
 	                            : (QIODevice::Truncate | QIODevice::WriteOnly))) {
 		if (error)
-			*error = "Cannot write " + t->path;
+			*error = "Cannot write " + t->part;
 		delete t->file;
 		delete t;
 		return false;
@@ -305,6 +324,16 @@ void http_download_source::teardown(transfer *t, bool ok, const QString &message
 		t->file->close();
 		delete t->file;
 		t->file = nullptr;
+	}
+	// Complete, so it takes its name. `rename` will not replace a file, so
+	// one that turned up under the name while this ran is kept, and the
+	// bytes stay in the `.part` beside it rather than being lost.
+	if (ok && !QFile::rename(t->part, t->path)) {
+		ok = false;
+		detail = QString("Finished, but %1 could not take its name (is "
+		                 "something else there?); it is kept as %2.")
+		             .arg(QFileInfo(t->path).fileName(),
+		                  QFileInfo(t->part).fileName());
 	}
 	if (ok) {
 		download_progress p;

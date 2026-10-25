@@ -183,6 +183,9 @@ private:
 	void on_progress(int id, const download_progress &p);
 	void on_finished(int id, bool ok, const QString &message);
 	void persist_history();
+	// A file of that name is already in the download directory: says so in
+	// `error`. Nothing is ever saved over one.
+	bool saved(const QString &file_name, QString *error) const;
 	// Both halves of a pair are on disk: combine them. Either failed: say so.
 	void settle_pair(int picture_id);
 	// A finished file with a tracklist: write it in as chapters.
