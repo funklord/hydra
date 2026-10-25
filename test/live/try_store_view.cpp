@@ -21,6 +21,7 @@
 #include "store_view.h"
 
 #include <QAbstractButton>
+#include <QDialog>
 #include <QLabel>
 #include <algorithm>
 #include <QApplication>
@@ -81,12 +82,19 @@ static QtMessageHandler g_prior = nullptr;
 static void listen(QtMsgType t, const QMessageLogContext &c, const QString &m) {
 	if (m.startsWith("store-view-ready ")) {
 		g_ready << m.mid(17);
-		// Find Media is modal, and its exec() would hold the wait below
-		// until somebody closed it.
+		// The dialog a view opened, measured and closed. Settings is modal and
+		// its exec() would hold the wait below until somebody closed it; Find
+		// Media is not, so it is found among the windows rather than asked
+		// for as the modal one.
 		QTimer::singleShot(0, qApp, [] {
-			if (QWidget *modal = QApplication::activeModalWidget()) {
-				measure(modal);
-				modal->close();
+			QWidget *dlg = QApplication::activeModalWidget();
+			if (!dlg)
+				for (QWidget *x : QApplication::topLevelWidgets())
+					if (qobject_cast<QDialog *>(x) && x->isVisible())
+						dlg = x;
+			if (dlg) {
+				measure(dlg);
+				dlg->close();
 			}
 		});
 	}

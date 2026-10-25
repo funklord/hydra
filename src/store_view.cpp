@@ -3,6 +3,7 @@
 #include "download_manager.h"
 #include "downloads_dialog.h"
 #include "main_window.h"
+#include "media_dialog.h"
 #include "media_detector.h"
 #include "tab_tree_model.h"
 #include "web_view_backend.h"
@@ -217,19 +218,11 @@ void main_window::show_store_view(const QString &name) {
 		                 found, "Found 3 sizes of the video, and its sound.",
 		                 QDateTime::currentDateTimeUtc());
 		m_shown_lookup.clear();
-		QTimer::singleShot(0, this, [this] { open_media(); });
-		// `open_media` runs its dialog modally, so the dialog is found by
-		// asking which window is modal once it is up.
-		auto *find = new QTimer(this);
-		find->setInterval(100);
-		connect(find, &QTimer::timeout, find, [find] {
-			if (QWidget *dlg = QApplication::activeModalWidget()) {
-				find->stop();
-				find->deleteLater();
-				store_view::announce_when_drawn(dlg, "media");
-			}
+		QTimer::singleShot(0, this, [this] {
+			open_media();
+			if (m_media_ui)
+				store_view::announce_when_drawn(m_media_ui, "media");
 		});
-		find->start();
 		return;
 	}
 	if (name == "settings") {

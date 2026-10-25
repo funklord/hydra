@@ -778,6 +778,8 @@ public:
 	QString             m_shown_lookup;   // the page whose rows the list holds
 	QUrl                m_lookup_page;   // what the resolver is busy with
 	QPointer<media_dialog> m_media_ui;   // while Find Media is open
+	QString m_media_bound;   // the tab and address it is showing
+	void bind_media_ui();
 	mse_tap            *m_mse            = nullptr;
 	// HLS assembly, held here because it outlives the dialog that starts it.
 	stream_assembly    *m_assembly       = nullptr;

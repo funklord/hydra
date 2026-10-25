@@ -112,6 +112,8 @@ int main(int argc, char *argv[]) {
 		tf.open(QIODevice::WriteOnly);
 		tf.write(QString("- [f0] folder | Mine\n  - [a1] unopened | Clip | "
 		                 "http://127.0.0.1:%1/watch | created=2026-01-01T00:00:00 | "
+		                 "seen=2026-01-01T00:00:00\n  - [a2] unopened | Other | "
+		                 "http://127.0.0.1:%1/watch?v=2 | created=2026-01-01T00:00:00 | "
 		                 "seen=2026-01-01T00:00:00\n").arg(srv.serverPort()).toUtf8());
 	}
 	policy_engine policy;
@@ -132,29 +134,27 @@ int main(int argc, char *argv[]) {
 	};
 	main_window *w = start();
 
-	// Open Find Media, run `during` while it is up, and close it. The dialog
-	// is modal, so `open_media` does not return until it closes: the checks
-	// run from a timer inside its own event loop, and closing it is what
-	// hands control back here.
+	// Open Find Media, run `during` while it is up, and close it. It is not
+	// modal (2026-10-25), so `open_media` returns with it open and the checks
+	// run here; it used to be, and these ran from a timer inside its loop.
 	auto with_dialog = [&](const std::function<void(QDialog *)> &during) {
-		auto *poll = new QTimer(w);
-		poll->setInterval(50);
-		int tries = 0;
-		QObject::connect(poll, &QTimer::timeout, poll, [&, poll] {
-			auto *dlg = qobject_cast<QDialog *>(QApplication::activeModalWidget());
-			if (!dlg && ++tries < 100)
-				return;
-			poll->stop();
-			poll->deleteLater();
-			if (!dlg) {
-				check(false, "Find Media opened");
-				return;
-			}
-			during(dlg);
-			dlg->reject();
-		});
-		poll->start();
 		QMetaObject::invokeMethod(w, "open_media");
+		QDialog *dlg = nullptr;
+		for (int i = 0; i < 100 && !dlg; ++i) {
+			for (QWidget *x : QApplication::topLevelWidgets())
+				if (auto *d = qobject_cast<QDialog *>(x); d && d->isVisible())
+					dlg = d;
+			if (!dlg)
+				spin(50);
+		}
+		if (!dlg) {
+			check(false, "Find Media opened");
+			return;
+		}
+		check(!dlg->isModal() && QApplication::activeModalWidget() == nullptr,
+		      "and it does not hold the window");
+		during(dlg);
+		dlg->reject();
 		spin(200);
 	};
 	auto note = [](QDialog *d) {
@@ -212,6 +212,26 @@ int main(int argc, char *argv[]) {
 		check(vouched_rows(d) == rows_first, "and lists the same rows once, not twice");
 	});
 	check(srv.page_fetches > fetches_after_first, "having run yt-dlp a second time");
+
+	// **It follows the tab in front of you**, the holder's choice when it
+	// stopped being modal: another tab is looked up, and coming back shows
+	// the first page's answer from the cache.
+	with_dialog([&](QDialog *d) {
+		spin(300);
+		auto *tree = w->findChild<QTreeView *>();
+		const QModelIndex folder = tree->model()->index(0, 0);
+		emit tree->activated(tree->model()->index(1, 0, folder));
+		spin(1500);
+		const QString there = note(d);
+		check(there.startsWith("Looking") || there.startsWith("yt-dlp"),
+		      QString("switching tabs looks up the page now in front (%1)").arg(there));
+		wait_done(d);
+		emit tree->activated(tree->model()->index(0, 0, folder));
+		spin(1500);
+		check(note(d).startsWith("yt-dlp (") && vouched_rows(d) == rows_first,
+		      QString("and switching back shows the first page's answer (%1, %2 rows)")
+		          .arg(note(d)).arg(vouched_rows(d)));
+	});
 
 	// **Reported 2026-10-22: the cache did not survive a restart.** The
 	// browser ended and started again on the same profile, the clip's tab

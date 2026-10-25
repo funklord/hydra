@@ -39174,6 +39174,31 @@ locally:
 - reopening uses the cache without fetching the page again;
 - Refresh runs it again.
 
+### Not modal, and it follows the tab in front of you
+
+The holder asked 2026-10-25 why Find Media was modal. Nothing recorded a
+reason: it ran through `exec()` because it was first written that way, and
+held the whole window until closed. It is a non-modal dialog now, one per
+window, brought forward rather than doubled when asked for again.
+
+Of three ways to behave when the page changes under it -- follow the new
+page, stay on the old one, close -- the holder chose **follow**.
+`bind_media_ui` points it at the page in front of you, and runs when the
+tab changes (`page_changed`) and when that tab's address does
+(`url_changed`, which covers a new video on the same site). It does the
+setup opening used to: the site's extractor, this page's looked-up rows
+and no other's, the title, and a lookup that comes from the cache where it
+can. A page it is already showing is left alone, since rebuilding folds
+every group back up; with no tab left it closes. Refresh asks about the
+page in front of you at the moment it is pressed.
+
+What relied on modality was found by searching for it: no code path
+depended on the dialog holding the window -- the lookup notes already
+went through a `QPointer` and checked which page they belong to -- and
+two live drivers looked for the modal window to find it. `try_media_lookup`
+now also switches tabs with the dialog open and back again (17 checks), and
+`try_store_view media` still announces it and fits a 320-point phone.
+
 ## List columns can all be dragged
 
 Asked for by the holder on 2026-10-22. Three lists set their widest,

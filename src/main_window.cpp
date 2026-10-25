@@ -2393,8 +2393,7 @@ void main_window::refresh_media_affordance(const QString &site_host) {
 }
 
 void main_window::open_media() {
-	web_view_backend *v = current_view();
-	if (!v) {
+	if (!current_view()) {
 		// The odd one out: every other action needing a page says so, and this
 		// returned in silence. Hard to reach, since the Media button is hidden
 		// until something is detected -- but "the button did nothing" is the
@@ -2403,9 +2402,70 @@ void main_window::open_media() {
 		                       "one.", 5000);
 		return;
 	}
+	// **Non-modal, and one of it.** It used to run with `exec()`, which held
+	// the whole window until it closed, for no reason anybody recorded; the
+	// holder asked 2026-10-25 why it was modal. Open now, it stays beside the
+	// browser and follows the tab in front of you (`bind_media_ui`), which
+	// was the holder's choice of the three. Asked for again while open, it is
+	// brought forward rather than doubled.
+	if (m_media_ui) {
+		m_media_bound.clear();
+		bind_media_ui();
+		m_media_ui->raise();
+		m_media_ui->activateWindow();
+		return;
+	}
+	auto *dlg = new media_dialog(m_media, m_players, m_downloads, m_local_proxy,
+	                             m_mse, m_assembly, this);
+	m_media_ui = dlg;
+	// Gone when closed by any route -- Close, Escape, Record's own accept --
+	// since `done()` hides a dialog and does not delete it.
+	connect(dlg, &QDialog::finished, dlg, &QObject::deleteLater);
+	// **The resolver is the shell's, so the dialog asks and this answers**,
+	// and answers into the dialog that stays open: the rows arrive through
+	// the detector, and what was said through `set_lookup_note`. Asked of
+	// the page in front of you at the moment Refresh is pressed, which is
+	// the page the dialog is showing.
+	connect(dlg, &media_dialog::refresh_requested, this, [this] {
+		web_view_backend *v = current_view();
+		if (!v)
+			return;
+		apply_extractor(v->url().host(), v->url());
+		look_up_media(true);
+	});
+	connect(dlg, &media_dialog::capture_requested, this, [this] {
+		// Queued: the dialog is closing itself, and starting a capture reloads
+		// the page -- not something to do from inside its own close.
+		QTimer::singleShot(0, this, [this] {
+			if (m_capture_url.isEmpty())
+				toggle_capture();
+		});
+	});
+	m_media_bound.clear();
+	bind_media_ui();
+	dlg->show();
+}
+
+// **Find Media, pointed at the page in front of you.** Run when it opens,
+// and again whenever that page changes -- another tab, or this tab going
+// somewhere else -- while it is open. A page it is already showing is left
+// alone, because rebuilding the list folds every group back up.
+void main_window::bind_media_ui() {
+	if (!m_media_ui)
+		return;
+	web_view_backend *v = current_view();
+	if (!v) {
+		// The last tab closed under it: there is no page left to list.
+		m_media_ui->close();
+		return;
+	}
 	QString node_id;
 	for (auto it = m_views_by_id.cbegin(); it != m_views_by_id.cend(); ++it)
 		if (it.value() == v) { node_id = it.key(); break; }
+	const QString bound = node_id + QLatin1Char(' ') + v->url().toString();
+	if (bound == m_media_bound)
+		return;
+	m_media_bound = bound;
 
 	// Anything this site has been taught (sec 11.5) runs before the list is built,
 	// so a learned stream appears beside whatever detection found on its own.
@@ -2422,30 +2482,10 @@ void main_window::open_media() {
 		                                                                 : QList<media_item>());
 	}
 
-	const stream_context ctx = page_context(v);
-	media_dialog dlg(m_media, m_players, m_downloads, m_local_proxy, m_mse,
-	                  m_assembly, this);
-	m_media_ui = &dlg;
-	// **The resolver is the shell's, so the dialog asks and this answers**,
-	// and answers into the dialog that stays open: the rows arrive through
-	// the detector, and what was said through `set_lookup_note`.
-	connect(&dlg, &media_dialog::refresh_requested, this, [this, v] {
-		apply_extractor(v->url().host(), v->url());
-		look_up_media(true);
-	});
-	connect(&dlg, &media_dialog::capture_requested, this, [this] {
-		// Queued: the dialog is closing itself, and starting a capture reloads
-		// the page -- not something to do from inside its own exec().
-		QTimer::singleShot(0, this, [this] {
-			if (m_capture_url.isEmpty())
-				toggle_capture();
-		});
-	});
-	dlg.set_page_title(v->page_title());
-	dlg.set_site(v->url().host(), node_id, ctx);
+	m_media_ui->set_page_title(v->page_title());
+	m_media_ui->set_site(v->url().host(), node_id, page_context(v));
 	// Looked up as it opens, from the cache where the answer is still good.
 	look_up_media(false);
-	dlg.exec();
 }
 
 void main_window::report_annoyance() {
@@ -4522,6 +4562,10 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 		         [this, view, cosmetic, consent, autofill,
 		          sponsor](const QUrl &u) {
 			apply_policy(view, u.host());
+			// And an open Find Media goes with this tab when it is the one
+			// in front of you -- a new video on the same site included.
+			if (view == current_view())
+				bind_media_ui();
 			// This view's own host, for this view's own bridges -- not the
 			// current view's, which is the fault described where the bridges
 			// are made.
@@ -5629,6 +5673,8 @@ void main_window::page_changed() {
 	}
 	update_navigation();
 	update_window_title();
+	// An open Find Media follows the tab in front of you.
+	bind_media_ui();
 }
 
 void main_window::set_loading(bool loading) {
