@@ -2566,6 +2566,74 @@ int main(int argc, char **argv) {
 		      "a frame on another page keeps its own");
 	}
 
+	// **A patched function answers as the one it replaced.** Measured
+	// 2026-10-25 on a YouTube watch page with the person's lists: five of
+	// the catalog's patches handed their source to a page that asked, one
+	// of them naming a property `__hydra_url` it left on every request.
+	section("a patched function still answers as the original, whichever family");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_fetch_stubs));
+		// **Named stubs, because this engine keeps no source**: QJSEngine
+		// prints every function as `[native code]` under its own name, so
+		// an anonymous stub and an undisguised patch print alike. A name is
+		// what tells them apart here; a browser would show the source too.
+		eng.evaluate(QStringLiteral(
+		  "var named = function (label, f) {"
+		  "  return new Function('f', 'return function ' + label + '() {"
+		  "    return f.apply(this, arguments); };')(f); };"
+		  "['fetch', 'open', 'eval', 'setTimeout', 'setInterval', 'requestAnimationFrame']"
+		  "  .forEach(function (n) { window[n] = named('page_' + n, window[n]); });"
+		  "var XP = window.XMLHttpRequest.prototype;"
+		  "XP.open = named('page_open', XP.open); XP.send = named('page_send', XP.send);"
+		  "var EP = window.EventTarget.prototype;"
+		  "EP.addEventListener = named('page_listen', EP.addEventListener);"));
+		eng.evaluate(QStringLiteral(
+		  "window.__was = {};"
+		  "window.__names = ['fetch', 'open', 'eval', 'setTimeout', 'setInterval',"
+		  "  'requestAnimationFrame'];"
+		  "window.__names.forEach(function (n) { window.__was[n] = String(window[n]); });"
+		  "window.__was.parse = String(JSON.parse);"
+		  "window.__was.xopen = String(window.XMLHttpRequest.prototype.open);"
+		  "window.__was.xsend = String(window.XMLHttpRequest.prototype.send);"
+		  "window.__was.ael = String(window.EventTarget.prototype.addEventListener);"));
+		run_one(&eng, "json-prune", { "adPlacements" });
+		run_one(&eng, "json-prune-fetch-response", { "adPlacements", "", "/player" });
+		run_one(&eng, "json-prune-xhr-response", { "adPlacements", "", "/player" });
+		run_one(&eng, "prevent-xhr", { "/ads" });
+		run_one(&eng, "no-fetch-if", { "/ads" });
+		run_one(&eng, "prevent-window-open", { "pop" });
+		run_one(&eng, "prevent-addEventListener", { "click", "ad" });
+		run_one(&eng, "noeval-if", { "ad" });
+		run_one(&eng, "prevent-requestAnimationFrame", { "ad" });
+		run_one(&eng, "adjust-setTimeout", { "x", "1000", "0.05" });
+		run_one(&eng, "prevent-setInterval", { "ad" });
+		const QString changed = ask(&eng,
+		  "(function () { var out = [];"
+		  "  window.__names.forEach(function (n) {"
+		  "    if (String(window[n]) !== window.__was[n]) out.push(n); });"
+		  "  if (String(JSON.parse) !== window.__was.parse) out.push('JSON.parse');"
+		  "  if (String(window.XMLHttpRequest.prototype.open) !== window.__was.xopen)"
+		  "    out.push('xhr open');"
+		  "  if (String(window.XMLHttpRequest.prototype.send) !== window.__was.xsend)"
+		  "    out.push('xhr send');"
+		  "  if (String(window.EventTarget.prototype.addEventListener) !== window.__was.ael)"
+		  "    out.push('addEventListener');"
+		  "  return out.join(' '); })()");
+		check(changed.isEmpty(),
+		      QString("every patched function gives the original's source (%1)")
+		          .arg(changed.isEmpty() ? QStringLiteral("all") : changed));
+		check(ask(&eng, "JSON.parse('{\"adPlacements\":1,\"k\":2}').adPlacements === undefined")
+		          == "true",
+		      "while still doing what it was patched to do");
+		check(ask(&eng, "(function () { var x = new window.XMLHttpRequest();"
+		                "x.open('GET', 'https://x.test/player'); x.send();"
+		                "return Object.keys(x).filter(function (k) {"
+		                "  return k.indexOf('hydra') >= 0; }).join(','); })()").isEmpty(),
+		      "and a request carries no property named for this browser");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

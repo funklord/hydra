@@ -26,6 +26,67 @@ var C = {};
 var native_parse = JSON.parse;
 var native_stringify = JSON.stringify;
 
+// **A replaced function that still answers as the one it replaced.** A
+// page can ask any function for its source, its name, its length, and
+// whether it has a `prototype`; a patch written as a plain function answers
+// all four differently from the engine's, and YouTube's player asks. Measured
+// 2026-10-25 on a watch page: `JSON.parse`, `fetch`, the XHR methods,
+// `Response.prototype.json` and `setTimeout` each handed back this file's
+// code. So every replacement goes through here: a Proxy of the original,
+// which keeps its name, length and shape, calls the patch, and has
+// `Function.prototype.toString` answer for it with the original's source.
+//
+// Where the engine has no Proxy, the patch is installed as it is: the
+// behaviour is the same, only the disguise is missing.
+var disguised = typeof WeakMap === 'function' ? new WeakMap() : null;
+var answers_as = function (stand_in, real) {
+	if (!disguised || typeof Proxy !== 'function' || typeof Reflect !== 'object')
+		return;
+	var source_of = Function.prototype.toString;
+	if (!disguised.has(source_of)) {
+		var answer = new Proxy(source_of, {
+			apply: function (target, self, args) {
+				var f = self;
+				while (disguised.has(f)) f = disguised.get(f);
+				return Reflect.apply(target, f, args);
+			}
+		});
+		disguised.set(answer, source_of);
+		try { Function.prototype.toString = answer; } catch (e) {}
+	}
+	disguised.set(stand_in, real);
+};
+// **Per-object notes the page cannot see.** What a request was opened with
+// used to be written onto the request as `__hydra_url`, which any page can
+// list with `Object.keys` -- a property named for this browser on every
+// XMLHttpRequest. A WeakMap holds the same note off the object.
+var private_note = function () {
+	if (typeof WeakMap === 'function') {
+		var m = new WeakMap();
+		return {
+			get: function (o) { return m.get(o); },
+			set: function (o, v) { try { m.set(o, v); } catch (e) {} }
+		};
+	}
+	return {
+		get: function (o) { return o.__hydra_note; },
+		set: function (o, v) { try { o.__hydra_note = v; } catch (e) {} }
+	};
+};
+var disguise = function (patch, real) {
+	if (typeof real !== 'function' || typeof Proxy !== 'function' ||
+	    typeof Reflect !== 'object')
+		return patch;
+	var traps = {
+		apply: function (target, self, args) { return Reflect.apply(patch, self, args); }
+	};
+	if (real.prototype && real.prototype.constructor === real)
+		traps.construct = function (target, args) { return Reflect.construct(patch, args); };
+	var stand_in = new Proxy(real, traps);
+	answers_as(stand_in, real);
+	return stand_in;
+};
+
 // json-prune: remove named properties from anything the page parses as JSON.
 //
 // This is the one that reaches a video ad. A player asks its own backend for a
@@ -76,14 +137,14 @@ C['json-prune'] = function (paths, needle) {
 	var prune = pruner(paths, needle);
 	if (!prune) return;
 	var real = JSON.parse;
-	JSON.parse = function () { return prune(real.apply(this, arguments)); };
+	JSON.parse = disguise(function () { return prune(real.apply(this, arguments)); }, real);
 	// And the fetch path, which is how a modern player actually asks.
 	if (window.Response && window.Response.prototype &&
 	     window.Response.prototype.json) {
 		var realJson = window.Response.prototype.json;
-		window.Response.prototype.json = function () {
+		window.Response.prototype.json = disguise(function () {
 			return realJson.apply(this, arguments).then(prune);
-		};
+		}, realJson);
 	}
 };
 
@@ -130,7 +191,7 @@ var filter_fetch = function (wanted, transform) {
 			clone: function () { return this; }
 		};
 	};
-	window.fetch = function (input) {
+	window.fetch = disguise(function (input) {
 		var url = '';
 		try {
 			url = (typeof input === 'string') ? input
@@ -147,7 +208,7 @@ var filter_fetch = function (wanted, transform) {
 				return like(res, typeof out === 'string' ? out : body);
 			});
 		});
-	};
+	}, real);
 };
 
 // json-prune-fetch-response: prune the body of a matching fetch, whichever way
@@ -206,15 +267,16 @@ var filter_xhr = function (wanted, on_text, on_parsed) {
 	var send = XHR.prototype.send;
 	if (typeof open !== 'function' || typeof send !== 'function') return;
 
-	XHR.prototype.open = function (method, url) {
-		try { this.__hydra_url = String(url == null ? '' : url); } catch (e) {}
+	var opened = private_note();
+	XHR.prototype.open = disguise(function (method, url) {
+		opened.set(this, String(url == null ? '' : url));
 		return open.apply(this, arguments);
-	};
+	}, open);
 
-	XHR.prototype.send = function () {
+	XHR.prototype.send = disguise(function () {
 		var xhr = this;
 		var url = '';
-		try { url = String(xhr.__hydra_url || ''); } catch (e) {}
+		url = String(opened.get(xhr) || '');
 		if (!url || !wanted(url)) return send.apply(this, arguments);
 
 		// Cached on the raw body, so repeated reads neither re-parse nor
@@ -261,7 +323,7 @@ var filter_xhr = function (wanted, on_text, on_parsed) {
 			});
 		} catch (e) { /* a page that pinned them keeps them */ }
 		return send.apply(this, arguments);
-	};
+	}, send);
 };
 
 C['json-prune-xhr-response'] = function (paths, needle, match) {
@@ -517,14 +579,14 @@ var prevent_timer = function (which) {
 		var want = (delay === undefined || delay === null ||
 		             String(delay) === '') ? null : Number(delay);
 		var fake = 0;
-		window[which] = function (fn, ms) {
+		window[which] = disguise(function (fn, ms) {
 			var source = '';
 			try { source = String(fn); } catch (e) {}
 			var delay_matches = (want === null) || (Number(ms) === want);
 			if (source && hit(source) && delay_matches)
 				return ++fake;
 			return real.apply(this, arguments);
-		};
+		}, real);
 	};
 };
 C['prevent-setTimeout']  = prevent_timer('setTimeout');
@@ -537,7 +599,7 @@ C['no-fetch-if'] = function (needle) {
 	if (typeof window.fetch !== 'function') return;
 	var hit = matcher(needle);
 	var real = window.fetch;
-	window.fetch = function (input) {
+	window.fetch = disguise(function (input) {
 		var url = '';
 		try {
 			url = (typeof input === 'string') ? input
@@ -552,7 +614,7 @@ C['no-fetch-if'] = function (needle) {
 			try { return window.Promise.resolve(empty); } catch (e) {}
 		}
 		return real.apply(this, arguments);
-	};
+	}, real);
 };
 
 // nowebrtc: a peer connection is not something an ad needs, and it is a
@@ -580,7 +642,7 @@ C['prevent-window-open'] = function (needle) {
 	if (typeof window.open !== 'function') return;
 	var hit = matcher(needle);
 	var real = window.open;
-	window.open = function (url) {
+	window.open = disguise(function (url) {
 		if (hit(String(url == null ? '' : url))) {
 			return {
 				closed: false, close: function () { this.closed = true; },
@@ -589,7 +651,7 @@ C['prevent-window-open'] = function (needle) {
 			};
 		}
 		return real.apply(this, arguments);
-	};
+	}, real);
 };
 
 // set-local-storage-item: a flag a page reads back from storage. The same
@@ -819,7 +881,7 @@ C['prevent-addEventListener'] = function (type, pattern) {
 	var want_type = matcher(type);
 	var want_handler = matcher(pattern);
 	var real = ET.prototype.addEventListener;
-	ET.prototype.addEventListener = function (t, h) {
+	ET.prototype.addEventListener = disguise(function (t, h) {
 		var ts = '', hs = '';
 		try { ts = String(t == null ? '' : t); } catch (e) {}
 		try {
@@ -834,7 +896,7 @@ C['prevent-addEventListener'] = function (type, pattern) {
 		if (want_type(ts) && want_handler(hs))
 			return;
 		return real.apply(this, arguments);
-	};
+	}, real);
 };
 
 // --- the boosters -----------------------------------------------------------
@@ -857,7 +919,7 @@ var adjust_timer = function (which, needle, delay_arg, boost_arg) {
 	if (!isFinite(delay)) delay = 1000;
 	var boost = parseFloat(boost_arg);
 	boost = isFinite(boost) ? Math.min(Math.max(boost, 0.001), 50) : 0.05;
-	window[which] = function (fn, ms) {
+	window[which] = disguise(function (fn, ms) {
 		var args = Array.prototype.slice.call(arguments);
 		var src = '';
 		try { src = String(fn == null ? '' : fn); } catch (e) {}
@@ -867,7 +929,7 @@ var adjust_timer = function (which, needle, delay_arg, boost_arg) {
 		if ((delay === -1 || ms === delay) && want(src))
 			args[1] = ms * boost;
 		return real.apply(this, args);
-	};
+	}, real);
 };
 
 C['adjust-setInterval'] = function (needle, delay, boost) {
@@ -899,12 +961,12 @@ C['noeval-if'] = function (needle) {
 	// than silently blocking every eval on the page.
 	if (raw === '') return;
 	var want = matcher(raw);
-	window.eval = function (code) {
+	window.eval = disguise(function (code) {
 		var a = '';
 		try { a = String(code == null ? '' : code); } catch (e) {}
 		if (want(a)) return undefined;
 		return real.apply(this, arguments);
-	};
+	}, real);
 };
 
 // prevent-requestAnimationFrame(needle): hand a matching callback a no-op
@@ -919,14 +981,14 @@ C['prevent-requestAnimationFrame'] = function (needle) {
 	if (raw === '') return;        // logs in uBlock; prevents nothing
 	var negated = raw.charAt(0) === '!';
 	var want = matcher(negated ? raw.slice(1) : raw);
-	window.requestAnimationFrame = function (fn) {
+	window.requestAnimationFrame = disguise(function (fn) {
 		var args = Array.prototype.slice.call(arguments);
 		var src = '';
 		try { src = String(fn == null ? '' : fn); } catch (e) {}
 		if (want(src) !== negated)
 			args[0] = function () {};
 		return real.apply(this, args);
-	};
+	}, real);
 };
 
 // prevent-refresh(delay): stop a `<meta http-equiv=refresh>` from taking the
@@ -1199,7 +1261,7 @@ C['prevent-bab'] = function () {
 	};
 	var real_eval = window.eval;
 	if (typeof real_eval === 'function') {
-		window.eval = function (code) {
+		window.eval = disguise(function (code) {
 			if (!check(code)) return real_eval.apply(this, arguments);
 			// Undo what the script had already done to the page before it
 			// called us: the body is hidden and a message element inserted.
@@ -1210,16 +1272,16 @@ C['prevent-bab'] = function () {
 				if (el && el.parentNode) el.parentNode.removeChild(el);
 			} catch (e) {}
 			return undefined;
-		};
+		}, real_eval);
 	}
 	var real_timeout = window.setTimeout;
 	if (typeof real_timeout === 'function') {
-		window.setTimeout = function (fn) {
+		window.setTimeout = disguise(function (fn) {
 			var args = Array.prototype.slice.call(arguments);
 			if (typeof fn === 'string' && /\.bab_elementid.$/.test(fn))
 				args[0] = function () {};
 			return real_timeout.apply(this, args);
-		};
+		}, real_timeout);
 	}
 };
 
@@ -1525,20 +1587,21 @@ C['prevent-xhr'] = function (props, directive) {
 	var send = XHR.prototype.send;
 	if (typeof open !== 'function' || typeof send !== 'function') return;
 
-	XHR.prototype.open = function (method, url) {
+	var blocked_note = private_note();
+	XHR.prototype.open = disguise(function (method, url) {
 		try {
-			this.__hydra_blocked = wanted({
+			blocked_note.set(this, wanted({
 				method: String(method == null ? '' : method),
 				url: String(url == null ? '' : url)
-			});
-		} catch (e) { this.__hydra_blocked = false; }
+			}));
+		} catch (e) { blocked_note.set(this, false); }
 		return open.apply(this, arguments);
-	};
+	}, open);
 
-	XHR.prototype.send = function () {
+	XHR.prototype.send = disguise(function () {
 		var xhr = this;
 		var blocked = false;
-		try { blocked = !!xhr.__hydra_blocked; } catch (e) {}
+		blocked = !!blocked_note.get(xhr);
 		if (!blocked) return send.apply(this, arguments);
 
 		var kind = '';
@@ -1592,7 +1655,7 @@ C['prevent-xhr'] = function (props, directive) {
 		};
 		if (typeof window.setTimeout === 'function') window.setTimeout(fire, 1);
 		else fire();
-	};
+	}, send);
 };
 
 // trusted-prevent-fetch(propsToMatch, body, type): the same for fetch, with
@@ -1604,7 +1667,7 @@ C['trusted-prevent-fetch'] = function (props, body, type) {
 	if (raw_props === '') return;
 	var wanted = props_matcher(raw_props, 'url');
 	var real = window.fetch;
-	window.fetch = function (input, init) {
+	window.fetch = disguise(function (input, init) {
 		var url = '', method = 'GET';
 		try {
 			url = (typeof input === 'string') ? input
@@ -1632,7 +1695,7 @@ C['trusted-prevent-fetch'] = function (props, body, type) {
 			},
 			clone: function () { return this; }
 		});
-	};
+	}, real);
 };
 
 // trusted-replace-argument(path, position, value): change what a call is
@@ -1679,13 +1742,13 @@ C['trusted-replace-argument'] = function (path, position, value) {
 		replace_with = function () { return fixed; };
 	}
 	try {
-		at.o[at.k] = function () {
+		at.o[at.k] = disguise(function () {
 			var args = Array.prototype.slice.call(arguments);
 			if (pos_raw === 'this') return real.apply(replace_with(this), args);
 			var i = offset >= 0 ? offset : args.length + offset;
 			if (i >= 0 && i < args.length) args[i] = replace_with(args[i]);
 			return real.apply(this, args);
-		};
+		}, real);
 	} catch (e) {}
 };
 
@@ -2114,17 +2177,14 @@ var json_path = function (query) {
 };
 
 
-// **A patched method that still reads as the engine's own.** A page can ask a
-// function for its source, and YouTube's player does: a wrapper written as a
-// plain function answers with this file's code, which is the most direct
-// thing a page can check. A Proxy keeps the engine's answer, and
-// `Function.prototype.toString` is taught to answer for the Proxy what it
-// would have for the original -- name included, which a bare Proxy loses.
+// **A patched method that still reads as the engine's own**, for the
+// edit family: the Proxy is around the original, and `answers_as` gives it
+// the original's source, as `disguise` does for the rest of the catalog.
 //
 // `handler(real, self, args)` makes the call; `args` may be changed first.
 // A constructor is wrapped for `new` as well, with `self` undefined.
 // Returns false where the path names no function.
-var disguised = typeof WeakMap === 'function' ? new WeakMap() : null;
+//
 // The global object, which in a page is `window` itself. Looked up on
 // `window` first and then here, so `fetch` and `JSON` resolve wherever the
 // engine keeps them. Through `Function` because the runner is strict, where
@@ -2161,21 +2221,7 @@ var wrap_method = function (path, handler) {
 			};
 		}
 		wrapped = new Proxy(real, traps);
-		if (disguised) {
-			var source_of = Function.prototype.toString;
-			if (!disguised.has(source_of)) {
-				var answer = new Proxy(source_of, {
-					apply: function (target, self, args) {
-						var f = self;
-						while (disguised.has(f)) f = disguised.get(f);
-						return Reflect.apply(target, f, args);
-					}
-				});
-				disguised.set(answer, source_of);
-				try { Function.prototype.toString = answer; } catch (e) {}
-			}
-			disguised.set(wrapped, real);
-		}
+		answers_as(wrapped, real);
 	} else {
 		wrapped = function () {
 			return handler(function (s, a) { return real.apply(s, a); },

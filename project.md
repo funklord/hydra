@@ -37790,11 +37790,38 @@ Three choices that differ from uBlock or go past it:
 **A wrapped method still reads as the engine's own.** `wrap_method` uses
 a Proxy and teaches `Function.prototype.toString` to answer for it with the
 original's source, name included, as uBlock does: YouTube can ask
-`JSON.stringify` for its source. **Only the new family is wrapped this
-way.** The older scriptlets replace `fetch`, `JSON.parse` and the XHR
-methods with plain functions, whose source a page can read; moving them
-onto `wrap_method` is open, and is the first thing to try if YouTube still
-detects this build.
+`JSON.stringify` for its source.
+
+**The wall stayed, and the rest of the catalog was giving itself away.**
+The holder reported it unchanged the same afternoon. `try_youtube_wall`
+loads a real watch page through the real window with a copy of the
+person's lists and asks the page what it sees: all 66 YouTube scriptlets
+ran and none threw, `adPlacements`, `adSlots` and `playerAds` were gone --
+and `JSON.parse`, `fetch`, both XHR methods, `Response.prototype.json` and
+`setTimeout` each handed a page that asked this file's own code, one of
+them naming the `__hydra_url` it left as an enumerable property on every
+request. (`appendChild` read as source too; that one is YouTube's own
+polyfill.) So `disguise(patch, real)` now stands behind every replacement
+in the catalog -- eighteen sites -- as a Proxy of the original that calls
+the patch, keeping its name, length and lack of a `prototype`, with its
+source answered as the original's; and what the XHR filters noted about a
+request is kept in a WeakMap rather than on it. Run again, every function
+reads as native. In `test_scriptlets`, QJSEngine keeps no source text and
+prints every function as `[native code]` under its own name, so the stubs
+are given names: with `disguise` reduced to returning the patch, all ten
+patched families go red.
+
+**What a page can still see**, as far as is known: `filter_xhr` defines
+`responseText` and `response` as own properties of each request it
+watches, where the engine keeps them on the prototype -- uBlock subclasses
+`XMLHttpRequest` instead. And the property traps (`set-constant`,
+`abort-on-property-*`) install accessors whose getters are plain
+functions. Neither has been seen to matter; they are the next things to
+try if the wall survives this.
+
+**The wall itself has not been seen here.** An anonymous session with the
+person's lists never got it, so whether these changes clear it is for the
+holder to see in their own session.
 
 **Proved three ways.** A differential run against uBlock's own
 `jsonpath.js` under node, used only as an oracle: 318 query-and-document
