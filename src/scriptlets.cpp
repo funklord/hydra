@@ -20,6 +20,12 @@ namespace {
 const char *k_catalog = R"JS(
 var C = {};
 
+// The engine's own JSON, kept before any scriptlet runs: the edit
+// scriptlets wrap `JSON.parse` and `JSON.stringify`, and the copying they do
+// must not go through their own wrappers.
+var native_parse = JSON.parse;
+var native_stringify = JSON.stringify;
+
 // json-prune: remove named properties from anything the page parses as JSON.
 //
 // This is the one that reaches a video ad. A player asks its own backend for a
@@ -1692,6 +1698,739 @@ C['set-local-storage-item'] = function (key, value) {
 		else window.localStorage.setItem(String(key), String(chosen.v));
 	} catch (e) { /* storage refused, which a page can also see */ }
 };
+
+// --- the JSON query language, and the scriptlets that edit with it -------
+
+// json_path(query): uBlock's JSON query language, compiled once and applied
+// to as many objects as the page hands over.
+//
+// **The language is uBlock's and the code is this project's.** uBlock's
+// `jsonpath.js` was read for the grammar and the semantics, and this was
+// written against them; the YouTube rules that need it are the test.
+//
+// The grammar, in brief:
+//
+//     $ @            the root, or the node a filter is looking at
+//     .k  ..k        a child, or a descendant at any depth
+//     .*  [*]        every child
+//     ['k'] [0] [-1] [a,b]   named, indexed, from the end, several
+//     ./re/          every key the regex matches
+//     [?.p]  [?!.p]  keep nodes where the path exists (or does not)
+//     [?.p==v]       ...and compares: == != < <= > >= ^= $= *= and =/re/i
+//     ;$  {n,m};$    the matches so far must number 1.. or n..m; then the
+//                    query restarts from the root
+//     =json          assign; +=json merges an object or appends to an array;
+//                    =repl({"regex":..,"flags":..,"replacement":..}) rewrites
+//                    a string; no assignment deletes what was found
+//
+// **`=call(...)` is refused**, which is the one place this differs from
+// uBlock by choice. It calls a method the rule names, on an object the rule
+// names, with `self` when the first entry is null -- so a list rule could
+// reach `eval`. Every argument here is data and never code, and that holds
+// for the query language too.
+//
+// Returns null for a query that does not compile. A query that assigns
+// says so in `assigns`, because only a trusted list may use one.
+var json_path = function (query) {
+	var ROOT = 1, CURRENT = 2, CHILD = 3, DESC = 4, QUANT = 5;
+	var q = String(query == null ? '' : query);
+	var v2 = false;
+	if (q.indexOf('v2:') === 0) { v2 = true; q = q.slice(3); }
+
+	// Up to the closing `close`, with `\close` an escaped one.
+	var until = function (s, close, i) {
+		var out = '';
+		for (var j = i; j < s.length; j++) {
+			var c = s.charAt(j);
+			if (c === close) return { s: out, i: j + 1 };
+			if (c === '\\' && s.charAt(j + 1) === close) { out += close; j++; continue; }
+			out += c;
+		}
+		return null;
+	};
+	var bare = function (s, i) {
+		if (s.charAt(i) === '/') {
+			var r = until(s, '/', i + 1);
+			if (!r) return null;
+			try { return { s: new RegExp(r.s), i: r.i }; } catch (e) { return null; }
+		}
+		var m = /^[A-Za-z_]\w*|^\*/.exec(s.slice(i));
+		return m ? { s: m[0], i: i + m[0].length } : null;
+	};
+	// Inside brackets: quoted names, indices and (before v2) bare names,
+	// comma-separated, up to the `]`.
+	var bracketed = function (s, i) {
+		var keys = [], want = true;
+		while (i < s.length) {
+			var c = s.charAt(i);
+			if (c === ']') break;
+			if (c === ' ') { i++; continue; }
+			if (c === ',') { if (want) return null; i++; want = true; continue; }
+			if (c === '"' || c === "'") {
+				var r = until(s, c, i + 1);
+				if (!r) return null;
+				keys.push(r.s); i = r.i; want = false; continue;
+			}
+			if (c === '-' || (c >= '0' && c <= '9')) {
+				var m = /^-?\d+/.exec(s.slice(i));
+				if (!m) return null;
+				keys.push(parseInt(m[0], 10)); i += m[0].length; want = false; continue;
+			}
+			if (v2) return null;
+			var b = bare(s, i);
+			if (!b) return null;
+			keys.push(b.s); i = b.i;
+			want = false;
+		}
+		if (want) return null;
+		return { s: keys.length === 1 ? keys[0] : keys, i: i };
+	};
+	// A comparison on the step it follows. Returns where the `]` is, or -1
+	// for none here (which is not an error: it may be an assignment).
+	var comparison = function (s, step, i) {
+		if (s.indexOf('=/', i) === i) {
+			var r = until(s, '/', i + 2);
+			if (!r) return -1;
+			var flags = s.charAt(r.i) === 'i' ? 'i' : undefined;
+			try { step.rval = new RegExp(r.s, flags); } catch (e) { return -2; }
+			step.op = 're';
+			return flags ? r.i + 1 : r.i;
+		}
+		var m = /^\s*([!=^$*]=|[<>]=?)\s*(.+?)\]/.exec(s.slice(i));
+		if (!m) return -1;
+		var rv = m[2];
+		if (rv.charAt(0) === "'") {
+			var t = until(rv, "'", 1);
+			if (!t) return -2;
+			step.rval = t.s;
+		} else {
+			try { step.rval = JSON.parse(rv); } catch (e) { return -2; }
+		}
+		step.op = m[1];
+		return i + m[0].length - 1;
+	};
+	var compile = function (s, i) {
+		if (s.length === 0) return null;
+		var steps = [];
+		var c = s.charAt(i);
+		if (c === '$') { steps.push({ mv: ROOT }); i++; }
+		else if (c === '@') { steps.push({ mv: CURRENT }); i++; }
+		else steps.push({ mv: i === 0 ? ROOT : CURRENT });
+		var mv = 0;
+		while (i < s.length) {
+			c = s.charAt(i);
+			if (c === ' ') { i++; continue; }
+			if (c === '.') {
+				if (mv) return null;
+				if (s.charAt(i + 1) === '.') { mv = DESC; i += 2; }
+				else { mv = CHILD; i += 1; }
+				continue;
+			}
+			if (c === ';') {
+				if (s.charAt(i + 1) !== '$') return null;
+				steps.push({ mv: QUANT, min: 1, max: 1e6 }, { mv: ROOT });
+				i += 2; mv = 0;
+				continue;
+			}
+			if (c === '{') {
+				var qm = /^\{(\d+|\d+,\d+|\d+,|,\d+)\};\$/.exec(s.slice(i));
+				if (!qm) return null;
+				var comma = qm[1].indexOf(','), min, max;
+				if (comma < 0) min = max = parseInt(qm[1], 10);
+				else {
+					min = parseInt(qm[1].slice(0, comma), 10) || 0;
+					max = parseInt(qm[1].slice(comma + 1), 10) || 1e6;
+				}
+				steps.push({ mv: QUANT, min: min, max: max }, { mv: ROOT });
+				i += qm[0].length; mv = 0;
+				continue;
+			}
+			if (c !== '[') {
+				if (!mv) {
+					var j = comparison(s, steps[steps.length - 1], i);
+					if (j === -2) return null;
+					if (j >= 0) i = j;
+					break;
+				}
+				var b = bare(s, i);
+				if (!b) return null;
+				steps.push({ mv: mv, k: b.s });
+				i = b.i; mv = 0;
+				continue;
+			}
+			if (mv === CHILD) return null;           // `.[` is not a step
+			if (s.indexOf('[?', i) === i) {
+				var not = s.charAt(i + 2) === '!' ? 1 : 0;
+				var r = compile(s, i + 2 + not);
+				if (!r || s.charAt(r.i) !== ']') return null;
+				if (not) r.steps[r.steps.length - 1].not = true;
+				steps.push({ mv: mv || CHILD, steps: r.steps });
+				i = r.i + 1; mv = 0;
+				continue;
+			}
+			if (s.indexOf('[*]', i) === i) {
+				steps.push({ mv: mv || CHILD, k: '*' });
+				i += 3; mv = 0;
+				continue;
+			}
+			var k = bracketed(s, i + 1);
+			if (!k) return null;
+			steps.push({ mv: mv || CHILD, k: k.s });
+			i = k.i + 1; mv = 0;
+		}
+		if (mv) return null;
+		return { steps: steps, i: i };
+	};
+
+	var top = compile(q, 0);
+	if (!top) return null;
+	var modify, rval, has_rval = false;
+	if (top.i !== q.length) {
+		var rest = q.slice(top.i), val;
+		if (rest.charAt(0) === '=') {
+			var fm = /^=([a-z]+)\((.+)\)$/.exec(rest);
+			if (fm) { modify = fm[1]; val = fm[2]; }
+			else val = rest.slice(1);
+		} else if (rest.indexOf('+=') === 0) {
+			modify = '+'; val = rest.slice(2);
+		} else {
+			return null;
+		}
+		try { rval = JSON.parse(val); } catch (e) { return null; }
+		has_rval = true;
+		if (modify !== undefined && modify !== '+' && modify !== 'repl') return null;
+		if (modify === '+' && (rval === null || typeof rval !== 'object')) return null;
+		if (modify === 'repl') {
+			if (rval === null || typeof rval !== 'object') return null;
+			try {
+				rval.re = rval.regex !== undefined
+					? new RegExp(rval.regex, rval.flags)
+					: new RegExp(String(rval.pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+			} catch (e) { return null; }
+		}
+	}
+
+	var holder = null;
+	var is_obj = function (v) {
+		return v !== null && (typeof v === 'object' || typeof v === 'function');
+	};
+	var resolve = function (path) {
+		if (path.length === 0) return { value: holder };
+		var o = holder;
+		for (var i = 0; i < path.length - 1; i++) {
+			o = o[path[i]];
+			if (!is_obj(o)) return {};
+		}
+		var key = path[path.length - 1];
+		return { obj: o, key: key, value: o[key] };
+	};
+	var expand = function (owner, k) {
+		if (!is_obj(owner)) return null;
+		if (Object.prototype.toString.call(k) === '[object Array]') {
+			var all = [];
+			for (var i = 0; i < k.length; i++) {
+				var some = expand(owner, k[i]);
+				if (some) all.push.apply(all, some);
+			}
+			return all;
+		}
+		if (typeof k === 'number') {
+			if (!Array.isArray(owner)) return null;
+			return [k >= 0 ? k : owner.length + k];
+		}
+		if (k === '*') {
+			if (Array.isArray(owner)) {
+				var ix = [];
+				for (var n = 0; n < owner.length; n++) ix.push(n);
+				return ix;
+			}
+			return Object.keys(owner);
+		}
+		if (k instanceof RegExp) {
+			return Object.keys(owner).filter(function (key) { return k.test(key); });
+		}
+		return [k];
+	};
+	// Every node under `v`, depth first, each with its path from `v`. Only
+	// the first level unless `deep`.
+	var descendants = function (v, deep) {
+		var out = [];
+		var walk = function (o, path) {
+			var keys = Array.isArray(o) ? o.map(function (x, i) { return i; })
+			                            : Object.keys(o);
+			for (var i = 0; i < keys.length; i++) {
+				var p = path.concat([keys[i]]);
+				out.push({ obj: o, key: keys[i], path: p });
+				var c = o[keys[i]];
+				if (deep && is_obj(c)) walk(c, p);
+			}
+		};
+		if (is_obj(v)) walk(v, []);
+		return out;
+	};
+	var test = function (step, owner, k) {
+		if (owner === undefined || owner === null) return undefined;
+		var has = owner[k] !== undefined ||
+		          Object.prototype.hasOwnProperty.call(owner, k);
+		if (step.op !== undefined && !has) return undefined;
+		var want = step.not !== true;
+		var v = owner[k];
+		switch (step.op) {
+		case '==': return (v === step.rval) === want;
+		case '!=': return (v !== step.rval) === want;
+		case '<':  return (v < step.rval) === want;
+		case '<=': return (v <= step.rval) === want;
+		case '>':  return (v > step.rval) === want;
+		case '>=': return (v >= step.rval) === want;
+		case '^=': return (String(v).indexOf(step.rval) === 0) === want;
+		case '$=': {
+			var sv = String(v), sr = String(step.rval);
+			return (sv.length >= sr.length &&
+			        sv.slice(sv.length - sr.length) === sr) === want;
+		}
+		case '*=': return (String(v).indexOf(step.rval) >= 0) === want;
+		// Not negated by `!`, as in uBlock: kept so a rule means here what
+		// it means there.
+		case 're': return step.rval.test(String(v));
+		}
+		return has === want;
+	};
+	var evaluate;
+	var filtered = function (pathin, step, owner, out) {
+		var deep = step.mv === DESC;
+		var each = v2 || deep || Array.isArray(owner);
+		var under = descendants(owner, deep);
+		for (var i = 0; i < under.length; i++) {
+			var at = each ? pathin.concat(under[i].path) : pathin;
+			var r = evaluate(step.steps, at);
+			if (!r || !r.length) continue;
+			out.push(at);
+			if (!each) break;
+		}
+	};
+	var matches = function (list, step) {
+		var out = [];
+		for (var i = 0; i < list.length; i++) {
+			var pathin = list[i];
+			var owner = resolve(pathin).value;
+			if (owner === undefined) continue;
+			if (step.steps) { filtered(pathin, step, owner, out); continue; }
+			var keys = expand(owner, step.k) || [];
+			for (var j = 0; j < keys.length; j++)
+				if (test(step, owner, keys[j]) === true) out.push(pathin.concat([keys[j]]));
+			if (step.mv !== DESC) continue;
+			var under = descendants(owner, true);
+			for (var d = 0; d < under.length; d++) {
+				var node = under[d].obj[under[d].key];
+				var inner = expand(node, step.k) || [];
+				for (var m = 0; m < inner.length; m++)
+					if (test(step, node, inner[m]) === true)
+						out.push(pathin.concat(under[d].path, [inner[m]]));
+			}
+		}
+		return out;
+	};
+	evaluate = function (steps, pathin) {
+		var set = [];
+		for (var i = 0; i < steps.length; i++) {
+			var step = steps[i];
+			if (step.mv === ROOT) set = [['$']];
+			else if (step.mv === CURRENT) {
+				if (step.op) {
+					var at = resolve(pathin);
+					if (at.obj === undefined) return [];
+					if (test(step, at.obj, at.key) !== true) continue;
+				}
+				set = [pathin];
+			} else if (step.mv === CHILD || step.mv === DESC) {
+				if (set.length) set = matches(set, step);
+			} else if (step.mv === QUANT) {
+				if (set.length < step.min || set.length > step.max) return [];
+				set = [];
+			}
+		}
+		return set;
+	};
+	// A fresh copy of the value per use, so one page object never shares a
+	// value with another the rule also wrote into.
+	var fresh = function () {
+		if (!is_obj(rval)) {
+			return typeof rval === 'string'
+				? rval.replace('${now}', String(Date.now())) : rval;
+		}
+		return native_parse(native_stringify(rval));
+	};
+	var change = function (o, key) {
+		if (modify === undefined) { o[key] = fresh(); return; }
+		if (modify === '+') {
+			var l = o[key];
+			if (!is_obj(l)) return;
+			var r = fresh();
+			if (Array.isArray(l)) {
+				if (Array.isArray(r)) l.push.apply(l, r); else l.push(r);
+				return;
+			}
+			var ks = Object.keys(r);
+			for (var i = 0; i < ks.length; i++) l[ks[i]] = r[ks[i]];
+			return;
+		}
+		if (modify === 'repl') {
+			if (typeof o[key] !== 'string') return;
+			rval.re.lastIndex = 0;
+			o[key] = o[key].replace(rval.re, rval.replacement);
+		}
+	};
+
+	return {
+		assigns: has_rval,
+		// What the query finds in `root`, edited in place: assigned, merged,
+		// rewritten or removed. Returns the root -- which a query that names
+		// the root itself may have replaced or removed (null) -- or
+		// undefined when it found nothing, so a caller can leave the original
+		// alone.
+		apply: function (root) {
+			// Kept and put back, so a call that re-enters this query --
+			// a page whose own code runs inside a wrapped method -- does not
+			// take the outer call's state with it.
+			var outer = holder;
+			holder = { '$': root };
+			var found;
+			try { found = evaluate(top.steps, []); }
+			catch (e) { holder = outer; return undefined; }
+			if (!found.length) { holder = outer; return undefined; }
+			for (var i = found.length - 1; i >= 0; i--) {
+				var at = resolve(found[i]);
+				if (at.obj === undefined) continue;
+				if (has_rval) change(at.obj, at.key);
+				else if (Array.isArray(at.obj) && typeof at.key === 'number')
+					at.obj.splice(at.key, 1);
+				else delete at.obj[at.key];
+			}
+			var out = holder['$'];
+			holder = outer;
+			return out === undefined ? null : out;
+		}
+	};
+};
+
+
+// **A patched method that still reads as the engine's own.** A page can ask a
+// function for its source, and YouTube's player does: a wrapper written as a
+// plain function answers with this file's code, which is the most direct
+// thing a page can check. A Proxy keeps the engine's answer, and
+// `Function.prototype.toString` is taught to answer for the Proxy what it
+// would have for the original -- name included, which a bare Proxy loses.
+//
+// `handler(real, self, args)` makes the call; `args` may be changed first.
+// A constructor is wrapped for `new` as well, with `self` undefined.
+// Returns false where the path names no function.
+var disguised = typeof WeakMap === 'function' ? new WeakMap() : null;
+// The global object, which in a page is `window` itself. Looked up on
+// `window` first and then here, so `fetch` and `JSON` resolve wherever the
+// engine keeps them. Through `Function` because the runner is strict, where
+// a plain function's `this` is undefined.
+var global_object = null;
+try { global_object = Function('return this')(); } catch (e) {}
+var wrap_method = function (path, handler) {
+	var parts = String(path || '').split('.');
+	var key = parts.pop();
+	var head = parts.length ? parts[0] : key;
+	var owner = window;
+	try { if (!(head in window) && global_object) owner = global_object; }
+	catch (e) {}
+	for (var i = 0; i < parts.length; i++) {
+		try { owner = owner[parts[i]]; } catch (e) { return false; }
+		if (owner === null || (typeof owner !== 'object' && typeof owner !== 'function'))
+			return false;
+	}
+	var real;
+	try { real = owner[key]; } catch (e) { return false; }
+	if (typeof real !== 'function') return false;
+	var wrapped;
+	if (typeof Proxy === 'function' && typeof Reflect === 'object') {
+		var traps = {
+			apply: function (target, self, args) {
+				return handler(function (s, a) { return Reflect.apply(target, s, a); },
+				               self, Array.prototype.slice.call(args));
+			}
+		};
+		if (real.prototype && real.prototype.constructor === real) {
+			traps.construct = function (target, args, newTarget) {
+				return handler(function (s, a) { return Reflect.construct(target, a, newTarget); },
+				               undefined, Array.prototype.slice.call(args));
+			};
+		}
+		wrapped = new Proxy(real, traps);
+		if (disguised) {
+			var source_of = Function.prototype.toString;
+			if (!disguised.has(source_of)) {
+				var answer = new Proxy(source_of, {
+					apply: function (target, self, args) {
+						var f = self;
+						while (disguised.has(f)) f = disguised.get(f);
+						return Reflect.apply(target, f, args);
+					}
+				});
+				disguised.set(answer, source_of);
+				try { Function.prototype.toString = answer; } catch (e) {}
+			}
+			disguised.set(wrapped, real);
+		}
+	} else {
+		wrapped = function () {
+			return handler(function (s, a) { return real.apply(s, a); },
+			               this, Array.prototype.slice.call(arguments));
+		};
+	}
+	try { owner[key] = wrapped; } catch (e) { return false; }
+	return true;
+};
+
+// uBlock's trailing `name, value` pairs, as an object.
+var named_args = function (list) {
+	var out = {};
+	for (var i = 0; i + 1 < list.length; i += 2) out[String(list[i])] = list[i + 1];
+	return out;
+};
+
+// The query for a call: none for one that does not compile, and none for
+// one that writes values unless the call is trusted. The untrusted spelling
+// of each name may only remove what it finds.
+var edit_query = function (query, trusted) {
+	var q = json_path(query);
+	if (!q || (q.assigns && !trusted)) return null;
+	return q;
+};
+
+// What a fetch was asked for, under the names `propsToMatch` reads.
+var fetch_props = function (input, init) {
+	var names = ['body', 'cache', 'credentials', 'duplex', 'headers', 'integrity',
+	             'keepalive', 'method', 'mode', 'priority', 'redirect',
+	             'referrer', 'referrerPolicy', 'url'];
+	var out = {};
+	var take = function (src) {
+		for (var i = 0; i < names.length; i++) {
+			try { if (src[names[i]] !== undefined) out[names[i]] = src[names[i]]; }
+			catch (e) {}
+		}
+	};
+	if (input !== null && typeof input === 'object' &&
+	    Object.prototype.toString.call(input) === '[object Request]') take(input);
+	else out.url = String(input);
+	if (init !== null && typeof init === 'object') take(init);
+	return out;
+};
+
+// json-edit(query, matches, pattern): edit what the page parses.
+var json_edit = function (trusted, query, extras) {
+	var q = edit_query(query, trusted);
+	if (!q) return;
+	var opts = named_args(extras);
+	var only = opts.matches ? matcher(opts.matches) : null;
+	wrap_method('JSON.parse', function (call, self, args) {
+		var obj = call(self, args);
+		if (only && !only(String(args[0]))) return obj;
+		var after = q.apply(obj);
+		return after === undefined ? obj : after;
+	});
+};
+C['json-edit'] = function (query) {
+	json_edit(false, query, Array.prototype.slice.call(arguments, 1));
+};
+C['trusted-json-edit'] = function (query) {
+	json_edit(true, query, Array.prototype.slice.call(arguments, 1));
+};
+
+// edit-inbound-object(method, position, query): edit what a call is given.
+//
+// This is uBlock's YouTube answer: `JSON.stringify` is how the player
+// serialises its request for a video, so editing the object on its way in
+// changes what is asked for. The page's object is left alone and a copy is
+// edited and passed on, so nothing the page holds changes under it.
+var edit_inbound = function (trusted, path, position, query) {
+	if (!path) return;
+	var q = edit_query(query, trusted);
+	if (!q) return;
+	var pos = parseInt(String(position), 10);
+	if (!isFinite(pos)) return;
+	wrap_method(path, function (call, self, args) {
+		var i = pos >= 0 ? (args.length > pos ? pos : -1)
+		                 : (args.length >= -pos ? args.length + pos : -1);
+		if (i >= 0) {
+			var copy;
+			try { copy = native_parse(native_stringify(args[i])); } catch (e) {}
+			if (copy !== null && typeof copy === 'object') {
+				var after = q.apply(copy);
+				if (after !== undefined && after !== null) args[i] = after;
+			}
+		}
+		return call(self, args);
+	});
+};
+C['edit-inbound-object'] = function (path, position, query) {
+	edit_inbound(false, path, position, query);
+};
+C['trusted-edit-inbound-object'] = function (path, position, query) {
+	edit_inbound(true, path, position, query);
+};
+
+// json-edit-fetch-response(query, propsToMatch, value): edit the body of a
+// matching fetch. A response is made from the edited object with the
+// original's status and headers, and the original's `ok`, `redirected`,
+// `type` and `url`, which a new response would otherwise get wrong.
+var edit_fetch_response = function (trusted, query, extras) {
+	var q = edit_query(query, trusted);
+	if (!q) return;
+	var opts = named_args(extras);
+	var props = opts.propsToMatch ? props_matcher(opts.propsToMatch, 'url') : null;
+	wrap_method('fetch', function (call, self, args) {
+		var answer = call(self, args);
+		if (props) {
+			var hit = false;
+			try { hit = props(fetch_props(args[0], args[1])); } catch (e) {}
+			if (!hit) return answer;
+		}
+		if (!answer || typeof answer.then !== 'function') return answer;
+		return answer.then(function (res) {
+			var copy;
+			try { copy = res.clone(); } catch (e) { return res; }
+			return copy.json().then(function (obj) {
+				if (obj === null || typeof obj !== 'object') return res;
+				var after = q.apply(obj);
+				if (after === undefined) return res;
+				var made;
+				try {
+					made = new window.Response(native_stringify(after), {
+						status: res.status, statusText: res.statusText,
+						headers: res.headers
+					});
+					var same = function (name) {
+						try {
+							Object.defineProperty(made, name, { value: res[name] });
+						} catch (e) {}
+					};
+					same('ok'); same('redirected'); same('type'); same('url');
+				} catch (e) { return res; }
+				return made;
+			}, function () { return res; });
+		});
+	});
+};
+C['json-edit-fetch-response'] = function (query) {
+	edit_fetch_response(false, query, Array.prototype.slice.call(arguments, 1));
+};
+C['trusted-json-edit-fetch-response'] = function (query) {
+	edit_fetch_response(true, query, Array.prototype.slice.call(arguments, 1));
+};
+
+// json-edit-fetch-request(query, propsToMatch, value): edit the JSON body a
+// page sends, through `fetch` or a `Request` it builds first.
+var edit_fetch_request = function (trusted, query, extras) {
+	var q = edit_query(query, trusted);
+	if (!q) return;
+	var opts = named_args(extras);
+	var props = opts.propsToMatch ? props_matcher(opts.propsToMatch, 'url') : null;
+	var handler = function (call, self, args) {
+		var init = args[1];
+		var before = init && typeof init === 'object' ? init.body : undefined;
+		if (typeof before !== 'string' || before === '') return call(self, args);
+		var data;
+		try { data = native_parse(before); } catch (e) { return call(self, args); }
+		if (data === null || typeof data !== 'object') return call(self, args);
+		var after = q.apply(data);
+		if (after === undefined) return call(self, args);
+		var text = native_stringify(after);
+		if (text === before) return call(self, args);
+		if (props) {
+			var hit = false;
+			try { hit = props(fetch_props(args[0], init)); } catch (e) {}
+			if (!hit) return call(self, args);
+		}
+		init.body = text;
+		return call(self, args);
+	};
+	wrap_method('fetch', handler);
+	wrap_method('Request', handler);
+};
+C['json-edit-fetch-request'] = function (query) {
+	edit_fetch_request(false, query, Array.prototype.slice.call(arguments, 1));
+};
+C['trusted-json-edit-fetch-request'] = function (query) {
+	edit_fetch_request(true, query, Array.prototype.slice.call(arguments, 1));
+};
+
+// json-edit-xhr-response(query, propsToMatch, value): the same edit on
+// XMLHttpRequest, through the shared `filter_xhr`. Matched on the url, the
+// one property `filter_xhr` keeps; a rule that also names the method matches
+// nothing rather than more than it asked for.
+var edit_xhr_response = function (trusted, query, extras) {
+	var q = edit_query(query, trusted);
+	if (!q) return;
+	var opts = named_args(extras);
+	var props = opts.propsToMatch ? props_matcher(opts.propsToMatch, 'url') : null;
+	filter_xhr(function (url) {
+		return !props || props({ url: url });
+	}, function (raw) {
+		var obj = native_parse(raw);
+		if (obj === null || typeof obj !== 'object') return raw;
+		var after = q.apply(obj);
+		if (after === undefined) return raw;
+		// uBlock escapes `/` in what it writes back, and a page comparing
+		// lengths or hashes would see the difference if this did not.
+		return native_stringify(after).replace(/\//g, '\\/');
+	}, function (real) {
+		if (real === null || typeof real !== 'object') return real;
+		var after = q.apply(real);
+		return after === undefined ? real : after;
+	});
+};
+C['json-edit-xhr-response'] = function (query) {
+	edit_xhr_response(false, query, Array.prototype.slice.call(arguments, 1));
+};
+C['trusted-json-edit-xhr-response'] = function (query) {
+	edit_xhr_response(true, query, Array.prototype.slice.call(arguments, 1));
+};
+
+// trusted-prevent-dom-bypass(method, property): keep a fresh frame from
+// handing the page an unpatched copy of what the scriptlets patched.
+//
+// A page can append an empty iframe and take `fetch` or `JSON.parse` from
+// its window, which no document-start script reaches. When `method` (say
+// `Node.prototype.appendChild`) puts such a frame in the page, its
+// `property` is set to this window's, which is the patched one; with no
+// property, the frame's whole window is answered with this one.
+C['trusted-prevent-dom-bypass'] = function (path, property) {
+	if (!path) return;
+	var prop = String(property == null ? '' : property);
+	wrap_method(path, function (call, self, args) {
+		var frames = [];
+		for (var i = 0; i < args.length; i++)
+			if (typeof window.HTMLElement === 'function' &&
+			    args[i] instanceof window.HTMLElement) frames.push(args[i]);
+		var r = call(self, args);
+		for (var j = 0; j < frames.length; j++) {
+			try {
+				var win = frames[j].contentWindow;
+				if (String(win) !== '[object Window]') continue;
+				var href = win.location.href;
+				if (href !== 'about:blank' && href !== window.location.href) continue;
+				if (prop !== '') {
+					var mine = window, theirs = win;
+					var chain = prop.split('.');
+					var last = chain.pop();
+					for (var k = 0; k < chain.length; k++) {
+						mine = mine[chain[k]]; theirs = theirs[chain[k]];
+					}
+					theirs[last] = mine[last];
+				} else {
+					Object.defineProperty(frames[j], 'contentWindow', { value: window });
+				}
+			} catch (e) {}
+		}
+		return r;
+	});
+};
+
 )JS";
 
 // **The catalog, with the names rules actually use.** A list rule calls a
@@ -1765,7 +2504,77 @@ const catalog_entry k_entries[] = {
 	                          (1 << 0) | (1 << 2), 0,      true  },
 	{ "trusted-replace-xhr-response",
 	                          (1 << 0) | (1 << 2), 0,      true  },
+	// **The JSON query language's family.** The query is checked by
+	// `query_arg` below; the third argument is the value of a trailing
+	// `matches` or `propsToMatch` pair, a pattern like any other. The
+	// untrusted spelling of each may only remove what it finds, which the
+	// page-side compiler enforces, since only it reads the query.
+	{ "json-edit",                       1 << 2, 0,      false },
+	{ "trusted-json-edit",               1 << 2, 0,      true  },
+	{ "json-edit-fetch-response",        1 << 2, 0,      false },
+	{ "trusted-json-edit-fetch-response", 1 << 2, 0,     true  },
+	{ "json-edit-fetch-request",         1 << 2, 0,      false },
+	{ "trusted-json-edit-fetch-request", 1 << 2, 0,      true  },
+	{ "json-edit-xhr-response",          1 << 2, 0,      false },
+	{ "trusted-json-edit-xhr-response",  1 << 2, 0,      true  },
+	{ "edit-inbound-object",             0,      0,      false },
+	{ "trusted-edit-inbound-object",     0,      0,      true  },
+	// Not a query, but it exists for the same YouTube rules: a fresh frame
+	// must not hand the page an unpatched `fetch` or `JSON.parse`.
+	{ "trusted-prevent-dom-bypass",      0,      0,      true  },
 };
+
+// Which argument is a JSON query, or -1. Every name here spells it first
+// except the inbound editor, which names the method and the argument first.
+int query_arg(const QString &canonical) {
+	if (canonical == QLatin1String("edit-inbound-object") ||
+	    canonical == QLatin1String("trusted-edit-inbound-object"))
+		return 2;
+	if (canonical.contains(QLatin1String("json-edit")))
+		return 0;
+	return -1;
+}
+
+// **Every regex a query carries**, so each gets the refusal a pattern
+// argument gets: a key `./re/`, a comparison `=/re/`, and the `regex` of a
+// `=repl({...})`. They are compiled into a `RegExp` in the page exactly as
+// a pattern argument is, so a catastrophic one costs the page the same.
+QStringList query_regexes(const QString &query) {
+	QStringList out;
+	for (int i = 1; i < query.size(); ++i) {
+		if (query.at(i) != QLatin1Char('/'))
+			continue;
+		const QChar before = query.at(i - 1);
+		if (before != QLatin1Char('.') && before != QLatin1Char('=') &&
+		    before != QLatin1Char('[') && before != QLatin1Char(','))
+			continue;
+		QString body;
+		int j = i + 1;
+		for (; j < query.size(); ++j) {
+			if (query.at(j) == QLatin1Char('\\') && j + 1 < query.size() &&
+			    query.at(j + 1) == QLatin1Char('/')) {
+				body += QLatin1Char('/');
+				++j;
+				continue;
+			}
+			if (query.at(j) == QLatin1Char('/'))
+				break;
+			body += query.at(j);
+		}
+		if (j >= query.size())
+			break;
+		out << body;
+		i = j;
+	}
+	const int repl = query.indexOf(QLatin1String("=repl("));
+	if (repl >= 0 && query.endsWith(QLatin1Char(')'))) {
+		const QString json = query.mid(repl + 6, query.size() - repl - 7);
+		const QJsonObject o = QJsonDocument::fromJson(json.toUtf8()).object();
+		if (o.value(QLatin1String("regex")).isString())
+			out << o.value(QLatin1String("regex")).toString();
+	}
+	return out;
+}
 
 
 struct catalog_alias {
@@ -1999,6 +2808,27 @@ bool parse_call(const QString &inside, scriptlet_call *out, QString *why) {
 		if (why)
 			*why = QString("its pattern %1").arg(refused);
 		return false;
+	}
+
+	// **A JSON query is data, and is checked as such.** `=call(...)` names
+	// a method for the page to call -- with `self` when the first entry is
+	// null, so a rule could reach `eval` -- and is the one construct of the
+	// language refused outright. Each regex the query carries gets the same
+	// backtracking refusal as a pattern argument.
+	const int queried = query_arg(name);
+	if (queried >= 0 && queried < parts.size()) {
+		const QString &query = parts.at(queried);
+		if (query.contains(QLatin1String("=call(")))
+			return fail("its query calls a method the rule names (=call), "
+			            "which runs code");
+		for (const QString &inner : query_regexes(query)) {
+			const QString refused = site_rules::why_pattern_backtracks(inner);
+			if (refused.isEmpty())
+				continue;
+			if (why)
+				*why = QString("a pattern in its query %1").arg(refused);
+			return false;
+		}
 	}
 
 	// **And a selector argument gets the refusal a container rule gets.**

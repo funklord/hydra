@@ -322,9 +322,11 @@ int main(int argc, char **argv) {
 		// **`aost` has since been implemented**, so it moved out of this list
 		// -- which is the list noticing a capability arrive rather than a
 		// regression, as `nowebrtc` and `trusted-set-cookie` did before it.
+		// `json-edit` left the same way on 2026-10-25, with the query
+		// language uBlock's YouTube rules came to depend on.
 		for (const char *no : { "trusted-click-element", "trusted-prune-fetch",
 		                         "trusted-prune-inbound-object",
-		                         "json-edit", "eval", "" }) {
+		                         "jsonl-edit-xhr-response", "eval", "" }) {
 			check(!scriptlets::vetted(QString::fromLatin1(no)),
 			       QString("\"%1\" is not in the catalog")
 			           .arg(QString::fromLatin1(no)));
@@ -824,8 +826,8 @@ int main(int argc, char **argv) {
 
 		// The count lives here, once. It moves when the catalog does, which
 		// is the point: a name added without a test is an entry nothing ran.
-		check(scriptlets::names().size() == 41,
-		       QString("forty-one scriptlets in the catalog (%1)")
+		check(scriptlets::names().size() == 52,
+		       QString("fifty-two scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 		// The trusted four, named here rather than counted: the question a
 		// reader has is which scriptlets can act on a page's behalf, and a
@@ -2338,6 +2340,230 @@ int main(int argc, char **argv) {
 		check(ask(&none, "(function () { window.__onload(); "
 		                  "return String(window.__stopped); })()") == "0",
 		       "a page with no meta refresh is untouched");
+	}
+
+	// ---------------------------------------------------- the query family --
+	// **uBlock's YouTube answer, as the list writes it.** Reported
+	// 2026-10-25: YouTube said "Ad blockers are not allowed" because this
+	// build ran the `rpnt` that marks the player's request and none of the
+	// rules that rewrite a marked one. The lines are quick-fixes.txt's own.
+	const char *k_yt_channel =
+	  "trusted-edit-inbound-object, JSON.stringify, 0, [?.attestationRequest]"
+	  "[?.context.client.userAgent*=\"channel\"].context.client"
+	  "[?.clientName==\"WEB\"]+={\"clientScreen\":\"CHANNEL\"}";
+	const char *k_yt_referer =
+	  "trusted-edit-inbound-object, JSON.stringify, 0, [?.attestationRequest]"
+	  "[?.context.client.userAgent=/adunit|channel|lactmilli|instream|inline|yahi|eafg/]"
+	  ".playbackContext.contentPlaybackContext.referer=repl({\"regex\":"
+	  "\"(?:#reloadxhr)?$\"\\,\"replacement\":\"#reloadxhr\"})";
+	const auto run_line = [](QJSEngine *eng, const char *line, bool trusted) {
+		scriptlet_call c;
+		QString why;
+		if (!scriptlets::parse_call(QString::fromLatin1(line), &c, &why))
+			return QString("refused: ") + why;
+		c.scope   = "x.test";
+		c.trusted = trusted;
+		const QJSValue r = eng->evaluate(scriptlets::source_for({ c }));
+		return r.isError() ? r.toString() : QString();
+	};
+	const char *k_request =
+	  "var req = function (ua) { return { attestationRequest: {}, context: { client: "
+	  "{ clientName: 'WEB', userAgent: ua } }, playbackContext: { "
+	  "contentPlaybackContext: { referer: 'https://www.youtube.com/watch?v=1' } } }; };";
+
+	section("the query family is in the catalog, with uBlock's trust");
+	{
+		for (const char *n : { "json-edit", "json-edit-fetch-response",
+		                       "json-edit-fetch-request", "json-edit-xhr-response",
+		                       "edit-inbound-object" }) {
+			check(scriptlets::vetted(n) && !scriptlets::requires_trust(n),
+			      QString("%1 is known and needs no trust").arg(n));
+			const QString t = QString("trusted-") + n;
+			check(scriptlets::vetted(t) && scriptlets::requires_trust(t),
+			      QString("%1 needs trust").arg(t));
+		}
+		check(scriptlets::requires_trust("trusted-prevent-dom-bypass"),
+		      "trusted-prevent-dom-bypass needs trust");
+		scriptlet_call c;
+		QString why;
+		check(scriptlets::parse_call(QString::fromLatin1(k_yt_channel), &c, &why) &&
+		      c.args.size() == 3 && c.args.at(2).endsWith("{\"clientScreen\":\"CHANNEL\"}"),
+		      QString("the list's line parses, the query whole (%1)").arg(why));
+		check(scriptlets::parse_call(QString::fromLatin1(k_yt_referer), &c, &why) &&
+		      c.args.at(2).contains("\"(?:#reloadxhr)?$\",\"replacement\""),
+		      QString("and an escaped comma inside a query stays in it (%1)").arg(why));
+		check(!scriptlets::parse_call("trusted-json-edit, .a=call([null\\,\"eval\"\\,\"1\"])",
+		                              &c, &why) && why.contains("call"),
+		      QString("a query that calls a method is refused (%1)").arg(why));
+		check(!scriptlets::parse_call("json-edit, ..[?.a=/^(a+)+$/]", &c, &why) &&
+		      why.contains("pattern"),
+		      QString("a backtracking regex inside a query is refused (%1)").arg(why));
+		check(!scriptlets::parse_call("trusted-json-edit, .a=repl({\"regex\":\"(x+)+y\""
+		                              "\\,\"replacement\":\"\"})", &c, &why),
+		      QString("and so is one in a repl (%1)").arg(why));
+		check(scriptlets::parse_call("json-edit, ..ads[?.kind=/^promo/]", &c, &why),
+		      QString("while an ordinary one is kept (%1)").arg(why));
+	}
+
+	section("trusted-edit-inbound-object rewrites the request it is aimed at");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_request));
+		const QString before = ask(&eng, "String(JSON.stringify)");
+		check(run_line(&eng, k_yt_channel, true).isEmpty(), "the call runs");
+		check(run_line(&eng, k_yt_referer, true).isEmpty(), "and the second");
+		check(ask(&eng, "JSON.stringify(req('Mozilla/5.0 (X11; channel)'))"
+		                ".indexOf('\"clientScreen\":\"CHANNEL\"') >= 0") == "true",
+		      "a request the marker names goes out as a channel page's");
+		check(ask(&eng, "JSON.stringify(req('Mozilla/5.0 (X11; channel)'))"
+		                ".indexOf('watch?v=1#reloadxhr') >= 0") == "true",
+		      "with the referer the second rule rewrites");
+		check(ask(&eng, "JSON.stringify(req('Mozilla/5.0 (X11)'))"
+		                ".indexOf('clientScreen') < 0 && "
+		                "JSON.stringify(req('Mozilla/5.0 (X11)')).indexOf('reloadxhr') < 0")
+		          == "true",
+		      "one without the marker goes out as it was");
+		check(ask(&eng, "(function () { var r = req('x; channel'); JSON.stringify(r); "
+		                "return r.context.client.clientScreen === undefined; })()") == "true",
+		      "and the page's own object is not changed under it");
+		check(ask(&eng, "JSON.stringify({ a: [1, 'b'] })") == "{\"a\":[1,\"b\"]}",
+		      "anything else stringifies exactly as before");
+		check(ask(&eng, "String(JSON.stringify)") == before,
+		      QString("and JSON.stringify still answers as the engine's own (%1)")
+		          .arg(ask(&eng, "String(JSON.stringify)")));
+	}
+
+	section("the untrusted spelling can only remove");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_request));
+		run_one(&eng, "edit-inbound-object",
+		        { "JSON.stringify", "0", "[?.attestationRequest].context.client"
+		          "+={\"clientScreen\":\"CHANNEL\"}" });
+		check(ask(&eng, "JSON.stringify(req('x')).indexOf('clientScreen') < 0") == "true",
+		      "an assignment without trust does nothing");
+		run_one(&eng, "edit-inbound-object",
+		        { "JSON.stringify", "-1", "[?.attestationRequest].playbackContext" });
+		check(ask(&eng, "JSON.stringify(req('x')).indexOf('playbackContext') < 0") == "true",
+		      "a removal does, counting the position from the end");
+	}
+
+	section("json-edit edits what the page parses");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		run_one(&eng, "json-edit", { "..adSlots", "matches", "/adSlots/" });
+		check(ask(&eng, "JSON.stringify(JSON.parse('{\"a\":{\"adSlots\":[1],\"v\":2}}'))")
+		          == "{\"a\":{\"v\":2}}",
+		      "a property found at any depth is removed");
+		check(ask(&eng, "JSON.stringify(JSON.parse('{\"b\":1}'))") == "{\"b\":1}",
+		      "a document the pattern does not match is untouched");
+		run_one(&eng, "json-edit", { ".x=1" });
+		check(ask(&eng, "JSON.stringify(JSON.parse('{\"x\":0}'))") == "{\"x\":0}",
+		      "an assignment without trust is not made");
+		run_one(&eng, "trusted-json-edit", { "..price=0" }, true);
+		check(ask(&eng, "JSON.stringify(JSON.parse('[{\"price\":5},{\"q\":{\"price\":9}}]'))")
+		          == "[{\"price\":0},{\"q\":{\"price\":0}}]",
+		      "and with it, every match is assigned");
+	}
+
+	section("json-edit-fetch-response edits the body of a matching fetch");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QStringLiteral(
+		  "window.P = function (v) { if (v && typeof v.then === 'function') return v;"
+		  "  return { then: function (f) { return window.P(f(v)); } }; };"
+		  "window.__body = '{\"contents\":{\"itemSectionRenderer\":{\"contents\":"
+		  "[{\"adSlotRenderer\":{}},{\"videoRenderer\":{\"id\":1}}]}}}';"
+		  "var mk = function (u, body) { return { ok: true, status: 203, statusText: 'S',"
+		  "  url: u, headers: { h: 1 }, redirected: false, type: 'basic',"
+		  "  clone: function () { return mk(u, body); },"
+		  "  json: function () { return window.P(JSON.parse(body)); },"
+		  "  text: function () { return window.P(body); } }; };"
+		  "window.Response = function (body, init) { this.__body = body;"
+		  "  this.status = init.status; this.headers = init.headers;"
+		  "  this.json = function () { return window.P(JSON.parse(body)); }; };"
+		  "window.fetch = function (u) { return window.P(mk(String(u), window.__body)); };"
+		  "window.got = function (u) { var seen = null; window.fetch(u).then(function (r) {"
+		  "  return r.json().then(function (o) { seen = [JSON.stringify(o), r.status,"
+		  "  r.url, r.type].join('|'); }); }); return seen; };"));
+		// m.youtube.com's line, as the list writes it.
+		check(run_line(&eng, "json-edit-fetch-response, ..itemSectionRenderer.contents.*"
+		                     "[?.adSlotRenderer], propsToMatch, /get_watch", false).isEmpty(),
+		      "the call runs without trust, since it only removes");
+		const QString hit = ask(&eng, "window.got('https://m.youtube.com/youtubei/v1/get_watch?k=1')");
+		check(hit.startsWith("{\"contents\":{\"itemSectionRenderer\":{\"contents\":"
+		                     "[{\"videoRenderer\":{\"id\":1}}]}}}|203|"
+		                     "https://m.youtube.com/youtubei/v1/get_watch?k=1|basic"),
+		      QString("the ad slot is gone, status, url and type kept (%1)").arg(hit));
+		const QString miss = ask(&eng, "window.got('https://m.youtube.com/youtubei/v1/next')");
+		check(miss.contains("adSlotRenderer"),
+		      QString("and a url the rule does not name is left alone (%1)").arg(miss));
+	}
+
+	section("json-edit-fetch-request edits the body a page sends");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QStringLiteral(
+		  "window.__bodies = []; window.fetch = function (u, init) {"
+		  "  window.__bodies.push(init && init.body); return { real: true }; };"));
+		run_one(&eng, "json-edit-fetch-request", { ".tracking", "propsToMatch", "/log" });
+		ask(&eng, "window.fetch('https://x.test/log', { body: '{\"tracking\":1,\"keep\":2}' })");
+		ask(&eng, "window.fetch('https://x.test/other', { body: '{\"tracking\":1}' })");
+		check(ask(&eng, "window.__bodies.join(' ')") == "{\"keep\":2} {\"tracking\":1}",
+		      QString("only the matching request's body is edited (%1)")
+		          .arg(ask(&eng, "window.__bodies.join(' ')")));
+	}
+
+	section("json-edit-xhr-response edits what a request reads");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&eng, "json-edit-xhr-response", { "..adPlacements", "propsToMatch", "/player" });
+		check(ask(&eng, "(function () { var x = new window.XMLHttpRequest();"
+		                "x.open('POST', 'https://x.test/player'); x.send();"
+		                "window.finish(x, '{\"adPlacements\":[1],\"url\":\"a/b\"}');"
+		                "return x.responseText; })()") == "{\"url\":\"a\\/b\"}",
+		      QString("the edit is read, with uBlock's escaped slash (%1)")
+		          .arg(ask(&eng, "(function () { var x = new window.XMLHttpRequest();"
+		                         "x.open('POST', 'https://x.test/player'); x.send();"
+		                         "window.finish(x, '{\"adPlacements\":[1],\"url\":\"a/b\"}');"
+		                         "return x.responseText; })()")));
+		check(ask(&eng, "(function () { var x = new window.XMLHttpRequest();"
+		                "x.open('GET', 'https://x.test/next'); x.send();"
+		                "window.finish(x, '{\"adPlacements\":[1]}'); return x.responseText; })()")
+		          == "{\"adPlacements\":[1]}",
+		      "and another url's is not");
+	}
+
+	section("trusted-prevent-dom-bypass hands a fresh frame this window's fetch");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QStringLiteral(
+		  "window.location = { href: 'https://x.test/page' };"
+		  "window.HTMLElement = function () {};"
+		  "window.Node = function () {};"
+		  "window.Node.prototype.appendChild = function (e) { return e; };"
+		  "window.frame = function (href) { var f = new window.HTMLElement();"
+		  "  f.contentWindow = { location: { href: href }, fetch: 'clean',"
+		  "    toString: function () { return '[object Window]'; } }; return f; };"
+		  "window.fetch = function () { return 'patched'; };"));
+		run_one(&eng, "trusted-prevent-dom-bypass",
+		        { "Node.prototype.appendChild", "fetch" }, true);
+		check(ask(&eng, "(function () { var f = window.frame('about:blank');"
+		                "new window.Node().appendChild(f); return f.contentWindow.fetch(); })()")
+		          == "patched",
+		      "an about:blank frame gets the patched fetch");
+		check(ask(&eng, "(function () { var f = window.frame('https://other.test/');"
+		                "new window.Node().appendChild(f); return f.contentWindow.fetch; })()")
+		          == "clean",
+		      "a frame on another page keeps its own");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

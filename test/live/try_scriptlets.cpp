@@ -87,6 +87,29 @@ public:
 				type = "application/json";
 				body = "{\"adPlacements\":[{\"slot\":1},{\"slot\":2}],"
 				        "\"streamingData\":{\"ok\":1}}";
+			} else if (target.startsWith("/inbound")) {
+				// **uBlock's YouTube answer, in a real engine.** A request
+				// marked the way the `rpnt` marks one, and one that is not,
+				// both serialised the way the player does; whether the
+				// patched `JSON.stringify` still looks like the engine's;
+				// and whether a fresh frame hands out an unpatched one.
+				body = "<!doctype html><html><body>inbound<script>"
+				        "var mk = function (ua) { return { attestationRequest: {},"
+				        "  context: { client: { clientName: 'WEB', userAgent: ua } } }; };"
+				        "var said = function (ua) {"
+				        "  return JSON.stringify(mk(ua)).indexOf('CHANNEL') >= 0"
+				        "         ? 'edited' : 'plain'; };"
+				        "var native = (String(JSON.stringify).indexOf('[native code]') >= 0"
+				        "  && JSON.stringify.name === 'stringify') ? 'yes' : 'no';"
+				        "var f = document.createElement('iframe');"
+				        "document.body.appendChild(f);"
+				        "var frame = 'error';"
+				        "try { frame = f.contentWindow.JSON.stringify === JSON.stringify"
+				        "  ? 'patched' : 'own'; } catch (e) {}"
+				        "new Image().src = '/report?marked=' + said('Mozilla/5.0 (X11; channel)')"
+				        "  + '&plain=' + said('Mozilla/5.0 (X11)') + '&native=' + native"
+				        "  + '&frame=' + frame;"
+				        "</script></body></html>";
 			} else if (target.startsWith("/report")) {
 				type = "image/gif";
 				body = QByteArray::fromHex("4749463839610100010080000000000000"
@@ -175,6 +198,21 @@ int main(int argc, char *argv[]) {
 			body.write("||never-requested.invalid^\n");
 		}
 	}
+	// **And a trusted one**, for the scriptlets that may only come from a
+	// list the person marked: quick-fixes.txt's YouTube rule, word for word
+	// but for the host it is scoped to.
+	{
+		QFile body(QDir(subs_dir).filePath("trusted.txt"));
+		if (body.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			body.write("! Title: a trusted local list\n");
+			body.write("127.0.0.1##+js(trusted-edit-inbound-object, JSON.stringify, 0, "
+			           "[?.attestationRequest][?.context.client.userAgent*=\"channel\"]"
+			           ".context.client[?.clientName==\"WEB\"]"
+			           "+={\"clientScreen\":\"CHANNEL\"})\n");
+			body.write("127.0.0.1##+js(trusted-prevent-dom-bypass, "
+			           "Node.prototype.appendChild, JSON.stringify)\n");
+		}
+	}
 	{
 		QFile idx(subs_index);
 		if (idx.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -184,6 +222,12 @@ int main(int argc, char *argv[]) {
 			           "        \"enabled\": true,\n"
 			           "        \"trusted\": false,\n"
 			           "        \"file\": \"local.txt\"\n"
+			           "    },\n    {\n"
+			           "        \"name\": \"a trusted local list\",\n"
+			           "        \"url\": \"https://local.invalid/trusted.txt\",\n"
+			           "        \"enabled\": true,\n"
+			           "        \"trusted\": true,\n"
+			           "        \"file\": \"trusted.txt\"\n"
 			           "    }\n]\n");
 	}
 	{
@@ -288,6 +332,27 @@ int main(int argc, char *argv[]) {
 		           .arg(server.report()));
 		policy.set_setting("127.0.0.1", policy::feature::ads,
 		                    policy::setting::ask);
+	}
+
+	section("a marked request goes out rewritten, in a real engine");
+	{
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/inbound").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		const bool answered = server.wait_for_report();
+		const QString said = server.report();
+		check(answered, QString("the page reported back (%1)").arg(said));
+		check(said.contains("marked=edited"),
+		      QString("the request the marker names is sent as a channel "
+		              "page's (%1)").arg(said));
+		check(said.contains("plain=plain"),
+		      QString("one without the marker is sent as it was (%1)").arg(said));
+		check(said.contains("native=yes"),
+		      QString("and JSON.stringify still reads as the engine's own (%1)")
+		          .arg(said));
+		check(said.contains("frame=patched"),
+		      QString("and a fresh frame hands out the patched one, not a "
+		              "clean copy (%1)").arg(said));
 	}
 
 	// --- what the real list says, reported rather than asserted -----------

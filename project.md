@@ -34908,15 +34908,20 @@ require trust. Four of them are not scriptlets in uBlock at all but neutered
 `popads-dummy`, `popads.net` -- which is why they take no arguments, and the
 rules invoke them bare.
 
-### The one declined, with the measurement
+### The one declined, with the measurement -- ported since
 
-`json-edit`, `json-edit-fetch-response` and `jsonl-edit-xhr-response` are
-**not** implemented. They are driven by uBlock's JSON query language, and
-`json-edit.js` is **1667 lines**. That is a language to port, for **3 rules of
-2453** -- 0.12% -- in the code that rewrites response bodies, which is the
-most consequential place in this catalog to be subtly wrong. Recorded rather
-than attempted; if those rules ever matter, the thing to port is the query
-language deliberately and on its own.
+Declined 2026-10-08: `json-edit`, `json-edit-fetch-response` and
+`jsonl-edit-xhr-response` are driven by uBlock's JSON query language, a
+language to port for **3 rules of 2453** in the code that rewrites response
+bodies. The entry said that if those rules ever mattered, the thing to port
+was the query language, deliberately and on its own.
+
+**They came to matter, and it was ported 2026-10-25**, on the holder's word:
+by then the family carried about 120 rules across the subscribed lists,
+including uBlock's whole answer to YouTube's "Ad blockers are not allowed".
+See *"Ad blockers are not allowed on YouTube": half of a rule set* for
+what was ported and how it was proved. `jsonl-edit-xhr-response` is still
+not implemented.
 
 **And 7 further rules are refused for their arguments rather than their
 names**, which is why the total is 2443 and not 2446: a catastrophic regex, or
@@ -37727,6 +37732,87 @@ and five refusals; making the translation decline reds five checks.
 `quick-fixes.txt`, where YouTube changes land first. It has a
 `trusted-rpfr` for `/get_watch?` this build would now run. Whether to add
 it to the shipped defaults is the holder's call.
+
+### "Ad blockers are not allowed on YouTube": half of a rule set
+
+Reported by the holder 2026-10-25, on the desktop, expected on the phone
+too. `quick-fixes.txt` (last modified 2026-10-23, fetched here
+2026-10-24) answers YouTube's server-side enforcement with a set of
+rules that only work together:
+
+- one `rpnt` rewrites YouTube's `serverContract` inline script. When the
+  player stalls with nothing buffered, it appends a marker (`; channel`,
+  `; lactmilli`, `; inline`, `; yahi`) to
+  `ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent` and reloads the video;
+- six `trusted-edit-inbound-object` rules on `JSON.stringify` find the
+  outgoing player request carrying that marker and rewrite it --
+  `clientScreen: CHANNEL`, `params: 8AUB` or `YAHI`, an instream ad
+  context, `lactMilliseconds`, a `#reloadxhr` referer -- into a request
+  YouTube answers without ads;
+- three `trusted-prevent-dom-bypass` rules stop the page taking a clean
+  `fetch`, `Request` or `JSON.parse` from a fresh iframe.
+
+This build runs the `rpnt` and the response rewrites (`trusted-rpfr`,
+`trusted-replace-xhr-response`, `json-prune-*`) and has neither of the
+other two names. So ads are stripped from the response, the stall-and-
+reload loop runs, and the request the loop exists to produce is never
+made. That is the likeliest reason YouTube flags this build and not
+uBlock; it has not been reproduced here, which needs a YouTube session
+that gets the wall.
+
+`trusted-edit-inbound-object` is driven by the JSON query language this
+file declined to port at 3 rules of 2453 (*The one declined*). The holder
+chose to port it rather than step back from following uBlock on YouTube.
+
+**Ported 2026-10-25.** `json_path` in the catalog is uBlock's language
+(`src/js/jsonpath.js`, read at uBlock `1522b6d`) written afresh in ES5:
+children, descendants, wildcards, indices from the end, regex keys,
+filters with the ten comparisons, the `;$` and `{n,m};$` quantifiers,
+`=json`, `+=json` and `=repl({...})`, with `${now}`. With it come
+`json-edit`, `json-edit-fetch-response`, `json-edit-fetch-request`,
+`json-edit-xhr-response` and `edit-inbound-object`, each with its
+`trusted-` twin, and `trusted-prevent-dom-bypass`: eleven names, trust as
+uBlock declares it. The untrusted spelling may only remove; an assigning
+query without trust does nothing.
+
+Three choices that differ from uBlock or go past it:
+
+- **`=call(...)` is refused**, in `parse_call` with a reason and again in
+  the page. It names a method to call with arguments the rule chooses, and
+  `self` when the first is null, so a rule could reach `eval`. No
+  subscribed rule uses it.
+- **`+=` with a value that is not an object is refused** where uBlock
+  accepts it and does nothing, so it is counted rather than silent.
+- **Every regex inside a query** -- a `/re/` key, a `=/re/` comparison, a
+  `repl`'s `regex` -- gets the shared backtracking refusal a pattern
+  argument gets.
+
+**A wrapped method still reads as the engine's own.** `wrap_method` uses
+a Proxy and teaches `Function.prototype.toString` to answer for it with the
+original's source, name included, as uBlock does: YouTube can ask
+`JSON.stringify` for its source. **Only the new family is wrapped this
+way.** The older scriptlets replace `fetch`, `JSON.parse` and the XHR
+methods with plain functions, whose source a page can read; moving them
+onto `wrap_method` is open, and is the first thing to try if YouTube still
+detects this build.
+
+**Proved three ways.** A differential run against uBlock's own
+`jsonpath.js` under node, used only as an oracle: 318 query-and-document
+cases, 312 identical, and the 6 that differ are the `+=` refusal above;
+every YouTube query is among the identical. `test_scriptlets` runs the
+list's lines exactly as written in QJSEngine (359 checks), and four
+sabotages -- no merge, no trust gate, no `=call` refusal, no disguise --
+each turn exactly their checks red. `try_scriptlets` runs the rule from a
+trusted subscribed list in Qt WebEngine: the marked request is sent
+rewritten, an unmarked one unchanged, `JSON.stringify` reads as native,
+and an about:blank frame hands out the patched function. Against the real
+quick-fixes list every active YouTube rule now loads; the four it still
+refuses are commented out in the list itself.
+
+**Not yet seen against YouTube.** Whether the wall goes away is the
+holder's to see on the desktop; the phone gets the same catalog.
+`jsonl-edit-xhr-response` (4 rules) and `edit-object-on-setter` (4) are
+still not implemented.
 
 ## The subscribed lists' cosmetic rules were never applied
 
