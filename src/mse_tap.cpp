@@ -10,15 +10,58 @@ namespace {
 // Runs in the page's own world. Deliberately small and dull: it wraps two
 // methods, counts bytes, and dispatches a DOM event. No bridge, no tokens,
 // nothing worth taking, nothing to escalate with.
+//
+// **And nothing a page can see**, which it was not until 2026-10-25. It ran
+// on every page with a global named `__hydra_mse`, replaced
+// `addSourceBuffer` with a plain function whose source any page could read,
+// and planted its own `appendBuffer` on every SourceBuffer -- the call a
+// video player makes most. Measured on a YouTube watch page while YouTube
+// was telling the holder "Ad blockers are not allowed". So: no global (one
+// script per document, so the guard bought nothing); the two methods are
+// wrapped once, on the prototypes, by a Proxy whose source reads as the
+// engine's; which buffer carries which mime is kept in a WeakMap; and the
+// event and the query it reports with are the engine's own, taken before
+// the page's scripts could replace them.
 const char *k_hook = R"JS(
 (function () {
-  if (window.__hydra_mse) return;
-  window.__hydra_mse = 1;
+  if (typeof Proxy !== 'function' || typeof Reflect !== 'object' ||
+      typeof WeakMap !== 'function' || !window.MediaSource ||
+      !window.SourceBuffer)
+    return;
+  var MS = MediaSource.prototype, SB = SourceBuffer.prototype;
+  var add = MS.addSourceBuffer, append = SB.appendBuffer;
+  if (typeof add !== 'function' || typeof append !== 'function') return;
+
+  var dispatch = EventTarget.prototype.dispatchEvent;
+  var Custom = window.CustomEvent;
+  var query = Document.prototype.querySelector;
+  var post = window.postMessage;
+  var in_frame = window.top !== window;
+
+  // The engine's answer for a wrapped method's source, whoever asks.
+  var real_of = new WeakMap();
+  var source_of = Function.prototype.toString;
+  var answer = new Proxy(source_of, {
+    apply: function (target, self, args) {
+      var f = self;
+      while (real_of.has(f)) f = real_of.get(f);
+      return Reflect.apply(target, f, args);
+    }
+  });
+  real_of.set(answer, source_of);
+  try { Function.prototype.toString = answer; } catch (e) {}
+  var wrap = function (real, apply) {
+    var p = new Proxy(real, { apply: apply });
+    real_of.set(p, real);
+    return p;
+  };
 
   var seen = {};
+  var mime_of = new WeakMap();
   var send = function (mime) {
     var s = seen[mime];
-    var v = document.querySelector('video');
+    var v = null;
+    try { v = query.call(document, 'video'); } catch (e) {}
     var detail = {
       mime: mime,
       bytes: s.bytes,
@@ -37,21 +80,26 @@ const char *k_hook = R"JS(
     // tap being silent on every page whose player is an embed, and that is most
     // of them.
     try {
-      if (window.top !== window)
-        window.top.postMessage({ __hydra_mse: detail }, '*');
+      if (in_frame)
+        post.call(window.top, { __hydra_mse: detail }, '*');
       else
-        document.dispatchEvent(new CustomEvent('hydra-mse', { detail: detail }));
-    } catch (e) { /* a page may have replaced either; nothing to do */ }
+        dispatch.call(document, new Custom('hydra-mse', { detail: detail }));
+    } catch (e) { /* nothing to do */ }
   };
 
-  if (window.MediaSource && MediaSource.prototype.addSourceBuffer) {
-    var add = MediaSource.prototype.addSourceBuffer;
-    MediaSource.prototype.addSourceBuffer = function (mime) {
-      var sb = add.apply(this, arguments);
+  try {
+    MS.addSourceBuffer = wrap(add, function (target, self, args) {
+      var sb = Reflect.apply(target, self, args);
+      var mime = String(args[0]);
       if (!seen[mime]) seen[mime] = { bytes: 0, appends: 0, last: 0 };
+      try { mime_of.set(sb, mime); } catch (e) {}
       send(mime);
-      var append = sb.appendBuffer;
-      sb.appendBuffer = function (buf) {
+      return sb;
+    });
+    SB.appendBuffer = wrap(append, function (target, self, args) {
+      var mime = mime_of.get(self);
+      var buf = args[0];
+      if (mime !== undefined) {
         var n = 0;
         if (buf) n = (buf.byteLength !== undefined) ? buf.byteLength : (buf.length || 0);
         var s = seen[mime];
@@ -74,11 +122,10 @@ const char *k_hook = R"JS(
         // constantly, and the shell only needs to know roughly how much is
         // buffered.
         if (s.bytes - s.last >= 262144) { s.last = s.bytes; send(mime); }
-        return append.apply(this, arguments);
-      };
-      return sb;
-    };
-  }
+      }
+      return Reflect.apply(target, self, args);
+    });
+  } catch (e) {}
 })();
 )JS";
 

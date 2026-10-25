@@ -30,6 +30,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QLineEdit>
+#include <QMap>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QWebEnginePage>
@@ -49,6 +50,25 @@ static void listen(QtMsgType t, const QMessageLogContext &c, const QString &m) {
 		g_reports << m;
 	g_prior(t, c, m);
 }
+
+// Every request the filter refused while the page loaded, by address up to
+// the query: a request YouTube expects to succeed and sees fail is the
+// oldest way a page notices an ad blocker, and nothing on the page side
+// can show it.
+class blocked_log : public request_observer {
+public:
+	QMap<QString, int> seen;
+	QMap<QString, int> hosts;   // every request, so a zero above means something
+	void on_request(const request_context &ctx, const request_decision &d) override {
+		hosts[ctx.request_host]++;
+		if (!d.block)
+			return;
+		QUrl u = ctx.url;
+		u.setQuery(QString());
+		u.setFragment(QString());
+		seen[ctx.site_host + "  " + u.toString()]++;
+	}
+};
 
 // Asked of the page once it has settled. Everything is read defensively:
 // a page that throws on a read is a finding, not a crash.
@@ -82,8 +102,17 @@ static const char *k_probe = R"JS(
 		'Function.prototype.toString': src(Function.prototype.toString),
 		'Map.prototype.has': src(Map.prototype.has),
 		'Array.prototype.push': src(Array.prototype.push),
-		'Promise.prototype.then': src(Promise.prototype.then)
+		'Promise.prototype.then': src(Promise.prototype.then),
+		'MediaSource.prototype.addSourceBuffer':
+			src(window.MediaSource && MediaSource.prototype.addSourceBuffer),
+		'SourceBuffer.prototype.appendBuffer':
+			src(window.SourceBuffer && SourceBuffer.prototype.appendBuffer)
 	};
+	// A buffer of the page's own making, asked what it carries of its own.
+	try {
+		var ms = new MediaSource();
+		out.source_buffer_own = Object.getOwnPropertyNames(ms).join(',') || 'none';
+	} catch (e) { out.source_buffer_own = 'throws'; }
 	try {
 		var d = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'responseText');
 		out.xhr_responseText_getter = d && d.get ? src(d.get) : 'none';
@@ -112,6 +141,13 @@ static const char *k_probe = R"JS(
 	out.wall_element = wall ? 'present' : 'absent';
 	out.wall_text = (document.body && document.body.innerText || '')
 		.indexOf('Ad blockers are not allowed') >= 0 ? 'present' : 'absent';
+	// Globals a page can list that name this browser or its engine.
+	try {
+		out.named_globals = Object.getOwnPropertyNames(window).filter(function (k) {
+			return /hydra|^qt$|webchannel|__/i.test(k);
+		});
+		out.qt_object = typeof window.qt;
+	} catch (e) { out.named_globals = 'throws'; }
 	out.url = location.href;
 	return JSON.stringify(out);
 })()
@@ -146,6 +182,8 @@ int main(int argc, char *argv[]) {
 	theme::apply(theme::choice::light);
 	policy_engine  policy;
 	request_filter filter(&policy);
+	blocked_log blocked;
+	filter.add_observer(&blocked);
 	qtwebengine_factory factory(&filter);
 	main_window window(&factory, &policy, &filter);
 	window.resize(1280, 800);
@@ -184,6 +222,12 @@ int main(int argc, char *argv[]) {
 	std::printf("\n== scriptlet reports (%lld) ==\n", qlonglong(g_reports.size()));
 	for (const QString &r : g_reports)
 		std::printf("%s\n", qPrintable(r.left(1500)));
+	std::printf("\n== requests refused (%lld) ==\n", qlonglong(blocked.seen.size()));
+	for (auto it = blocked.seen.cbegin(); it != blocked.seen.cend(); ++it)
+		std::printf("%3d  %s\n", it.value(), qPrintable(it.key().left(200)));
+	std::printf("\n== every host asked (%lld) ==\n", qlonglong(blocked.hosts.size()));
+	for (auto it = blocked.hosts.cbegin(); it != blocked.hosts.cend(); ++it)
+		std::printf("%4d  %s\n", it.value(), qPrintable(it.key()));
 	std::printf("\n== what the page sees ==\n%s\n",
 	            qPrintable(QString::fromUtf8(QJsonDocument::fromJson(said.toUtf8())
 	                                           .toJson(QJsonDocument::Indented))));

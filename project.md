@@ -37823,6 +37823,31 @@ try if the wall survives this.
 person's lists never got it, so whether these changes clear it is for the
 holder to see in their own session.
 
+**It came back on the first video, on the desktop**, the holder reported
+the same evening -- at load, so not the stall path the inbound rules
+answer. The probe, extended, found the thing a page could see that was
+not ad blocking at all: **the MSE tap** (`mse_tap.cpp`), which runs in the
+page's own world on every page, set a global `__hydra_mse`, replaced
+`MediaSource.prototype.addSourceBuffer` with a plain function, and planted
+its own `appendBuffer` on every SourceBuffer -- the call a video player
+makes most, named for this browser and readable by any page. It is
+rewritten to leave nothing behind: no global, both methods wrapped once on
+the prototypes by Proxies that answer with the engine's source, the mime
+per buffer in a WeakMap, and the event and query it reports with taken
+before the page's scripts run. Run again, the page sees no global named
+for this browser and both methods read as native. `try_subframe` still
+passes (the tap sees a fixture's MediaSource, in same- and cross-origin
+frames). `try_tap` on YouTube counts no bytes with the old hook or the new
+one alike: YouTube does not start playback in the headless engine, so that
+driver cannot say anything here.
+
+The request filter refused nothing on the anonymous watch page (12 hosts,
+none of them an ad host), so a blocked detection request is not what this
+session shows; whether the person's own session differs is not known.
+On Android, the isolated world does not exist: the MSE relay's
+`__hydra_mse_relay`, `hydraChannel` and the client-hints shim are all in
+the page's world there. Not yet looked at.
+
 **Proved three ways.** A differential run against uBlock's own
 `jsonpath.js` under node, used only as an oracle: 318 query-and-document
 cases, 312 identical, and the 6 that differ are the `+=` refusal above;
