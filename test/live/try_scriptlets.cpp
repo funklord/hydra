@@ -79,7 +79,7 @@ public:
 			const QByteArray target = sp > 4 ? head.mid(4, sp - 4) : QByteArray();
 			asked << QString::fromUtf8(target);
 
-			QByteArray body, type = "text/html";
+			QByteArray body, type = "text/html", csp;
 			if (target.startsWith("/player")) {
 				// The shape a player response has: the ad slots beside the
 				// thing the page actually needs, so a prune that took the
@@ -87,6 +87,24 @@ public:
 				type = "application/json";
 				body = "{\"adPlacements\":[{\"slot\":1},{\"slot\":2}],"
 				        "\"streamingData\":{\"ok\":1}}";
+			} else if (target.startsWith("/instream/ad_status.js")) {
+				// The real file, as far as this test is concerned: it sets
+				// the flag to something the stand-in never would.
+				type = "application/javascript";
+				body = "window.google_ad_status = 'real';";
+			} else if (target.startsWith("/adstatus")) {
+				// **YouTube's check, under a strict script policy.** The
+				// stand-in arrives by redirect, and the page's
+				// Content-Security-Policy follows a redirect -- so a scheme
+				// the policy does not list would turn the answer back into
+				// a failure.
+				csp = "script-src 'self' 'unsafe-inline'";
+				body = "<!doctype html><html><body>adstatus"
+				        "<script src=\"/instream/ad_status.js\" onerror=\"window.__err=1\"></script>"
+				        "<script>"
+				        "new Image().src = '/report?status=' + String(window.google_ad_status)"
+				        "  + '&error=' + (window.__err ? 1 : 0);"
+				        "</script></body></html>";
 			} else if (target.startsWith("/inbound")) {
 				// **uBlock's YouTube answer, in a real engine.** A request
 				// marked the way the `rpnt` marks one, and one that is not,
@@ -133,6 +151,8 @@ public:
 				        "});"
 				        "</script></body></html>";
 			}
+			if (!csp.isEmpty())
+				type += "\r\nContent-Security-Policy: " + csp;
 			QByteArray resp = "HTTP/1.1 200 OK\r\nContent-Type: " + type +
 			                   "\r\nCache-Control: no-store\r\nContent-Length: " +
 			                   QByteArray::number(body.size()) +
@@ -163,6 +183,8 @@ public:
 int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+	// Before the engine starts, as `main` does: where a redirect is answered from.
+	qtwebengine_factory::register_resource_scheme();
 	QApplication app(argc, argv);
 
 	origin server;
@@ -211,6 +233,12 @@ int main(int argc, char *argv[]) {
 			           "+={\"clientScreen\":\"CHANNEL\"})\n");
 			body.write("127.0.0.1##+js(trusted-prevent-dom-bypass, "
 			           "Node.prototype.appendChild, JSON.stringify)\n");
+			// uBlock's ad_status.js rule, scoped to this host -- by `domain=`
+			// rather than `||127.0.0.1/...`, since the server's port sits
+			// between the host and the path and a `||` pattern allows
+			// nothing there.
+			body.write("/instream/ad_status.js^$script,xhr,"
+			           "redirect=doubleclick_instream_ad_status.js:5,domain=127.0.0.1\n");
 		}
 	}
 	{
@@ -332,6 +360,24 @@ int main(int argc, char *argv[]) {
 		           .arg(server.report()));
 		policy.set_setting("127.0.0.1", policy::feature::ads,
 		                    policy::setting::ask);
+	}
+
+	section("a redirect rule answers with the stand-in, past the page's policy");
+	{
+		check(filter.redirect_count() == 1,
+		      QString("the trusted list's redirect rule reached the filter (%1)")
+		          .arg(filter.redirect_count()));
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/adstatus").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		const bool answered = server.wait_for_report();
+		const QString said = server.report();
+		check(answered, QString("the page reported back (%1)").arg(said));
+		check(said.contains("status=1") && said.contains("error=0"),
+		      QString("ad_status.js ran as the stand-in, not refused and not the "
+		              "real one (%1)").arg(said));
+		check(!server.asked.contains("/instream/ad_status.js"),
+		      "and the real file was never fetched");
 	}
 
 	section("a marked request goes out rewritten, in a real engine");

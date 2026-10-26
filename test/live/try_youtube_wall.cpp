@@ -170,6 +170,7 @@ static const char *k_probe = R"JS(
 int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+	qtwebengine_factory::register_resource_scheme();
 	QApplication app(argc, argv);
 	g_prior = qInstallMessageHandler(listen);
 	const QString watch = argc > 1 ? QString::fromLocal8Bit(argv[1])
@@ -233,6 +234,20 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < 50 && !done; ++i)
 		spin(100);
 
+	std::printf("\n== redirect rules in force: %d ==\n", filter.redirect_count());
+	{
+		request_context ctx;
+		ctx.url = QUrl("https://static.doubleclick.net/instream/ad_status.js");
+		ctx.request_host = ctx.url.host();
+		ctx.site_host = "www.youtube.com";
+		ctx.kind = resource_kind::script;
+		ctx.type = request_type::script;
+		const request_decision d = filter.decide(ctx);
+		std::printf("ad_status.js on youtube: %s\n",
+		            d.block ? (d.redirect.isEmpty() ? "refused"
+		                                            : qPrintable("answered with " + d.redirect))
+		                    : "allowed");
+	}
 	std::printf("\n== scriptlet reports (%lld) ==\n", qlonglong(g_reports.size()));
 	for (const QString &r : g_reports)
 		std::printf("%s\n", qPrintable(r.left(1500)));

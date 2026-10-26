@@ -130,6 +130,11 @@ public:
 	// looked up by id: the interceptor fires for requests belonging to a page
 	// whose view may already be gone, and a decision that depends on the view
 	// still existing would be a race for no benefit.
+	// The same decision with its redirect: empty to let the request through,
+	// "block" to refuse it, or the name of the resource to answer it with
+	// (`redirect_rules.h`). What Java's interceptor asks.
+	static QString request_verdict(const QString &url, const QString &accept,
+	                               const QString &page_url);
 	static bool should_block(const QString &url, const QString &accept,
 	                          const QString &page_url);
 

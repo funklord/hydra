@@ -83,12 +83,40 @@ request_decision request_filter::decide(const request_context &ctx) const {
 	if (!m_engine)
 		return d;
 
-	// Ads / trackers: block known ad hosts unless this site permits ads.
-	if (is_ad_host(ctx.request_host) &&
-	    !m_engine->is_allowed(feature::ads, ctx.site_host)) {
-		d.block = true;
-		return d;
+	// **A redirect rule answers before anything refuses.** `redirect=` blocks
+	// and answers in one, so it outranks the blanket rules below -- which is
+	// what makes `ad_status.js` arrive as uBlock's stand-in rather than as a
+	// failure YouTube reads as an ad blocker (`redirect_rules.h`). A
+	// `redirect-rule=` answers only what something else blocks, so it is
+	// asked again at those points, through `refused`.
+	const bool ads_here = m_engine->is_allowed(feature::ads, ctx.site_host);
+	QString url_text;
+	const auto url = [&]() -> const QString & {
+		if (url_text.isEmpty())
+			url_text = ctx.url.toString();
+		return url_text;
+	};
+	if (!ads_here && m_redirects.size() > 0) {
+		const QString r = m_redirects.resource_for(url(), ctx.request_host,
+		                                           ctx.site_host, ctx.type, false);
+		if (!r.isEmpty()) {
+			d.block = true;
+			d.redirect = r;
+			return d;
+		}
 	}
+	// An ad request refused: answered by a `redirect-rule=` where one names it.
+	const auto refused = [&]() {
+		d.block = true;
+		if (m_redirects.size() > 0)
+			d.redirect = m_redirects.resource_for(url(), ctx.request_host,
+			                                      ctx.site_host, ctx.type, true);
+		return d;
+	};
+
+	// Ads / trackers: block known ad hosts unless this site permits ads.
+	if (is_ad_host(ctx.request_host) && !ads_here)
+		return refused();
 
 	// The accepted filter rules, which are ads and annoyances by another name and
 	// so answer to the same per-site switch: turning ads back on for a site the
@@ -105,14 +133,10 @@ request_decision request_filter::decide(const request_context &ctx) const {
 	// conditions are tested once and the url is stringified once rather than
 	// per list -- this runs on every request, and `blocks()` already takes a
 	// read lock of its own on each list it is asked.
-	if (ctx.kind != resource_kind::font && (m_list || m_subscribed) &&
-	    !m_engine->is_allowed(feature::ads, ctx.site_host)) {
-		const QString url = ctx.url.toString();
-		if ((m_list && m_list->blocks(url, ctx.site_host)) ||
-		    (m_subscribed && m_subscribed->blocks(url, ctx.site_host))) {
-			d.block = true;
-			return d;
-		}
+	if (ctx.kind != resource_kind::font && (m_list || m_subscribed) && !ads_here) {
+		if ((m_list && m_list->blocks(url(), ctx.site_host)) ||
+		    (m_subscribed && m_subscribed->blocks(url(), ctx.site_host)))
+			return refused();
 	}
 
 	// The investigation's trial rules, for its site only.

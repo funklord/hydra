@@ -12,6 +12,9 @@
 // turn ad blocking off without saying so.
 #include "filter_subscription.h"
 #include "filter_list.h"
+#include "policy_engine.h"
+#include "redirect_rules.h"
+#include "request_filter.h"
 #include "subscription_updater.h"
 #include "echo_server.h"
 
@@ -49,6 +52,7 @@ static QString kind_name(line_kind k) {
 		case line_kind::network:     return QStringLiteral("network");
 		case line_kind::cosmetic:    return QStringLiteral("cosmetic");
 		case line_kind::scriptlet:   return QStringLiteral("scriptlet");
+		case line_kind::redirect:    return QStringLiteral("redirect");
 		case line_kind::unsupported: return QStringLiteral("unsupported");
 		case line_kind::unsafe:      return QStringLiteral("unsafe");
 	}
@@ -1019,6 +1023,126 @@ int main(int argc, char **argv) {
 		       "while a list we do not ship is untrusted on silence as before");
 
 		QFile::remove(idx);
+	}
+
+	// ------------------------------------------------------------- redirects --
+	// **uBlock's answer to YouTube's ad_status.js check, as the list writes
+	// it.** The holder's report of 2026-10-26 showed this browser refusing
+	// that file while YouTube said "Ad blockers are not allowed"; uBlock
+	// answers it with a stand-in that sets the flag the real one sets.
+	const QString k_ad_status =
+	  "||doubleclick.net/instream/ad_status.js^$script,xhr,"
+	  "redirect=doubleclick_instream_ad_status.js:5";
+
+	section("a redirect rule is read, with its options");
+	{
+		redirect_rule r;
+		QString why;
+		check(filter_subscription::classify(k_ad_status, nullptr, &why, nullptr, &r) ==
+		        line_kind::redirect,
+		      QString("the list's line is a redirect (%1)").arg(why));
+		check(r.resource == "doubleclick_instream_ad_status.js" && r.priority == 5 &&
+		        r.host == "doubleclick.net" && !r.rule_only &&
+		        r.types == (request_type::script | request_type::xhr),
+		      QString("naming its resource, priority, host and types (%1 %2 %3 %4)")
+		          .arg(r.resource).arg(r.priority).arg(r.host).arg(r.types));
+		check(filter_subscription::classify(
+		        "||ads.example^$image,redirect-rule=1x1.gif,domain=a.example|~b.a.example",
+		        nullptr, nullptr, nullptr, &r) == line_kind::redirect &&
+		        r.rule_only && r.resource == "1x1.gif" &&
+		        r.include == QStringList{ "a.example" } &&
+		        r.exclude == QStringList{ "b.a.example" },
+		      "redirect-rule= and its domains");
+		check(filter_subscription::classify("||x.example^$script,redirect=noopjs",
+		                                    nullptr, nullptr, nullptr, &r) ==
+		        line_kind::redirect && r.resource == "noop.js",
+		      "an alias resolves to the resource's own name");
+		check(filter_subscription::classify(
+		        "/instream/ad_status.js^$script,redirect=noopjs,domain=a.example",
+		        nullptr, nullptr, nullptr, &r) == line_kind::redirect,
+		      "a path pattern is a pattern, not a regex");
+		why.clear();
+		check(filter_subscription::classify("||x.example^$script,redirect=google-ima.js",
+		                                    nullptr, &why) == line_kind::unsupported &&
+		        why.contains("google-ima.js"),
+		      QString("a resource this build does not carry is refused, named (%1)")
+		          .arg(why));
+		why.clear();
+		check(filter_subscription::classify(
+		        "||x.example^$script,redirect=noopjs,denyallow=y.example",
+		        nullptr, &why) == line_kind::unsupported && why.contains("denyallow"),
+		      QString("and so is an option this reader does not know (%1)").arg(why));
+		const subscription_read rep = filter_subscription::read(
+		  "! Title: t\n||ads.example^\n" + k_ad_status + "\n");
+		check(rep.redirects == 1 && rep.redirect_list.size() == 1 &&
+		        rep.summary().contains("1 answered with a stand-in"),
+		      QString("a list counts them apart and says so (%1)").arg(rep.summary()));
+		redirect_resources::resource res;
+		check(redirect_resources::find("doubleclick_instream_ad_status.js", &res) &&
+		        res.body == "window.google_ad_status = 1;\n" &&
+		        res.mime == "application/javascript",
+		      "and the stand-in sets what the real file sets, and nothing else");
+		check(redirect_resources::find("1x1.gif", &res) && res.body.size() == 43 &&
+		        res.body.startsWith("GIF89a"),
+		      "an image stand-in is a whole image");
+	}
+
+	section("a redirect answers a request a blanket rule would refuse");
+	{
+		policy_engine policy;
+		request_filter filter(&policy);
+		filter_list subscribed;
+		filter_rule blanket;
+		filter_list::parse_rule("||doubleclick.net^", &blanket);
+		subscribed.replace({ blanket });
+		filter.set_subscription_list(&subscribed);
+		QList<redirect_rule> rules;
+		redirect_rule r;
+		parse_redirect_rule(k_ad_status, &r, nullptr);
+		rules << r;
+		parse_redirect_rule("||ads.example/pixel^$image,redirect-rule=1x1.gif,domain=site.example",
+		                    &r, nullptr);
+		rules << r;
+		filter.set_redirects(rules);
+
+		const auto ask = [&](const QString &url, const QString &site, unsigned type) {
+			request_context ctx;
+			ctx.url = QUrl(url);
+			ctx.request_host = ctx.url.host();
+			ctx.site_host = site;
+			ctx.kind = type == request_type::script ? resource_kind::script
+			         : type == request_type::image ? resource_kind::image
+			                                       : resource_kind::other;
+			ctx.type = type;
+			return filter.decide(ctx);
+		};
+		request_decision d = ask("https://static.doubleclick.net/instream/ad_status.js",
+		                         "www.youtube.com", request_type::script);
+		check(d.block && d.redirect == "doubleclick_instream_ad_status.js",
+		      QString("ad_status.js is answered with the stand-in (%1)").arg(d.redirect));
+		d = ask("https://static.doubleclick.net/instream/ad_status.js",
+		        "www.youtube.com", request_type::image);
+		check(d.block && d.redirect.isEmpty(),
+		      "but not as an image, which the rule does not name");
+		d = ask("https://static.doubleclick.net/other.js", "www.youtube.com",
+		        request_type::script);
+		check(d.block && d.redirect.isEmpty(),
+		      "and the blanket rule still refuses the rest of the host");
+		d = ask("https://ads.example/pixel", "site.example", request_type::image);
+		check(!d.block, "a redirect-rule= answers nothing that is not blocked");
+		filter_rule ads;
+		filter_list::parse_rule("||ads.example^", &ads);
+		subscribed.replace({ blanket, ads });
+		d = ask("https://ads.example/pixel", "site.example", request_type::image);
+		check(d.block && d.redirect == "1x1.gif",
+		      QString("and answers what is, on its own site (%1)").arg(d.redirect));
+		d = ask("https://ads.example/pixel", "other.example", request_type::image);
+		check(d.block && d.redirect.isEmpty(), "and on no other");
+		policy.set_setting("www.youtube.com", policy::feature::ads, policy::setting::allow);
+		d = ask("https://static.doubleclick.net/instream/ad_status.js",
+		        "www.youtube.com", request_type::script);
+		check(!d.block && d.redirect.isEmpty(),
+		      "and a site whose ads are allowed gets the real file");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

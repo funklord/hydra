@@ -6381,6 +6381,7 @@ int main_window::load_subscriptions() {
 	// half-filled list -- adding rule by rule would leave a window in which
 	// the page being loaded is matched against some of them.
 	QList<filter_rule> all;
+	QList<redirect_rule> redirects;
 	m_scriptlets.clear();
 	int taken = 0;
 	for (const subscription &sub : m_sub_updater->subscriptions()) {
@@ -6418,6 +6419,7 @@ int main_window::load_subscriptions() {
 		// behind a number that says "rules".
 		for (const scriptlet_call &c : rep.calls)
 			m_scriptlets.push_back(c);
+		redirects += rep.redirect_list;
 		taken += rep.accepted;
 	}
 	// **The person's own list carries scriptlets too, and did not before.**
@@ -6457,6 +6459,8 @@ int main_window::load_subscriptions() {
 	// the last fetch produced, and the difference between those two is exactly
 	// what a reader needs when a build starts reading more of a list.
 	m_subscribed->replace(all);
+	if (m_filter)
+		m_filter->set_redirects(redirects);
 	return taken;
 }
 

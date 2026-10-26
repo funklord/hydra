@@ -1,5 +1,6 @@
 #include "qtwebengine_interceptor.h"
 #include "request_filter.h"
+#include "qtwebengine_factory.h"
 
 #include <QWebEngineUrlRequestInfo>
 
@@ -22,13 +23,35 @@ void qtwebengine_interceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
 		case RT::ResourceTypeFontResource: ctx.kind = resource_kind::font; break;
 		default:                     ctx.kind = resource_kind::other;  break;
 	}
+	// uBlock's finer type, for a rule's type options: the engine says it.
+	switch (info.resourceType()) {
+		case RT::ResourceTypeScript:
+		case RT::ResourceTypeWorker:
+		case RT::ResourceTypeSharedWorker:
+		case RT::ResourceTypeServiceWorker: ctx.type = request_type::script; break;
+		case RT::ResourceTypeImage:
+		case RT::ResourceTypeFavicon:       ctx.type = request_type::image; break;
+		case RT::ResourceTypeStylesheet:    ctx.type = request_type::stylesheet; break;
+		case RT::ResourceTypeXhr:           ctx.type = request_type::xhr; break;
+		case RT::ResourceTypeSubFrame:      ctx.type = request_type::subdocument; break;
+		case RT::ResourceTypeMedia:         ctx.type = request_type::media; break;
+		case RT::ResourceTypeFontResource:  ctx.type = request_type::font; break;
+		case RT::ResourceTypePing:
+		case RT::ResourceTypeCspReport:     ctx.type = request_type::ping; break;
+		default:                            ctx.type = request_type::other; break;
+	}
 
 	const request_decision d = m_filter->decide(ctx);
 	// Every request reaches the observers, blocked or not: the media detector
 	// wants what loaded, and filter-evolution wants what slipped through.
 	m_filter->notify(ctx, d);
 	if (d.block) {
-		info.block(true);
+		// Answered rather than refused, where a redirect rule names a
+		// stand-in and the scheme that serves it is in place.
+		if (!d.redirect.isEmpty() && qtwebengine_factory::resource_scheme_registered())
+			info.redirect(qtwebengine_factory::resource_url(d.redirect));
+		else
+			info.block(true);
 		return;
 	}
 	if (d.strip_referer)

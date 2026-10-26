@@ -37877,6 +37877,59 @@ what the page could see. On Android the probe is not wired yet
 (`run_page_probe` and `run_probe` are both the empty default there);
 `tool/webview_probe.py` asks the same questions from outside.
 
+### The wall was a refused request: `redirect=` is read now
+
+The holder pressed the Annoyed button with the wall up, 2026-10-26. The
+report said what no session here could: nothing of this browser was
+visible to the page -- no tell at all -- the 66 YouTube scriptlets had
+run, and the filter had **refused two requests**:
+`static.doubleclick.net/instream/ad_status.js` and
+`googleads.g.doubleclick.net/pagead/id`. `ad_status.js` sets
+`window.google_ad_status`; YouTube loads it and reads the flag. uBlock
+does not refuse it -- its own list answers it with a stand-in:
+
+    ||doubleclick.net/instream/ad_status.js^$script,xhr,redirect=doubleclick_instream_ad_status.js:5
+
+This build dropped every rule with options, so that one went, and a
+blanket `doubleclick.net` rule (and `is_ad_host`) refused the file. An
+anonymous session never asks for it, which is why nothing here reproduced
+the wall.
+
+**`redirect=` and `redirect-rule=` are read now** (`redirect_rules.h`).
+The resources are a closed catalog written here -- an empty script, text,
+page, stylesheet and JSON, transparent images generated for it, and the
+one line `ad_status.js` sets -- under uBlock's names and aliases; a rule
+naming any other is refused and counted, as are rules with an option the
+reader does not know (only types, `domain=`, first/third-party,
+`important` and the priority suffix are read). `request_filter::decide`
+asks the redirect rules before anything refuses: a `redirect=` rule
+answers on its own, a `redirect-rule=` only what something else blocked,
+the highest priority wins, and a site whose ads are allowed gets the real
+thing. The desktop answers through a `resource:` scheme registered before
+the engine starts, secure, CORS-enabled and past the page's CSP (which
+follows a redirect and would refuse an unlisted scheme); the interceptor
+now passes the engine's exact request type. Android answers in
+`shouldInterceptRequest` with the bytes and an open CORS header.
+
+Measured: of the person's lists, 897 redirect rules are in force; the
+rest name resources not in the catalog (`google-ima.js` 215, the media
+stand-ins, the analytics and ad-library shims) and are counted.
+`ad_status.js` on `www.youtube.com` is now answered with the stand-in.
+`test_subscription` reads the rules and decides with them (150 passed);
+`try_scriptlets` serves a page under `script-src 'self'` that loads
+`/instream/ad_status.js` through a trusted list's rule: the stand-in ran
+(`google_ad_status` is 1), and the server never saw the request.
+
+**A finding in the block list, recorded rather than changed:**
+`filter_list` indexes a `||host/path^` rule under the key `host/path`,
+which no request host can equal, and `filter_list::matches` compares
+that same string with the host. So every host-anchored rule with a path
+in a subscribed list is counted as in use and never matches. It fails
+safe -- nothing is over-blocked -- but a large share of EasyList is
+inert. Enforcing them is its own change: thousands of rules start
+applying at once, and that wants its own measurement of what breaks.
+The redirect rules have their own compiled matcher and are not affected.
+
 ### On Android every page can see the bridge, and call it
 
 Looked at 2026-10-25 at the holder's word. Measured on the phone through

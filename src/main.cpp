@@ -207,6 +207,7 @@ int main(int argc, char *argv[]) {
 	// nothing changes.
 #ifndef Q_OS_ANDROID
 	qtwebengine_factory::register_url_schemes(torrent_download_source::url_schemes());
+	qtwebengine_factory::register_resource_scheme();
 #endif
 
 	QApplication app(argc, argv);

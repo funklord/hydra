@@ -5,6 +5,7 @@
 #include "qtwebengine_view.h"
 #include "request_filter.h"
 #include "qtwebengine_interceptor.h"
+#include "redirect_rules.h"
 
 #include <QtWebEngineCore/qtwebenginecoreglobal.h>
 #include <QVersionNumber>
@@ -24,6 +25,7 @@
 #include <QWebEngineUrlScheme>
 #include <QWebEngineUrlSchemeHandler>
 #include <QWebEngineCookieStore>
+#include <QBuffer>
 
 namespace {
 
@@ -31,8 +33,28 @@ namespace {
 // install a handler for. A file-scope list is acceptable here because scheme
 // registration is itself process-wide and once-only in Qt.
 QStringList g_custom_schemes;
+bool        g_resource_scheme = false;
+const char *k_resource_scheme = "resource";
 
 }  // namespace
+
+// Serves the redirect resources. Every name not in the catalog fails, so the
+// scheme cannot be pointed at anything else; a page that asks for one
+// directly gets the same stand-in a refused request would, and nothing more.
+class resource_scheme_handler : public QWebEngineUrlSchemeHandler {
+public:
+	void requestStarted(QWebEngineUrlRequestJob *job) override {
+		redirect_resources::resource r;
+		if (!redirect_resources::find(job->requestUrl().path(), &r)) {
+			job->fail(QWebEngineUrlRequestJob::UrlNotFound);
+			return;
+		}
+		auto *body = new QBuffer(job);
+		body->setData(r.body);
+		body->open(QIODevice::ReadOnly);
+		job->reply(r.mime, body);
+	}
+};
 
 // Receives every request for a registered custom scheme. Chromium calls this on
 // the UI thread, so handing the URL straight to the shell is safe.
@@ -50,6 +72,32 @@ public:
 
 	std::function<void(const QUrl &)> on_url;
 };
+
+void qtwebengine_factory::register_resource_scheme() {
+	if (g_resource_scheme)
+		return;
+	QWebEngineUrlScheme scheme(k_resource_scheme);
+	scheme.setSyntax(QWebEngineUrlScheme::Syntax::Path);
+	// **Each flag is what lets a stand-in arrive where the original would
+	// have.** Secure, so an https page's script or image is not mixed
+	// content; CORS-enabled, so a cross-origin request can read it; and past
+	// the page's Content-Security-Policy, which follows a redirect and would
+	// otherwise refuse a scheme no site lists -- turning the answer back into
+	// the failure it exists to avoid.
+	scheme.setFlags(QWebEngineUrlScheme::SecureScheme |
+	                QWebEngineUrlScheme::CorsEnabled |
+	                QWebEngineUrlScheme::ContentSecurityPolicyIgnored);
+	QWebEngineUrlScheme::registerScheme(scheme);
+	g_resource_scheme = true;
+}
+
+bool qtwebengine_factory::resource_scheme_registered() {
+	return g_resource_scheme;
+}
+
+QUrl qtwebengine_factory::resource_url(const QString &name) {
+	return QUrl(QString::fromLatin1(k_resource_scheme) + QLatin1Char(':') + name);
+}
 
 void qtwebengine_factory::register_url_schemes(const QStringList &schemes) {
 	for (const QString &name : schemes) {
@@ -282,6 +330,11 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 	                  [this](const QNetworkCookie &c) {
 		m_cookies->deleteCookie(c);
 	});
+
+	if (g_resource_scheme) {
+		m_resource_handler = new resource_scheme_handler;
+		m_profile->installUrlSchemeHandler(k_resource_scheme, m_resource_handler);
+	}
 
 	// Links that are not pages (sec 11.4). Installed per scheme main() registered;
 	// with none registered this does nothing and such links behave as before.

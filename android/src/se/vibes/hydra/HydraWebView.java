@@ -241,6 +241,16 @@ public class HydraWebView {
     public static native boolean shouldBlock(String url, String accept, String pageUrl);
 
     /**
+     * The same decision with its redirect: empty lets the request through,
+     * "block" refuses it, and anything else names the stand-in to answer it
+     * with -- what a site checking for an ad blocker expects to receive, where
+     * a refusal is what it is looking for.
+     */
+    public static native String requestVerdict(String url, String accept, String pageUrl);
+    public static native String resourceMime(String name);
+    public static native byte[] resourceBody(String name);
+
+    /**
      * Whether the page at pageUrl may set or send third-party cookies.
      *
      * The same per-site policy the desktop applies, answered by the same
@@ -748,6 +758,18 @@ public class HydraWebView {
     private static WebResourceResponse blocked() {
         return new WebResourceResponse("text/plain", "utf-8",
                                        new ByteArrayInputStream(new byte[0]));
+    }
+
+    // A redirect resource as the answer to a request. Any origin may read it,
+    // as the request it stands in for could have been cross-origin.
+    private static WebResourceResponse standIn(String name) {
+        final String mime = resourceMime(name);
+        if (mime == null || mime.isEmpty())
+            return blocked();
+        final Map<String, String> headers = new java.util.HashMap<>();
+        headers.put("Access-Control-Allow-Origin", "*");
+        return new WebResourceResponse(mime, "utf-8", 200, "OK", headers,
+                                       new ByteArrayInputStream(resourceBody(name)));
     }
 
     // The Activity is handed in rather than fetched: QtNative.activity() is not
@@ -1337,10 +1359,14 @@ public class HydraWebView {
                                 accept = a;
                         }
                         final String page = PAGE_URLS.get(Long.valueOf(id));
-                        if (shouldBlock(req.getUrl().toString(), accept,
-                                         page != null ? page : ""))
+                        final String verdict = requestVerdict(req.getUrl().toString(),
+                                                              accept,
+                                                              page != null ? page : "");
+                        if (verdict == null || verdict.isEmpty())
+                            return null;
+                        if (verdict.equals("block"))
                             return blocked();
-                        return null;
+                        return standIn(verdict);
                     }
                 });
                 // Zero-sized until C++ says where the page area is; a view added

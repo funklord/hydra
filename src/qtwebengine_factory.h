@@ -10,6 +10,7 @@ class QNetworkCookieJar;
 class QWebEngineProfile;
 class QWebEngineDownloadRequest;
 class magnet_scheme_handler;
+class resource_scheme_handler;
 class request_filter;
 class qtwebengine_interceptor;
 
@@ -41,6 +42,15 @@ public:
 	// swallow the link silently, which is worse than the error page.
 	static void register_url_schemes(const QStringList &schemes);
 
+	// **The scheme a refused request is answered from** when a redirect rule
+	// names a stand-in (`redirect_rules.h`): the interceptor can only send a
+	// request somewhere else, never hand it a body, so it sends it here and
+	// this serves the resource. Registered before the engine starts, like the
+	// rest; until it is, a redirect is a plain block.
+	static void register_resource_scheme();
+	static bool resource_scheme_registered();
+	static QUrl resource_url(const QString &name);
+
 	// **The profile the app actually uses**, which since it gained a storage
 	// name is no longer `QWebEngineProfile::defaultProfile()`. A live driver
 	// that wants the cookie store must ask here: reaching for the default gets
@@ -69,6 +79,7 @@ private:
 	request_filter     *m_filter      = nullptr;
 	qtwebengine_interceptor *m_interceptor = nullptr;
 	magnet_scheme_handler   *m_scheme_handler = nullptr;
+	resource_scheme_handler *m_resource_handler = nullptr;
 	external_url_handler     m_external;
 	download_note            m_download_note;
 	// The engine's downloads, so a Cancel in the downloads window can reach

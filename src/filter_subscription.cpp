@@ -20,6 +20,8 @@ QString subscription_read::summary() const {
 	if (needs_trust > 0)
 		s += QString(", %1 needing trust this list has not been given")
 		         .arg(needs_trust);
+	if (redirects > 0)
+		s += QString(", %1 answered with a stand-in").arg(redirects);
 	if (unsupported > 0)
 		s += QString(", %1 line(s) this build cannot enforce").arg(unsupported);
 	if (unsafe > 0)
@@ -160,7 +162,7 @@ rewrite response_rewrite(const QString &t, scriptlet_call *out, QString *why) {
 namespace filter_subscription {
 
 line_kind classify(const QString &line, filter_rule *out, QString *why,
-                    scriptlet_call *call) {
+                    scriptlet_call *call, redirect_rule *redirect) {
 	const auto reason = [why](const char *text) {
 		if (why)
 			*why = QString::fromLatin1(text);
@@ -282,6 +284,23 @@ line_kind classify(const QString &line, filter_rule *out, QString *why,
 	// It is the right way round -- such a rule is skipped rather than
 	// enforced too broadly -- and the alternative is a parser for the option
 	// grammar, which is the work this defers.
+	// **A redirect rule is read before the options test refuses it**: its
+	// options are the few `parse_redirect_rule` knows, and any other refuses
+	// it there, with the option named.
+	{
+		redirect_rule r;
+		QString said;
+		if (parse_redirect_rule(t, &r, &said)) {
+			if (redirect)
+				*redirect = r;
+			return line_kind::redirect;
+		}
+		if (!said.isEmpty()) {
+			if (why)
+				*why = said;
+			return line_kind::unsupported;
+		}
+	}
 	{
 		scriptlet_call rewritten;
 		QString said;
@@ -335,7 +354,8 @@ subscription_read read(const QString &text, int previous_rules,
 	for (const QString &line : lines) {
 		filter_rule r;
 		scriptlet_call call;
-		switch (classify(line, &r, nullptr, &call)) {
+		redirect_rule redirect;
+		switch (classify(line, &r, nullptr, &call, &redirect)) {
 			case line_kind::comment:
 				continue;   // not a candidate line; headers are not a gap
 			case line_kind::network:
@@ -373,6 +393,11 @@ subscription_read read(const QString &text, int previous_rules,
 					++rep.scriptlets;
 					rep.calls.push_back(twin);
 				}
+				break;
+			case line_kind::redirect:
+				++rep.lines;
+				++rep.redirects;
+				rep.redirect_list.push_back(redirect);
 				break;
 			case line_kind::unsupported:
 				++rep.lines;

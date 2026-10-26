@@ -12,6 +12,7 @@
 #ifdef Q_OS_ANDROID
 
 #include "android_view.h"
+#include "redirect_rules.h"
 #include "request_filter.h"
 #include "permissions_shim.h"
 #include "scheme_rules.h"
@@ -336,6 +337,36 @@ Java_se_vibes_hydra_HydraWebView_bridgeDescribe(JNIEnv *env, jclass,
 	// hanging on a promise nothing will resolve.
 	on_qt_thread([id, n] { return android_view::describe_bridge(id, n); }, &r);
 	return env->NewStringUTF(r.toUtf8().constData());
+}
+
+// The same, with the redirect: see `android_view::request_verdict`.
+extern "C" JNIEXPORT jstring JNICALL
+Java_se_vibes_hydra_HydraWebView_requestVerdict(JNIEnv *env, jclass, jstring url,
+                                                jstring accept, jstring page_url) {
+	const QString v = android_view::request_verdict(from_java(env, url),
+	                                                from_java(env, accept),
+	                                                from_java(env, page_url));
+	return env->NewStringUTF(v.toUtf8().constData());
+}
+
+// A redirect resource's type and bytes, for Java to answer a request with.
+extern "C" JNIEXPORT jstring JNICALL
+Java_se_vibes_hydra_HydraWebView_resourceMime(JNIEnv *env, jclass, jstring name) {
+	redirect_resources::resource r;
+	if (!redirect_resources::find(from_java(env, name), &r))
+		return env->NewStringUTF("");
+	return env->NewStringUTF(r.mime.constData());
+}
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_se_vibes_hydra_HydraWebView_resourceBody(JNIEnv *env, jclass, jstring name) {
+	redirect_resources::resource r;
+	redirect_resources::find(from_java(env, name), &r);
+	jbyteArray out = env->NewByteArray(jsize(r.body.size()));
+	if (out && !r.body.isEmpty())
+		env->SetByteArrayRegion(out, 0, jsize(r.body.size()),
+		                        reinterpret_cast<const jbyte *>(r.body.constData()));
+	return out;
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -952,8 +983,13 @@ request_filter *android_view::s_filter = nullptr;
 
 bool android_view::should_block(const QString &url, const QString &accept,
                                  const QString &page_url) {
+	return !request_verdict(url, accept, page_url).isEmpty();
+}
+
+QString android_view::request_verdict(const QString &url, const QString &accept,
+                                      const QString &page_url) {
 	if (!s_filter)
-		return false;
+		return QString();
 
 	request_context ctx;
 	ctx.url          = QUrl(url);
@@ -965,6 +1001,12 @@ bool android_view::should_block(const QString &url, const QString &accept,
 	// rules that key off the request host apply, which is the safe subset.
 	ctx.site_host    = QUrl(page_url).host();
 	ctx.kind         = kind_from_hints(accept, ctx.url);
+	// Only what the hints can say: a script, an image or a font is told apart
+	// and anything else is `unknown`, which any type option accepts.
+	ctx.type = ctx.kind == resource_kind::script ? request_type::script
+	         : ctx.kind == resource_kind::image  ? request_type::image
+	         : ctx.kind == resource_kind::font   ? request_type::font
+	                                             : request_type::unknown;
 
 	const request_decision d = s_filter->decide(ctx);
 	// Observers see every request here too, exactly as on the desktop: the media
@@ -974,7 +1016,9 @@ bool android_view::should_block(const QString &url, const QString &accept,
 	// replace a response but not edit a request, and silently doing nothing is
 	// better than pretending. It is not lost -- the desktop honours it, and the
 	// decision is one struct for both.
-	return d.block;
+	if (!d.block)
+		return QString();
+	return d.redirect.isEmpty() ? QStringLiteral("block") : d.redirect;
 }
 
 bool android_view::any_view_open() {
