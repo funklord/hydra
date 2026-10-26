@@ -373,6 +373,17 @@ public:
 		done(QString());
 	}
 
+	// The same in the page's own world, top frame only, for the one question
+	// the isolated world cannot answer: what the page itself can see. The
+	// page could notice being asked, which is why this is only done when a
+	// person presses a button. The default answers empty, read as "could
+	// not be asked".
+	virtual void run_page_probe(const QString &source,
+	                            std::function<void(const QString &)> done) {
+		Q_UNUSED(source)
+		done(QString());
+	}
+
 	// **The same question asked in every frame**, each answer with the
 	// address of the frame that gave it, the main frame first. An ad is
 	// usually served in a frame of its own, from another origin, and a probe

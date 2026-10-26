@@ -24,6 +24,9 @@
 #include <QToolBar>
 #include <QTreeView>
 #include <QUrl>
+#include <QWebEnginePage>
+#include <QWebEngineScript>
+#include <QWebEngineView>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -143,6 +146,16 @@ int main(int argc, char *argv[]) {
 		spin(qEnvironmentVariableIsSet("HYDRA_SETTLE")
 		         ? qEnvironmentVariableIntValue("HYDRA_SETTLE") : 2500);
 
+		// **A global named for this browser, planted in the page's own
+		// world**, which only a probe running there can see -- the isolated
+		// world the ad probe uses has its own globals. Added with the page
+		// probe, 2026-10-25; the report must name it.
+		for (QWebEngineView *v : w.findChildren<QWebEngineView *>())
+			if (v->isVisible())
+				v->page()->runJavaScript(QStringLiteral("window.hydraPlanted = 1;"),
+				                         QWebEngineScript::MainWorld);
+		spin(300);
+
 		bool saw = false;
 		answer(&saw, "Just Record It", false);
 		annoyed->trigger();
@@ -186,6 +199,15 @@ int main(int argc, char *argv[]) {
 			             qint64(r.detected.size()));
 			for (const QString &d : r.detected)
 				std::printf("       %s\n", qPrintable(d.left(120)));
+			check(r.tells.contains(QStringLiteral("global hydraPlanted")),
+			      QString("and what the page's own world could see, asked there "
+			              "(%1)").arg(r.tells.join(" | ")));
+			std::printf("     refused on the page: %lld\n", qint64(r.refused.size()));
+			for (int i = 0; i < r.refused.size() && i < 8; ++i)
+				std::printf("       %s\n", qPrintable(r.refused[i].left(110)));
+			std::printf("     tells: %lld\n", qint64(r.tells.size()));
+			for (const QString &t : r.tells)
+				std::printf("       %s\n", qPrintable(t.left(120)));
 		}
 	}
 

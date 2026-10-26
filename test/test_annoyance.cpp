@@ -45,6 +45,8 @@ static annoyance_report make(const QString &host, const QStringList &suspects) {
 	                          "0 failed, 2431 for other sites" };
 	r.detected = QStringList{ "player: youtube player #movie_player says it is "
 	                           "in an ad (ad-showing)" };
+	r.refused = QStringList{ "https://static.doubleclick.net/instream/ad_status.js" };
+	r.tells = QStringList{ "youtube: the \"Ad blockers are not allowed\" wall is up" };
 	r.observed = 42;
 	return r;
 }
@@ -152,6 +154,10 @@ int main(int argc, char **argv) {
 		check(r.patches.size() == 1 && r.patches.first().contains("10 ran"),
 		      "and what the page patches did -- the evidence for an ad from "
 		      "the site's own host");
+		check(r.refused.size() == 1 && r.refused.first().contains("ad_status"),
+		      "and what this browser refused on the page");
+		check(r.tells.size() == 1 && r.tells.first().contains("wall is up"),
+		      "and what the page could see of it");
 		check(r.when.isValid(), "and when it was filed");
 
 		// Shrinking must not leave a tail: an array rewritten shorter used to

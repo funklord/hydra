@@ -1076,6 +1076,12 @@ void qtwebengine_view::run_probe(const QString &source,
 	                      [done](const QVariant &v) { done(v.toString()); });
 }
 
+void qtwebengine_view::run_page_probe(const QString &source,
+                                       std::function<void(const QString &)> done) {
+	m_page->runJavaScript(source, QWebEngineScript::MainWorld,
+	                      [done](const QVariant &v) { done(v.toString()); });
+}
+
 void qtwebengine_view::run_probe_in_frames(
     const QString &source, std::function<void(const QList<frame_answer> &)> done) {
 	// Every frame, to a bound: a page of embeds can hold dozens, and each is

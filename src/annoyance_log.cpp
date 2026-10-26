@@ -90,6 +90,8 @@ bool annoyance_log::load(const QString &path) {
 		// Absent before the page patches reported, read the same way.
 		r.patches = f.value("patches").toStringList();
 		r.detected = f.value("detected").toStringList();
+		r.refused = f.value("refused").toStringList();
+		r.tells = f.value("tells").toStringList();
 		m_reports.append(r);
 	}
 	f.endArray();
@@ -115,6 +117,10 @@ bool annoyance_log::save(const QString &path) const {
 			f.setValue("patches", r.patches);
 		if (!r.detected.isEmpty())
 			f.setValue("detected", r.detected);
+		if (!r.refused.isEmpty())
+			f.setValue("refused", r.refused);
+		if (!r.tells.isEmpty())
+			f.setValue("tells", r.tells);
 		if (!r.outcome.isEmpty())
 			f.setValue("outcome", r.outcome);
 	}

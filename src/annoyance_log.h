@@ -48,6 +48,10 @@ struct annoyance_report {
 	// labels (`ad_probe::describe`). The only field that answers "was an ad
 	// on screen" rather than "what did the browser do".
 	QStringList detected;
+	// What this browser refused on the page, and what the page could see of
+	// it (`ad_probe::parse_tells`): the two halves of "does the site know".
+	QStringList refused;
+	QStringList tells;
 	int         observed = 0;  // how many requests the page had made in total
 	// What the person did next, if anything: "recorded", "zapped", "evolved",
 	// "consent". Kept because a report nobody acted on is the interesting kind

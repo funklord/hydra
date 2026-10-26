@@ -2522,12 +2522,23 @@ void main_window::report_annoyance() {
 			if (ad_probe::parse(a.answer, &f))
 				ad_probe::add(&found, f, a.url.host(), a.main);
 		}
-		file_annoyance(asked, page, found);
+		// **And what the page itself can see of this browser**, asked in its
+		// own world because that is where the patches are. Added after the
+		// YouTube wall of 2026-10-25, which no session here reproduced: the
+		// person's own session is where it shows, and this is how a report
+		// filed there says what the site could have noticed.
+		asked->run_page_probe(ad_probe::tells_source(),
+		    [this, asked, page, found](const QString &tells) {
+			if (!asked)
+				return;
+			file_annoyance(asked, page, found, ad_probe::parse_tells(tells));
+		});
 	});
 }
 
 void main_window::file_annoyance(web_view_backend *view, const QUrl &page,
-                                  const ad_probe::findings &found) {
+                                  const ad_probe::findings &found,
+                                  const QStringList &tells) {
 	const QString host = page.host();
 
 	// **Nothing is captured here that was not already being collected.**
@@ -2553,6 +2564,9 @@ void main_window::file_annoyance(web_view_backend *view, const QUrl &page,
 	// showed at the moment of the complaint. Kept with the site's signals as
 	// well, so the filter dialog the report can open sends it to the model.
 	r.detected = ad_probe::describe(found);
+	r.tells    = tells;
+	if (m_signals)
+		r.refused = m_signals->refused_for(host);
 	if (m_signals)
 		m_signals->note_detected(host, r.detected);
 

@@ -162,6 +162,52 @@ const char *k_script = R"JS(
 })()
 )JS";
 
+const char *k_tells = R"JS(
+(function () {
+  var out = [];
+  var fns = {
+    'fetch': window.fetch, 'JSON.parse': JSON.parse, 'JSON.stringify': JSON.stringify,
+    'XMLHttpRequest.prototype.open': window.XMLHttpRequest && XMLHttpRequest.prototype.open,
+    'XMLHttpRequest.prototype.send': window.XMLHttpRequest && XMLHttpRequest.prototype.send,
+    'Response.prototype.json': window.Response && Response.prototype.json,
+    'setTimeout': window.setTimeout, 'setInterval': window.setInterval,
+    'EventTarget.prototype.addEventListener': EventTarget.prototype.addEventListener,
+    'Function.prototype.toString': Function.prototype.toString,
+    'MediaSource.prototype.addSourceBuffer': window.MediaSource && MediaSource.prototype.addSourceBuffer,
+    'SourceBuffer.prototype.appendBuffer': window.SourceBuffer && SourceBuffer.prototype.appendBuffer,
+    'Permissions.prototype.query': window.Permissions && Permissions.prototype.query,
+    'MediaDevices.prototype.enumerateDevices': window.MediaDevices && MediaDevices.prototype.enumerateDevices
+  };
+  for (var k in fns) {
+    try {
+      if (typeof fns[k] === 'function' && String(fns[k]).indexOf('[native code]') < 0)
+        out.push('function ' + k + ' hands back its source');
+    } catch (e) {}
+  }
+  try {
+    Object.getOwnPropertyNames(window).forEach(function (k) {
+      if (/hydra|^qt$|webchannel/i.test(k)) out.push('global ' + k);
+    });
+  } catch (e) {}
+  try {
+    var named = document.querySelectorAll('[id*=hydra i],[class*=hydra i]').length;
+    if (named) out.push(named + ' element(s) named for this browser');
+  } catch (e) {}
+  if (document.querySelector('ytd-enforcement-message-view-model'))
+    out.push('youtube: the "Ad blockers are not allowed" wall is up');
+  try {
+    var ua = window.ytcfg && ytcfg.data_ && ytcfg.data_.INNERTUBE_CONTEXT.client.userAgent;
+    if (ua) out.push('youtube: the player sends userAgent "' + String(ua).slice(0, 160) + '"');
+  } catch (e) {}
+  try {
+    var p = window.ytInitialPlayerResponse;
+    if (p && p.adPlacements !== undefined)
+      out.push('youtube: the first player response still carries adPlacements');
+  } catch (e) {}
+  return JSON.stringify(out);
+})()
+)JS";
+
 QStringList strings(const QJsonArray &a,
                      QString (*line)(const QJsonObject &)) {
 	QStringList out;
@@ -225,6 +271,19 @@ void add(findings *into, const findings &frame, const QString &frame_host,
 	copy(&into->elements, frame.elements);
 	copy(&into->frames, frame.frames);
 	copy(&into->labels, frame.labels);
+}
+
+QString tells_source() {
+	return QString::fromUtf8(k_tells);
+}
+
+QStringList parse_tells(const QString &json) {
+	QStringList out;
+	const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+	for (const QJsonValue &v : doc.array())
+		if (v.isString())
+			out << v.toString().left(300);
+	return out.mid(0, 64);
 }
 
 QStringList describe(const findings &f) {

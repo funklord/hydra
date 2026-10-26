@@ -305,7 +305,7 @@ private slots:
 	// The half of it that runs once the page has answered whether an ad is
 	// on screen. Separate because that answer arrives asynchronously.
 	void file_annoyance(web_view_backend *view, const QUrl &page,
-	                    const ad_probe::findings &found);
+	                    const ad_probe::findings &found, const QStringList &tells);
 	// The model loop behind the window's Work On It button, on that tab.
 	void start_investigation(annoyed_dialog *dlg, web_view_backend *view,
 	                         const investigation_evidence &ev);

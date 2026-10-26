@@ -48,4 +48,14 @@ void add(findings *into, const findings &frame, const QString &frame_host,
 // ad is worth more than a div with "ad" in its class.
 QStringList describe(const findings &f);
 
+// **What the page can see of this browser**, asked in the page's own world,
+// where the patches are -- the isolated world above has its own untouched
+// `fetch` and would see nothing. Read-only and asked once, when the button
+// is pressed. Each line is a tell a page could check: a patched function
+// that hands back its source, a global or element named for this browser,
+// and on YouTube the "Ad blockers are not allowed" wall and the request
+// identity the player is sending. Empty when there is nothing to say.
+QString tells_source();
+QStringList parse_tells(const QString &json);
+
 }  // namespace ad_probe

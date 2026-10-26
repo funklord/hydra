@@ -52,9 +52,18 @@ void filter_signals::on_request(const request_context &ctx, const request_decisi
 		seen << url;
 
 	// Only requests that got *through* are evidence of a filter gap. One that
-	// was blocked is the system working.
-	if (d.block)
+	// was blocked is the system working -- and is kept apart, as what a page
+	// may have noticed.
+	if (d.block) {
+		QUrl bare = ctx.url;
+		bare.setQuery(QString());
+		bare.setFragment(QString());
+		const QString b = bare.toString();
+		QStringList &ref = m_refused[ctx.site_host];
+		if (ref.size() < k_max_per_site && !ref.contains(b))
+			ref << b;
 		return;
+	}
 	if (!looks_ad_shaped(url, ctx.request_host, ctx.site_host))
 		return;
 
@@ -66,6 +75,11 @@ void filter_signals::on_request(const request_context &ctx, const request_decisi
 QStringList filter_signals::suspects_for(const QString &site_host) const {
 	QMutexLocker guard(&m_lock);
 	return m_suspects.value(site_host);
+}
+
+QStringList filter_signals::refused_for(const QString &site_host) const {
+	QMutexLocker guard(&m_lock);
+	return m_refused.value(site_host);
 }
 
 QStringList filter_signals::observed_for(const QString &site_host) const {
@@ -159,11 +173,13 @@ int filter_signals::clear_all() {
 	for (const QString &k : m_detected.keys())     sites.insert(k);
 	for (const QString &k : m_suspects.keys())     sites.insert(k);
 	for (const QString &k : m_observed.keys())     sites.insert(k);
+	for (const QString &k : m_refused.keys())      sites.insert(k);
 	m_capabilities.clear();
 	m_scriptlets.clear();
 	m_detected.clear();
 	m_suspects.clear();
 	m_observed.clear();
+	m_refused.clear();
 	return int(sites.size());
 }
 
@@ -174,4 +190,5 @@ void filter_signals::clear_site(const QString &site_host) {
 	m_detected.remove(site_host);
 	m_suspects.remove(site_host);
 	m_observed.remove(site_host);
+	m_refused.remove(site_host);
 }

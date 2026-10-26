@@ -97,6 +97,24 @@ int main(int argc, char **argv) {
 		      "though it is still part of the corpus a rule is simulated against");
 	}
 
+	section("what was refused is kept apart, as what a page may have noticed");
+	{
+		filter_signals s;
+		feed(s, "https://ads.other.example/ad_status.js?cb=1", "news.example", true);
+		feed(s, "https://ads.other.example/ad_status.js?cb=2", "news.example", true);
+		feed(s, "https://cdn.news.example/app.js", "news.example");
+		const QStringList refused = s.refused_for("news.example");
+		check(refused == QStringList{ "https://ads.other.example/ad_status.js" },
+		      QString("a refused request, by address without its query, once (%1)")
+		          .arg(refused.join(' ')));
+		check(s.refused_for("other.example").isEmpty(), "and only for its own page");
+		s.clear_site("news.example");
+		check(s.refused_for("news.example").isEmpty(), "gone with the site's other signals");
+		feed(s, "https://ads.other.example/x.js", "a.example", true);
+		check(s.clear_all() == 1 && s.refused_for("a.example").isEmpty(),
+		      "and counted and gone in a clear of browsing data");
+	}
+
 	section("repeats do not inflate the evidence");
 	{
 		filter_signals s;

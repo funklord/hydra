@@ -30,6 +30,12 @@ public:
 
 	// Requests that got through and look ad-shaped, for this page.
 	QStringList suspects_for(const QString &site_host) const;
+	// **Requests this browser refused on the page**, by address without its
+	// query. A request a page expects to succeed and sees fail is the oldest
+	// way a page notices an ad blocker, and nothing on the page side shows
+	// it; the YouTube wall of 2026-10-25 could not be told apart from a
+	// detection of this kind without it. Bounded like the rest.
+	QStringList refused_for(const QString &site_host) const;
 	// How many of those there are. **Suspects, not everything observed** --
 	// this sat directly under `observed_for` and was read as its count by the
 	// next caller to arrive, who then showed "N requests seen, M ad-shaped"
@@ -101,6 +107,7 @@ public:
 private:
 	mutable QMutex m_lock;
 	QHash<QString, QStringList> m_suspects;
+	QHash<QString, QStringList> m_refused;
 	QHash<QString, QStringList> m_observed;
 	// Bounded, like the two above: a page that asks for a camera every second
 	// must not turn a diagnostic into a leak of memory.

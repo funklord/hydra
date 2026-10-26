@@ -37848,6 +37848,35 @@ On Android, the isolated world does not exist: the MSE relay's
 `__hydra_mse_relay`, `hydraChannel` and the client-hints shim are all in
 the page's world there.
 
+### The Annoyed report says what the site could have noticed
+
+The wall shows in the holder's session and in none here, so the evidence
+has to come from there. The Annoyed button's report gained two fields:
+
+- **`refused`**: every request the filter refused on the page, by address
+  without its query, kept by `filter_signals` beside the corpus and the
+  suspects, bounded the same, and cleared with them -- per site and by
+  "Clear browsing data", since it is a record of where somebody has been.
+- **`tells`**: what the page's own world can see of this browser, asked by
+  `run_page_probe` -- the first backend method that runs in the main world,
+  because the isolated world has its own untouched `fetch` and would see
+  nothing. Patched functions handing back their source, globals and
+  elements named for this browser, and on YouTube whether the wall is up
+  and the `userAgent` the player sends (where the `rpnt` marker would
+  show). It runs once, when the button is pressed; a page could notice
+  being asked then, and at no other time.
+
+`try_annoyed` plants a global in the page's own world before pressing the
+button and asserts the report names it (17 passed). Against a YouTube
+watch page here the report lists that planted global and the player's
+plain `userAgent` -- nothing of this browser's own, and nothing refused.
+
+**For the holder:** when the wall appears, press the Annoyed button on
+that page. The report lands in `annoyances.ini` with what was refused and
+what the page could see. On Android the probe is not wired yet
+(`run_page_probe` and `run_probe` are both the empty default there);
+`tool/webview_probe.py` asks the same questions from outside.
+
 ### On Android every page can see the bridge, and call it
 
 Looked at 2026-10-25 at the holder's word. Measured on the phone through
