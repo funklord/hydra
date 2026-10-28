@@ -5,6 +5,7 @@
 #include <QHash>
 #include <QList>
 #include <QReadWriteLock>
+#include <QRegularExpression>
 #include <QString>
 #include <QStringList>
 
@@ -103,6 +104,14 @@ public:
 	// Does a single network rule pattern match a URL?
 	static bool matches(const QString &pattern, const QString &url);
 
+	// **A network pattern as a regex**, uBlock's reading of it: `||` any
+	// scheme and a subdomain boundary, a leading or trailing `|` an anchor,
+	// `*` anything, `^` a separator character or the end. Case-insensitive.
+	// Used for every pattern that is more than a host -- `||host/path^`,
+	// which this file used to compare with the request's host whole, so that
+	// such a rule never matched at all.
+	static QRegularExpression pattern_regex(const QString &pattern);
+
 	// **Whether a cosmetic selector can be put in a stylesheet without being
 	// able to say anything else.**
 	//
@@ -158,10 +167,13 @@ private:
 	//
 	// Rebuilt whenever the rules change, under the same write lock.
 	struct compiled {
-		enum class kind { host, substring, wildcard } k = kind::substring;
-		QString     host;    // for `host`: the bare domain, lowercased
+		enum class kind { host, host_path, regex, substring, wildcard } k = kind::substring;
+		QString     host;    // for `host` and `host_path`: the bare domain, lowercased
 		QString     needle;  // for `substring`: the pattern as written
 		QStringList parts;   // for `wildcard`: the pieces between the stars
+		// For `host_path` (`||host/path^`, tried only when the host matches)
+		// and `regex` (`||name.*/path`, a wildcard in the host, always tried).
+		QRegularExpression rx;
 	};
 	void reindex();
 	// **One rule, appended.** `add()` used to call `reindex()`, which rebuilt
@@ -174,6 +186,8 @@ private:
 
 	QList<compiled>            m_compiled;    // parallel to m_rules
 	QHash<QString, QList<int>> m_by_host;
+	QHash<QString, QList<int>> m_by_host_path;
+	QList<int>                 m_regex;
 	QHash<QString, QList<int>> m_by_token;
 	QList<int>                 m_untokenised;
 

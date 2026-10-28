@@ -782,12 +782,18 @@ int main(int argc, char **argv) {
 			// host `cdn*.site.example` and looked up by exact host, so it
 			// never fires -- and `matches()` does not expand it either, so
 			// **the scan agrees and a differential check cannot see it.**
-			// Recorded rather than fixed: host rules are the large majority
-			// and making their bucket handle a wildcard is a change to the
-			// shape of the index, not a rule about tokens.
-			check(!fl.blocks("https://cdn7.site.example/a", QString()),
-			      "while a host rule with a star in it fires for neither, "
-			      "which is its own gap");
+			// Recorded rather than fixed at the time: host rules are the large
+			// majority and making their bucket handle a wildcard is a change to
+			// the shape of the index, not a rule about tokens.
+			//
+			// **Closed 2026-10-29**, with the `||host/path^` rules that had the
+			// same shape of fault: a `||` pattern that is more than a host is
+			// compiled to a regex, and one with a wildcard in its host is kept
+			// in a list that is always tried. Both sides now fire, and still
+			// agree.
+			check(fl.blocks("https://cdn7.site.example/a", QString()) &&
+			        fl.blocks("https://xq.test/y", QString()),
+			      "and a host rule with a star in it fires now");
 		}
 
 		// **What the fix costs, since the index's speed is the reason a real
@@ -873,6 +879,42 @@ int main(int argc, char **argv) {
 		// refuse.
 		std::printf("        a request is decided in %.1f us\n",
 		             double(fast_us) / urls.size());
+	}
+
+	// **`||host/path^` rules match, and only their path.** They were indexed
+	// under the key `host/path`, which no request host can equal, so every
+	// such rule in a subscription was counted and never applied -- 2640 of
+	// the holder's 44361 host-anchored rules, measured 2026-10-29.
+	section("a host-anchored rule with a path blocks that path");
+	{
+		filter_list fl;
+		for (const char *text : { "||tracker.example^", "||cdn.example/ads/",
+		                          "||widget.example/loader.js^", "||animeflv.*/api/pop.php" }) {
+			filter_rule r;
+			filter_list::parse_rule(QString::fromLatin1(text), &r);
+			fl.add(r);
+		}
+		const auto blocks = [&](const char *u) {
+			return fl.blocks(QString::fromLatin1(u), QStringLiteral("site.example"));
+		};
+		check(blocks("https://cdn.example/ads/banner.png"), "the path is blocked");
+		check(blocks("https://img.cdn.example/ads/x.gif"), "on a subdomain too");
+		check(!blocks("https://cdn.example/app/main.js"),
+		      "and nothing else on that host");
+		check(!blocks("https://cdn.example.org/ads/x.gif"),
+		      "nor a host that only begins the same");
+		check(blocks("https://widget.example/loader.js") &&
+		        blocks("https://widget.example/loader.js?v=2") &&
+		        !blocks("https://widget.example/loader.json"),
+		      "a separator ends the path, and a longer name is not it");
+		check(blocks("https://animeflv.net/api/pop.php") &&
+		        !blocks("https://animeflv.net/api/other.php"),
+		      "a wildcard in the host is matched whole");
+		check(blocks("https://ads.tracker.example/x") && !blocks("https://tracker.example.org/"),
+		      "a host-only rule is as it was");
+		check(filter_list::matches("||cdn.example/ads/", "https://cdn.example/ads/a") &&
+		        !filter_list::matches("||cdn.example/ads/", "https://cdn.example/app/"),
+		      "and matches(), which the dry run uses, agrees");
 	}
 
 	section("a save drops what an older format left behind");

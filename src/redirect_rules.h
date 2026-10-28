@@ -65,11 +65,7 @@ enum : unsigned {
 
 struct redirect_rule {
 	QString     pattern;     // the network half, as the list wrote it
-	// **Compiled here rather than handed to `filter_list::matches`**, which
-	// reads `||host/path^` as a host and compares the path with the request's
-	// host -- so a rule with a path never matches through it. uBlock's
-	// syntax: `||` a host boundary, `|` an end anchor, `*` anything, `^` a
-	// separator or the end.
+	// Compiled once, by `filter_list::pattern_regex`.
 	QRegularExpression match;
 	QString     host;        // for `||host...` patterns, the index key
 	QString     resource;    // canonical name

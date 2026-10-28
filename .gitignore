@@ -80,3 +80,6 @@ debian/debhelper-build-stamp
 
 # OpenSSL built for Android by tool/build-openssl-android.sh: build output.
 deps/
+
+# The /go run's work file: a session's own state, not the project's.
+.claude/go.md

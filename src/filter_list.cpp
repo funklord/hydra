@@ -52,8 +52,58 @@ bool filter_list::parse_rule(const QString &line, filter_rule *out) {
 	return true;
 }
 
+QRegularExpression filter_list::pattern_regex(const QString &pattern) {
+	QString p = pattern, re;
+	if (p.startsWith(QLatin1String("||"))) {
+		re = QStringLiteral("^[a-z][a-z0-9+.-]*://([^/?#]*\\.)?");
+		p = p.mid(2);
+	} else if (p.startsWith(QLatin1Char('|'))) {
+		re = QStringLiteral("^");
+		p = p.mid(1);
+	}
+	bool end = false;
+	if (p.endsWith(QLatin1Char('|'))) {
+		end = true;
+		p.chop(1);
+	}
+	for (const QChar c : p) {
+		if (c == QLatin1Char('*'))
+			re += QStringLiteral(".*");
+		else if (c == QLatin1Char('^'))
+			re += QStringLiteral("(?:[^a-z0-9_.%-]|$)");
+		else
+			re += QRegularExpression::escape(QString(c));
+	}
+	if (end)
+		re += QLatin1Char('$');
+	return QRegularExpression(re, QRegularExpression::CaseInsensitiveOption);
+}
+
+namespace {
+// Where a `||` pattern's host ends: at the first character a host cannot
+// hold. What follows it, beyond a lone `^`, makes the rule more than a host.
+int host_end(const QString &p) {
+	for (int i = 2; i < p.size(); ++i) {
+		const QChar c = p.at(i);
+		if (c == QLatin1Char('/') || c == QLatin1Char('^') || c == QLatin1Char('*') ||
+		    c == QLatin1Char('?') || c == QLatin1Char(':') || c == QLatin1Char('|'))
+			return i;
+	}
+	return int(p.size());
+}
+bool host_only(const QString &p, int end) {
+	const QString rest = p.mid(end);
+	return rest.isEmpty() || rest == QLatin1String("^") || rest == QLatin1String("^|");
+}
+}  // namespace
+
 bool filter_list::matches(const QString &pattern, const QString &url) {
 	QString p = pattern;
+	// `||host/path^` and every other `||` pattern that is more than a host:
+	// the whole address against the regex. The branch below compared the
+	// path with the host and never matched.
+	if (p.startsWith("||") && !host_only(p, host_end(p)))
+		return pattern_regex(p).match(url).hasMatch();
 	// `||host^` -- anchored at a domain boundary.
 	if (p.startsWith("||")) {
 		p.remove(0, 2);
@@ -308,6 +358,8 @@ void filter_list::replace(const QList<filter_rule> &rules) {
 	m_rules.clear();
 	m_compiled.clear();
 	m_by_host.clear();
+	m_by_host_path.clear();
+	m_regex.clear();
 	m_by_token.clear();
 	m_untokenised.clear();
 	// Deduplicated rather than trusting the caller: two subscriptions overlap
@@ -422,6 +474,30 @@ void filter_list::index_one(int i) {
 		return;
 	}
 	QString p = r.text;
+	// **More than a host: indexed by its host, matched by its regex.** This
+	// went to the branch below, which keyed `||host/path^` under the string
+	// `host/path` -- a key no request host can equal -- so every such rule in
+	// a subscription was counted as in use and never matched. 2640 of the
+	// 44361 host-anchored rules in the holder's lists, measured 2026-10-29.
+	if (p.startsWith(QLatin1String("||")) && !host_only(p, host_end(p))) {
+		const int end = host_end(p);
+		c.rx = pattern_regex(p);
+		const QString h = p.mid(2, end - 2).toLower();
+		// A wildcard right after a partial host -- `||animeflv.*/api/pop.php`
+		// -- has no host to index under, and is always tried.
+		if (h.isEmpty() || h.endsWith(QLatin1Char('.')) ||
+		    (end < p.size() && p.at(end) == QLatin1Char('*'))) {
+			c.k = compiled::kind::regex;
+			m_compiled.push_back(c);
+			m_regex.append(i);
+		} else {
+			c.k    = compiled::kind::host_path;
+			c.host = h;
+			m_compiled.push_back(c);
+			m_by_host_path[h].append(i);
+		}
+		return;
+	}
 	if (p.startsWith(QLatin1String("||"))) {
 		p.remove(0, 2);
 		const int caret = p.indexOf('^');
@@ -456,6 +532,8 @@ void filter_list::index_one(int i) {
 void filter_list::reindex() {
 	m_compiled.clear();
 	m_by_host.clear();
+	m_by_host_path.clear();
+	m_regex.clear();
 	m_by_token.clear();
 	m_untokenised.clear();
 	m_compiled.reserve(m_rules.size());
@@ -501,6 +579,11 @@ bool filter_list::blocks(const QString &url, const QString &site_host) const {
 		const auto it = m_by_host.constFind(host.mid(at));
 		if (it != m_by_host.cend() && !it->isEmpty())
 			return true;
+		const auto paths = m_by_host_path.constFind(host.mid(at));
+		if (paths != m_by_host_path.cend())
+			for (int i : *paths)
+				if (m_compiled[i].rx.match(url).hasMatch())
+					return true;
 		if (host.indexOf('.', at) < 0)
 			break;
 	}
@@ -526,6 +609,9 @@ bool filter_list::blocks(const QString &url, const QString &site_host) const {
 		return false;
 	};
 
+	for (int i : m_regex)
+		if (m_compiled[i].rx.match(url).hasMatch())
+			return true;
 	if (try_rules(m_untokenised))
 		return true;
 	for (const QString &tok : tokens_in(url)) {
@@ -544,6 +630,8 @@ bool filter_list::load(const QString &path) {
 	m_rules.clear();
 	m_compiled.clear();
 	m_by_host.clear();
+	m_by_host_path.clear();
+	m_regex.clear();
 	m_by_token.clear();
 	m_untokenised.clear();
 	QTextStream in(&f);

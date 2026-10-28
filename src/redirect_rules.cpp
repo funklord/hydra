@@ -1,5 +1,6 @@
 #include "redirect_rules.h"
 
+#include "filter_list.h"
 #include "policy_engine.h"
 
 #include <QRegularExpression>
@@ -74,37 +75,6 @@ unsigned type_bit(const QString &word) {
 	if (word == QLatin1String("ping") || word == QLatin1String("beacon")) return ping;
 	if (word == QLatin1String("other")) return other;
 	return 0;
-}
-
-// A network pattern as a regex: `||` any scheme and any subdomain boundary,
-// a leading or trailing `|` an anchor, `*` anything, `^` a separator
-// character or the end of the address. Case-insensitive, as uBlock reads
-// patterns unless told otherwise.
-QRegularExpression compile_pattern(const QString &pattern) {
-	QString p = pattern, re;
-	if (p.startsWith(QLatin1String("||"))) {
-		re = QStringLiteral("^[a-z][a-z0-9+.-]*://([^/?#]*\\.)?");
-		p = p.mid(2);
-	} else if (p.startsWith(QLatin1Char('|'))) {
-		re = QStringLiteral("^");
-		p = p.mid(1);
-	}
-	bool end = false;
-	if (p.endsWith(QLatin1Char('|'))) {
-		end = true;
-		p.chop(1);
-	}
-	for (const QChar c : p) {
-		if (c == QLatin1Char('*'))
-			re += QStringLiteral(".*");
-		else if (c == QLatin1Char('^'))
-			re += QStringLiteral("(?:[^a-z0-9_.%-]|$)");
-		else
-			re += QRegularExpression::escape(QString(c));
-	}
-	if (end)
-		re += QLatin1Char('$');
-	return QRegularExpression(re, QRegularExpression::CaseInsensitiveOption);
 }
 
 bool site_in(const QString &host, const QString &site) {
@@ -222,7 +192,7 @@ bool parse_redirect_rule(const QString &line, redirect_rule *out, QString *why) 
 	}
 	if (r.resource.isEmpty())
 		return refuse(QStringLiteral("a redirect rule naming no resource"));
-	r.match = compile_pattern(r.pattern);
+	r.match = filter_list::pattern_regex(r.pattern);
 	if (!r.match.isValid())
 		return refuse(QStringLiteral("a redirect rule whose pattern does not compile"));
 	if (out)

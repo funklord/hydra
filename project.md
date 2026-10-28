@@ -37920,15 +37920,22 @@ stand-ins, the analytics and ad-library shims) and are counted.
 `/instream/ad_status.js` through a trusted list's rule: the stand-in ran
 (`google_ad_status` is 1), and the server never saw the request.
 
-**A finding in the block list, recorded rather than changed:**
-`filter_list` indexes a `||host/path^` rule under the key `host/path`,
-which no request host can equal, and `filter_list::matches` compares
-that same string with the host. So every host-anchored rule with a path
-in a subscribed list is counted as in use and never matches. It fails
-safe -- nothing is over-blocked -- but a large share of EasyList is
-inert. Enforcing them is its own change: thousands of rules start
-applying at once, and that wants its own measurement of what breaks.
-The redirect rules have their own compiled matcher and are not affected.
+**A finding in the block list, recorded and then closed (2026-10-29):**
+`filter_list` indexed a `||host/path^` rule under the key `host/path`,
+which no request host can equal, and `filter_list::matches` compared that
+same string with the host -- so every host-anchored rule with a path in a
+subscribed list was counted as in use and never matched: 2640 of the
+44361 host-anchored rules in the holder's lists. A rule with a wildcard in
+its host (`||cdn*.site.example^`, 122 of them) was dead the same way, and
+`test_bundle` had pinned that as "its own gap". Now a `||` pattern that is
+more than a host is compiled by `filter_list::pattern_regex` -- the
+compiler the redirect rules use -- and indexed under its host, tried only
+when the host matches; one with a wildcard in its host is kept in a short
+list that is always tried. On a YouTube watch page with the holder's lists
+this newly refuses one request, `youtubei/v1/log_event`, which is uBlock's
+own privacy list's plain rule; the page plays and the wall is absent.
+`test_bundle` covers path, subdomain, a different host, a separator, a
+wildcard host, and `matches()` agreeing (136 passed).
 
 ### On Android every page can see the bridge, and call it
 
