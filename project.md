@@ -18301,11 +18301,12 @@ read by hand, because that check matches names and **not** signatures:
 `(JNIEnv*, jclass, jlong, jint, jint)`, and `findText` is
 `(JLjava/lang/String;ZZ)V` against `(long, String, boolean, boolean)`.
 
-**It has not been run on the device.** The phone was in use -- another
-application had focus and somebody was typing in it -- so the APK is installed
-and the behaviour is unexercised. Compilation and a name check are not a
-demonstration that a search finds anything, and this entry should not be read
-as one until somebody opens the bar and types.
+~~**It has not been run on the device.**~~ **Run on the emulator 2026-10-29**,
+the first time it was exercised anywhere: `tool/emulator_checks.py` opens the
+bar with Ctrl+F on a page with six paragraphs, types "rain", and requires the
+count to read "N of 6". It does. (The phone was in use when this was built,
+and the entry said, rightly, that a build and a name check demonstrate
+nothing until somebody types.)
 
 ### The lens
 

@@ -35,7 +35,9 @@
 #      window, and the app survives it. `input text` sends key events, not
 #      the keyboard's own input, so this may not reproduce the crash a popup
 #      window caused there (project.md, "The address bar suggests from the
-#      tree"); the phone was the test of that.
+#      tree"); the phone was the test of that;
+#   9. Find on Page counts what is on the page: built for Android long ago
+#      and never once run on a device until this check.
 #
 # What makes it stop: every adb call has a timeout, every wait is bounded,
 # and the emulator -- started in its own session -- is killed in `finally`,
@@ -383,6 +385,23 @@ def main():
 			check(ok and "127.0.0.1" in shown and "Suggestions" in shown,
 			      "the suggestions list, inside the window")
 			check(adb("shell", "pidof", APP).strip() != "", "and the app is still running")
+
+			print("\n== Find on Page counts what is on the page ==")
+			# Fresh again, and opened with Ctrl+F rather than the Edit menu: after a
+			# menu closes the window's own controls leave the accessibility tree,
+			# and the count is one of them.
+			adb("shell", "am", "force-stop", APP)
+			adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
+			    "-d", f"http://127.0.0.1:{port}/article", "-n", f"{APP}/.HydraActivity")
+			time.sleep(10)
+			adb("shell", "input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_F")
+			time.sleep(2)
+			adb("shell", "input", "text", "rain")
+			def counted():
+				adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+				return re.search(r"\b[1-6] of 6\b", adb("shell", "cat", "/sdcard/ui.xml")) is not None
+			check(wait_for("the find count", counted, 15, step=2),
+			      "\"rain\" found six times, once in each paragraph")
 		finally:
 			adb("reverse", "--remove", f"tcp:{port}")
 			# The AVD keeps its data between runs, so what this run wrote
