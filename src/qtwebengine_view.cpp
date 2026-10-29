@@ -1369,6 +1369,14 @@ void qtwebengine_view::save_page() {
 		m_page->triggerAction(QWebEnginePage::SavePage);
 }
 
+void qtwebengine_view::show_html(const QString &html, const QUrl &base) {
+	// `setHtml` goes through a data url with `base` as the address Chromium
+	// shows and keeps in history, which is the property the seam promises.
+	// Its own limit is 2 MB of encoded data; the extractor stops well short.
+	if (m_view)
+		m_view->setHtml(html, base);
+}
+
 bool qtwebengine_view::can_save_page() const {
 	return m_page != nullptr;
 }

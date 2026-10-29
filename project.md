@@ -26922,6 +26922,58 @@ them never was is a present-tense claim about an environment, quoted rather
 than re-derived. Recorded so the next session does not run `test_live_model`
 and conclude the suite is broken.
 
+## Reader mode, with an extractor of our own
+
+**View > Reader View (Ctrl+Alt+R) shows the page's article alone**, in one
+column of readable type, light or dark to match the window, with the site,
+the byline and a reading time above it. Text size is the tab's zoom. Turning
+it off loads the page again.
+
+**The extractor is this project's own, by the holder's choice (2026-10-29)**,
+rather than Mozilla's Readability, so no third party's terms come with the
+feature. It is the long-established approach written from scratch, in
+`reader_extract`: paragraphs (`p`, `pre`, `td`, `blockquote`, and a `div`
+holding only inline content) score their parent and grandparent by length
+and commas; a class or id naming content or chrome moves a container's score
+by 25; links thin it; the best container and its well-scoring siblings are
+the article. It runs in the isolated world through `run_probe` and reads the
+DOM without changing it -- on Android, where that world is the page's own,
+even its bookkeeping is kept in a `Map` rather than on the page's nodes.
+
+**The answer is rebuilt, never copied.** Tags come from an allow-list,
+attributes are three (`href`, `src`, `alt`, plus table spans), links keep
+only `http:`, `https:` and `mailto:` targets, and text is escaped. The
+document (`reader_page`) is shown with the page's address as its base -- so
+Back returns to the page, the tree keeps the address and relative pictures
+resolve -- which puts it in the page's origin, and that is why it also
+carries a Content-Security-Policy with `default-src 'none'`: a script that
+slipped through the allow-list does not run (`try_reader` plants one and
+checks).
+
+**Two things real pages taught it**, run against them with
+`HYDRA_READER_URL=... try_reader`:
+
+- **List items stopped counting as paragraphs.** Wikipedia's references are
+  long `<li>`s full of commas, and they outscored its own prose; with list
+  items out, the article came back from the first sentence. Lists inside an
+  article are still kept, since the chosen container is emitted whole.
+- **Wiki furniture is chrome**: references, citation markers, navboxes,
+  category and edit links. And a title's last segment is dropped when it
+  names the site ("Bread - Wikipedia" reads "Bread"), but only then.
+
+Measured that evening: English and Swedish Wikipedia, gnu.org and
+paulgraham.com (a table layout) come out whole; danluu.com from first line
+to last; an index page is refused with "No article was found on this page."
+The infobox at the top of a Wikipedia article is kept, as Firefox's reader
+keeps it, and "Further reading" and "External links" with it.
+
+**Tested in three places**: `test_reader` holds the parsing and the document
+(escaping, a "%5" in a title, the policy, light and dark, right to left);
+`try_reader` the extractor in a real engine, against fixtures whose chrome
+is all supposed to vanish; `test_rotation` the window's toggle -- on, off,
+and off by itself on the load after its own. The Android half is in
+`tool/emulator_checks.py`.
+
 ## Every launch copied every finished download into Downloads again
 
 **`android_downloads` publishes a finished download into the shared Downloads
@@ -27494,7 +27546,10 @@ carried along as amendments to a list item.
    transcript until now.** Its closing summary named them as not done, and
    said the details were here; they were not.
 
-   - **Reader mode.** Large, and its core cannot be tested from here.
+   - ~~**Reader mode.**~~ **Built 2026-10-29**, with an extractor of this
+     project's own -- see *Reader mode, with an extractor of our own*. Its
+     core turned out to be testable here after all: through a real engine,
+     offline, in `try_reader`.
    - ~~**Address-bar autocomplete.**~~ **Built 2026-10-29**, see
      *The address bar suggests from the tree*. (The `autocomplete` elsewhere
      in this file is the HTML attribute the form filler reads.)

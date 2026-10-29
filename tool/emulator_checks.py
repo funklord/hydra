@@ -29,7 +29,8 @@
 #      listens, so a request at the server proves nothing (measured: a build
 #      without the listener passed a check that only read the server);
 #   6. File > Print reaches the system's print dialog, Save as PDF writes a
-#      PDF, and the window hears that it finished.
+#      PDF, and the window hears that it finished;
+#   7. View > Reader View shows an article without the page around it.
 #
 # What makes it stop: every adb call has a timeout, every wait is bounded,
 # and the emulator -- started in its own session -- is killed in `finally`,
@@ -122,7 +123,17 @@ class files(http.server.BaseHTTPRequestHandler):
 
 	def do_GET(self):
 		files.seen.append((self.path, dict(self.headers)))
-		if self.path.startswith("/file"):
+		if self.path.startswith("/article"):
+			para = ("<p>Rivers across the northern provinces rose to their highest level "
+			        "in a decade, after three days of rain that forecasters had warned "
+			        "about since the weekend, and the town opened its school to families.</p>")
+			body = ("<!doctype html><meta name=viewport content='width=device-width'>"
+			        "<title>Rivers rise</title><aside class=sidebar><h3>MOST READ LIST</h3>"
+			        "<a href=/a>Another story</a></aside><article><h1>Rivers rise</h1>"
+			        + para * 6 + "</article>").encode()
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/file"):
 			body = b"hydra download check\n"
 			self.send_response(200)
 			self.send_header("Content-Type", "application/octet-stream")
@@ -335,6 +346,20 @@ def main():
 				made.update(pdfs() - before_pdfs)
 				return bool(made)
 			check(wait_for("a PDF in Download", written, 20), f"a PDF was written {sorted(made)}")
+
+			print("\n== View > Reader View shows the article alone ==")
+			adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
+			    "-d", f"http://127.0.0.1:{port}/article", "-n", f"{APP}/.HydraActivity")
+			time.sleep(8)
+			check(tap("View") and tap("Reader View"), "View, Reader View")
+			def reading():
+				adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+				shown = adb("shell", "cat", "/sdcard/ui.xml")
+				return "min read" in shown and "highest level in a decade" in shown
+			check(wait_for("the reader document", reading, 20, step=2),
+			      "the article in reader mode, with its reading time")
+			check("MOST READ LIST" not in adb("shell", "cat", "/sdcard/ui.xml"),
+			      "and without the page's sidebar")
 		finally:
 			adb("reverse", "--remove", f"tcp:{port}")
 			# The AVD keeps its data between runs, so what this run wrote

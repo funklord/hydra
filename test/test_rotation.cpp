@@ -297,6 +297,22 @@ public:
 	void save_page() override { ++saved; }
 	bool can_save_page() const override { return true; }
 
+	// Reader mode's two calls: the extractor's answer is whatever the test
+	// sets, and what the window shows is recorded rather than rendered.
+	QString probe_answer;
+	void run_probe(const QString &, std::function<void(const QString &)> done) override {
+		done(probe_answer);
+	}
+	QString shown_html;
+	QUrl    shown_base;
+	int     shows = 0;
+	void show_html(const QString &h, const QUrl &b) override {
+		shown_html = h;
+		shown_base = b;
+		++shows;
+	}
+	bool can_show_html() const override { return true; }
+
 	QLabel *m_widget = nullptr;
 	QUrl    m_url;
 };
@@ -962,6 +978,69 @@ int main(int argc, char **argv) {
 		m.toggle_mute();
 		check(v && !v->muted, "toggling again unmutes it");
 		check(mute && !mute->isChecked(), "and the toggle follows it back");
+	}
+
+	section("Reader View shows the article in the tab, and leaves when the tab does");
+	{
+		main_window m(&factory, &policy, &filter);
+		m.show();
+		spin(200);
+		const QUrl page("https://news.example/story");
+		node *t = m.m_model->add_tab(nullptr, "a story", page.toString());
+		fake_view *v = nullptr;
+		if (t) {
+			const QModelIndex idx =
+			  m.m_proxy->mapFromSource(m.m_model->index_for_node(t));
+			emit m.m_tree->activated(idx);
+			spin(200);
+			v = static_cast<fake_view *>(m.m_views_by_id.value(t->id, nullptr));
+		}
+		QAction *reader = nullptr;
+		for (QAction *a : m.findChildren<QAction *>())
+			if (a->text() == "&Reader View") { reader = a; break; }
+		check(v && reader && reader->isCheckable() && reader->isEnabled() &&
+		        !reader->isChecked(),
+		      "a checkable Reader View, live on a web page and not yet on");
+
+		if (v && reader) {
+			v->probe_answer = R"({"ok":false,"why":"No article was found on this page."})";
+			m.toggle_reader();
+			spin(50);
+			check(v->shows == 0 && !reader->isChecked() &&
+			        m.m_status->currentMessage() == "No article was found on this page.",
+			      "no article: nothing shown, and the status bar says why");
+
+			v->probe_answer =
+			  R"({"ok":true,"title":"The story","site":"News","html":"<p>The words.</p>",)"
+			  R"("words":300})";
+			m.toggle_reader();
+			spin(50);
+			check(v->shows == 1 && v->shown_base == page &&
+			        v->shown_html.contains("<h1>The story</h1>") &&
+			        v->shown_html.contains("<p>The words.</p>") &&
+			        v->shown_html.contains("default-src 'none'"),
+			      "an article: the reader document, shown at the page's own address");
+			check(reader->isChecked(), "and the toggle reads on");
+			v->finished_loading();   // the reader document's own load
+			spin(20);
+			check(reader->isChecked(), "it stays on through its own load");
+			v->finished_loading();   // a link followed, or Back
+			spin(20);
+			check(!reader->isChecked(), "and goes off with the next one");
+
+			m.toggle_reader();
+			spin(50);
+			v->finished_loading();
+			v->m_url = QUrl("https://news.example/other");
+			m.toggle_reader();
+			spin(50);
+			check(!reader->isChecked() && v->url() == page && v->shows == 2,
+			      "toggled off, the page itself is loaded again");
+
+			v->navigated_to(QUrl("about:blank"));
+			spin(50);
+			check(!reader->isEnabled(), "and there is nothing to read on a page that is not the web");
+		}
 	}
 
 	section("Save Page hands the page to the backend, and greys where it cannot");

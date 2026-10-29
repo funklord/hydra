@@ -2157,6 +2157,21 @@ public class HydraWebView {
      * route has to be remembered -- `load`, `shouldOverrideUrlLoading` and
      * `setDesktopSite` were remembered and these two were not.
      */
+    /**
+     * A document this program built -- reader mode's -- shown in place of
+     * the page, with the page's address as its base and as the history entry,
+     * so relative links resolve and the tab keeps the page's address.
+     */
+    public static void showHtml(final long id, final String html, final String base) {
+        onUi(new Runnable() {
+            @Override public void run() {
+                WebView w = VIEWS.get(id);
+                if (w != null)
+                    w.loadDataWithBaseURL(base, html, "text/html", "utf-8", base);
+            }
+        });
+    }
+
     /** How a print job ended: true when it completed. */
     public static native void onPrintFinished(long id, boolean ok);
 

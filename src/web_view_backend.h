@@ -132,6 +132,17 @@ public:
 	virtual void save_page() {}
 	virtual bool can_save_page() const { return false; }
 
+	// **Show a document this program built**, in place of the page: reader
+	// mode's (`reader_page.h`). `base` is the page's own address, so relative
+	// links and pictures in the document resolve against it, and the tab's
+	// address stays the page's rather than becoming a data url the tree would
+	// record. Greyed on `can_show_html()`, which the default denies.
+	virtual void show_html(const QString &html, const QUrl &base) {
+		Q_UNUSED(html)
+		Q_UNUSED(base)
+	}
+	virtual bool can_show_html() const { return false; }
+
 	virtual void apply_settings(const view_settings &s) = 0;
 	virtual void set_permission_decider(permission_decider fn) = 0;
 

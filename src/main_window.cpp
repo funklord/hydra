@@ -31,6 +31,8 @@
 #include "ollama_provider.h"
 #include "claude_provider.h"
 #include "media_detector.h"
+#include "reader_extract.h"
+#include "reader_page.h"
 #include "media_dialog.h"
 #include "sponsor_skip.h"
 #include "stream_assembly.h"
@@ -1844,6 +1846,13 @@ QMenuBar *main_window::build_menu_bar() {
 	zin->setStatusTip("Make this page larger");
 	zout->setStatusTip("Make this page smaller");
 	zoff->setStatusTip("Back to 100%");
+
+	// Reader mode beside the zoom, which sets its text size.
+	m_reader_action = view_menu->addAction("&Reader View", QKeySequence("Ctrl+Alt+R"),
+	                                        this, &main_window::toggle_reader);
+	m_reader_action->setCheckable(true);
+	m_reader_action->setStatusTip("Show only this page's article, in plain readable type");
+	m_reader_action->setEnabled(false);
 
 	m_mute_action = view_menu->addAction("&Mute Tab", QKeySequence("Ctrl+M"),
 	                                      this, &main_window::toggle_mute);
@@ -4787,7 +4796,20 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 			if (view == current_view())
 				on_load_progress(p);
 		});
+		// **A new view starts out of reader mode**, even one that lands at the
+		// address of a view since destroyed. Cleared here rather than from the
+		// old view's `destroyed`: views die in the window's base destructor,
+		// after this hash, and a slot run then wrote into freed memory --
+		// test_rotation crashed tearing down its window.
+		m_reader.remove(view);
 		connect(view, &web_view_backend::load_finished, this, [this, view](bool ok) {
+			// A tab in reader mode leaves it on the load after the reader
+			// document's own: a link followed, Back, a reload.
+			if (auto it = m_reader.find(view); it != m_reader.end() && ++it->loads > 1) {
+				m_reader.erase(it);
+				if (view == current_view())
+					refresh_reader_action();
+			}
 			// Removed *after* the chrome is told, because
 			// `on_load_finished` reads when this load began.
 			if (view == current_view())
@@ -5135,6 +5157,7 @@ void main_window::update_navigation() {
 	// already showing.
 	if (m_print_action)
 		m_print_action->setEnabled(v && v->can_print());
+	refresh_reader_action();
 	if (m_source_action)
 		m_source_action->setEnabled(v && has_viewable_source(v->url()));
 
@@ -5626,6 +5649,59 @@ node *main_window::open_new_window(const QUrl &url, bool user_initiated,
 		preload_node(made);
 	}
 	return made;
+}
+
+void main_window::refresh_reader_action() {
+	if (!m_reader_action)
+		return;
+	web_view_backend *v = current_view();
+	const QString scheme = v ? v->url().scheme() : QString();
+	const bool web = scheme == QLatin1String("http") || scheme == QLatin1String("https");
+	m_reader_action->setEnabled(v && v->can_show_html() && (web || m_reader.contains(v)));
+	m_reader_action->setChecked(v && m_reader.contains(v));
+}
+
+// **Reader mode, in the tab itself.** The extractor reads the page in the
+// isolated world (`reader_extract.h`), and the document built from its answer
+// (`reader_page.h`) is shown with the page's address as its base -- so Back
+// returns to the page, the tree keeps its address, and the article's links
+// and pictures resolve. Turning it off loads the page again rather than going
+// back, which would leave somewhere else if a link had been followed.
+void main_window::toggle_reader() {
+	web_view_backend *v = current_view();
+	if (!v || !v->can_show_html())
+		return;
+	if (auto it = m_reader.find(v); it != m_reader.end()) {
+		const QUrl page = it->page;
+		m_reader.erase(it);
+		v->load(page);
+		refresh_reader_action();
+		return;
+	}
+	const QUrl page = v->url();
+	if (page.scheme() != QLatin1String("http") && page.scheme() != QLatin1String("https")) {
+		refresh_reader_action();
+		return;
+	}
+	m_status->showMessage("Finding the article…", 3000);
+	QPointer<QObject> alive(v);
+	v->run_probe(reader_extract::source(), [this, v, alive, page](const QString &json) {
+		if (!alive || v != current_view() || v->url() != page) {
+			refresh_reader_action();
+			return;
+		}
+		reader_extract::article a;
+		QString why;
+		if (!reader_extract::parse(json, &a, &why)) {
+			m_status->showMessage(why, 6000);
+			refresh_reader_action();
+			return;
+		}
+		const bool dark = palette().color(QPalette::Window).lightness() < 128;
+		m_reader.insert(v, reader_state{ page, 0 });
+		v->show_html(reader_page::build(a, page, dark), page);
+		refresh_reader_action();
+	});
 }
 
 void main_window::report_render_crash(const QString &host) {

@@ -53,6 +53,8 @@ public:
 	bool can_mute() const override;
 	void save_page() override;
 	bool can_save_page() const override;
+	void show_html(const QString &html, const QUrl &base) override;
+	bool can_show_html() const override { return m_view != nullptr; }
 	void apply_settings(const view_settings &s) override;
 	void set_permission_decider(permission_decider fn) override;
 	void set_capture_chooser(capture_chooser fn) override;

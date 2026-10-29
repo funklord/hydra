@@ -690,6 +690,11 @@ public:
 	// last click, so switching tabs shows that tab's answer.
 	void toggle_mute();
 
+	// Reader mode (Ctrl+Alt+R): the article alone, in readable type, in place
+	// of the page, or the page back again. Public so a test drives it.
+	void toggle_reader();
+	void refresh_reader_action();
+
 	// Save a copy of the current page to the downloads folder (Ctrl+Shift+S).
 	// Public so the shortcut and a test drive it. Greyed where the backend
 	// cannot save (Android), like Print.
@@ -876,6 +881,15 @@ public:
 	QAction            *m_source_action = nullptr;
 	QAction            *m_desktop_site_action = nullptr;
 	QAction            *m_mute_action  = nullptr;
+	QAction            *m_reader_action = nullptr;
+	// Tabs showing reader mode: the page they were made from, and how many
+	// loads have finished since -- the first is the reader document itself,
+	// and any later one (a link, Back, a reload) means the tab has left it.
+	struct reader_state {
+		QUrl page;
+		int  loads = 0;
+	};
+	QHash<web_view_backend *, reader_state> m_reader;
 	QAction            *m_save_page_action = nullptr;
 	QAction            *m_close_tab_action = nullptr;
 	bool                m_page_fullscreen = false;

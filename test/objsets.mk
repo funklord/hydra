@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build 3b5a2d23, mtime 2026-10-29 02:45)
+#     /home/claude/src/fmake/fmake  (build 3b5a2d23, mtime 2026-10-29 11:01)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -55,6 +55,7 @@ OBJSETS_SOURCES = \
 	test/test_probe.cpp \
 	test/test_probe_ui.cpp \
 	test/test_proxy_chunks.cpp \
+	test/test_reader.cpp \
 	test/test_replay.cpp \
 	test/test_rotation.cpp \
 	test/test_scriptlets.cpp \
@@ -119,6 +120,7 @@ OBJSETS_SOURCES = \
 	test/live/try_pdf.cpp \
 	test/live/try_permissions.cpp \
 	test/live/try_phone.cpp \
+	test/live/try_reader.cpp \
 	test/live/try_rename.cpp \
 	test/live/try_scriptlet_cost.cpp \
 	test/live/try_scriptlets.cpp \
@@ -449,6 +451,10 @@ OBJS_test_proxy_chunks = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o
 
+OBJS_test_reader = \
+	$(BUILD_DIR)/app/reader_page.o \
+	$(BUILD_DIR)/app/reader_extract.o
+
 OBJS_test_replay = \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -550,6 +556,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
@@ -565,6 +572,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/capture_source.o \
 	$(BUILD_DIR)/moc/moc_capture_source.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -806,6 +814,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -836,6 +845,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -984,6 +994,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -1013,6 +1024,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -1180,6 +1192,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -1206,6 +1219,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/app/filter_signals.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -1332,6 +1346,7 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/app/media_dialog.o \
@@ -1359,6 +1374,7 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -1464,6 +1480,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -1494,6 +1511,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -1622,6 +1640,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -1652,6 +1671,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -1791,6 +1811,7 @@ OBJS_try_challenge = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -1821,6 +1842,7 @@ OBJS_try_challenge = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -1983,6 +2005,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -2011,6 +2034,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -2107,6 +2131,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -2137,6 +2162,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -2273,6 +2299,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -2302,6 +2329,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -2423,6 +2451,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -2453,6 +2482,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -2587,6 +2617,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/app/media_dialog.o \
@@ -2616,6 +2647,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -2746,6 +2778,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -2776,6 +2809,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -2899,6 +2933,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -2928,6 +2963,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -3069,6 +3105,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -3099,6 +3136,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -3213,6 +3251,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -3243,6 +3282,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -3384,6 +3424,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -3414,6 +3455,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -3567,6 +3609,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -3595,6 +3638,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -3731,6 +3775,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -3758,6 +3803,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -3858,6 +3904,7 @@ OBJS_try_fullscreen_keys = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -3888,6 +3935,7 @@ OBJS_try_fullscreen_keys = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -4016,6 +4064,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -4046,6 +4095,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -4183,6 +4233,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -4211,6 +4262,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -4334,6 +4386,7 @@ OBJS_try_investigate = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -4363,6 +4416,7 @@ OBJS_try_investigate = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -4533,6 +4587,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -4559,6 +4614,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -4703,6 +4759,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -4727,6 +4784,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -4817,6 +4875,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -4846,6 +4905,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/app/keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -4972,6 +5032,7 @@ OBJS_try_media_lookup = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -5001,6 +5062,7 @@ OBJS_try_media_lookup = \
 	$(BUILD_DIR)/app/keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -5145,6 +5207,7 @@ OBJS_try_media_reading = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/app/media_dialog.o \
@@ -5173,6 +5236,7 @@ OBJS_try_media_reading = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -5307,6 +5371,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -5335,6 +5400,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -5488,6 +5554,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -5516,6 +5583,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -5616,6 +5684,7 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -5646,6 +5715,7 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -5806,6 +5876,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -5834,6 +5905,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -5951,6 +6023,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -5980,6 +6053,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -6169,6 +6243,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -6191,6 +6266,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -6238,6 +6314,26 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
 	$(BUILD_DIR)/app/sponsor_segments.o
 
+OBJS_try_reader = \
+	$(BUILD_DIR)/app/reader_page.o \
+	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/app/reader_extract.o \
+	$(BUILD_DIR)/app/request_filter.o \
+	$(BUILD_DIR)/moc/moc_web_view_backend.o \
+	$(BUILD_DIR)/app/qtwebengine_factory.o \
+	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/app/qtwebengine_view.o \
+	$(BUILD_DIR)/app/network_rules.o \
+	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
+	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/filter_list.o \
+	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/webauth_dialog.o \
+	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
+	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
+	$(BUILD_DIR)/app/policy.o
+
 OBJS_try_rename = \
 	$(BUILD_DIR)/app/main_window.o \
 	$(BUILD_DIR)/app/policy_engine.o \
@@ -6275,6 +6371,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -6303,6 +6400,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -6424,6 +6522,7 @@ OBJS_try_scriptlet_cost = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -6454,6 +6553,7 @@ OBJS_try_scriptlet_cost = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -6584,6 +6684,7 @@ OBJS_try_scriptlets = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -6614,6 +6715,7 @@ OBJS_try_scriptlets = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -6755,6 +6857,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -6785,6 +6888,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -6976,6 +7080,7 @@ OBJS_try_share = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -7004,6 +7109,7 @@ OBJS_try_share = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -7113,6 +7219,7 @@ OBJS_try_store_view = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -7143,6 +7250,7 @@ OBJS_try_store_view = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -7268,6 +7376,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -7298,6 +7407,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -7457,6 +7567,7 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/app/media_dialog.o \
@@ -7484,6 +7595,7 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -7588,6 +7700,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -7617,6 +7730,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/app/keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -7746,6 +7860,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -7775,6 +7890,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/app/keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -7905,6 +8021,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -7935,6 +8052,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -8058,6 +8176,7 @@ OBJS_try_youtube_wall = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -8088,6 +8207,7 @@ OBJS_try_youtube_wall = \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
@@ -8218,6 +8338,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/model_tally.o \
+	$(BUILD_DIR)/app/reader_page.o \
 	$(BUILD_DIR)/app/reading_log.o \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
@@ -8247,6 +8368,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/app/keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/app/media_evidence.o \
+	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \

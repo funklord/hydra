@@ -1177,6 +1177,15 @@ void android_view::print() {
 	  QJniObject::fromString(page_title()).object<jstring>());
 }
 
+void android_view::show_html(const QString &html, const QUrl &base) {
+	if (!m_native)
+		return;
+	QJniObject::callStaticMethod<void>(
+	  k_cls, "showHtml", "(JLjava/lang/String;Ljava/lang/String;)V", jlong(m_id),
+	  QJniObject::fromString(html).object<jstring>(),
+	  QJniObject::fromString(base.toString(QUrl::FullyEncoded)).object<jstring>());
+}
+
 void android_view::report_print(qint64 id, bool ok) {
 	QMetaObject::invokeMethod(qApp, [id, ok] {
 		if (android_view *v = s_views.value(id))
