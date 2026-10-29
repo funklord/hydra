@@ -1227,17 +1227,19 @@ int main(int argc, char **argv) {
 		filter.set_filter_list(&own);
 		QList<network_rule> rules;
 		network_rule r;
-		for (const char *line : {
-		       "@@||cdn.example^$script,domain=news.example",
-		       "@@||mine.example^",
-		       "@@||page.example^$document",
-		       "||tracker.example^$script,third-party",
-		       "||hard.example^$important",
-		       "@@||hard.example^",
-		       "||ads.example^$~image",
-		       "-advert-banner.$image,domain=shop.example",
-		       "pixel-tracker/$image",
-		       ".com/ad/$image" }) {
+		const char *const lines[] = {
+			"@@||cdn.example^$script,domain=news.example",
+			"@@||mine.example^",
+			"@@||page.example^$document",
+			"||tracker.example^$script,third-party",
+			"||hard.example^$important",
+			"@@||hard.example^",
+			"||ads.example^$~image",
+			"-advert-banner.$image,domain=shop.example",
+			"pixel-tracker/$image",
+			".com/ad/$image",
+		};
+		for (const char *line : lines) {
 			if (parse_network_rule(QString::fromLatin1(line), &r, nullptr) == parsed::option)
 				rules << r;
 		}
