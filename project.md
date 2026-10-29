@@ -26988,6 +26988,19 @@ tapped. Three things were wrong, and all three are fixed:
   was the fold inside a section rather than the section. A fold now steps up
   to its section first.
 
+**A fourth, from news sites on the emulator the same evening**: Ars
+Technica's article came out from its middle, 355 words of about 4,800. It
+is cut into "post-content" blocks, each alone inside a wrapper div, with ad
+slots between the wrappers. So the series rule was generalised, replacing
+the fold-specific step: climb from the best block while it holds nine
+tenths of its parent's text (a fold, a wrapper), and look for siblings of
+that unit's own **tag and class** -- class, so the ad slots between are not
+taken; not id, which Wikipedia gives every section. Afterwards: Ars 4,846
+words from its first sentence, the Guardian 1,105 whole, SVT's short news
+item whole, Wikipedia unchanged. (The emulator's own graphics translation
+segfaulted -- exit 139, `-gpu swiftshader_indirect` -- loading BBC News;
+`-gpu guest` did not, which is what to use for heavy pages.)
+
 Measured on the emulator afterwards: Sweden 16,405 words and 11 headings,
 Swedish "Bröd" 5,884, "Bread" unchanged at 4,454. `try_reader` carries the
 real structure as a fixture, which the extractor before the fix fails with

@@ -114,6 +114,26 @@ static const char k_folded[] = R"HTML(<!doctype html>
 <div class="promo-panel">HIDDEN-PROMO Download our app for a better reading experience, with offline articles, saved pages, dark mode, notifications and a great many other features that nobody asked for at all, ever, anywhere, and this goes on long enough to outscore a short lead paragraph if it were allowed to vote.</div>
 </body></html>)HTML";
 
+// Ars Technica's shape, as measured on the emulator: the article cut into
+// "post-content" blocks, each alone inside a wrapper div, with ad slots
+// between the wrappers.
+static const char k_wrapped[] = R"HTML(<!doctype html>
+<html lang="en"><head><title>A long feature | Example Tech</title></head><body>
+<nav><a href="/">Home</a> <a href="/science">Science</a></nav>
+<main><div class="grid">
+<div class="relative col-span-2"><div class="post-content">
+<p>OPENING-PART The first part of the article sets the scene at some length, describing the launch site at dawn, the weather, and the engineers who had worked on the vehicle for most of a decade.</p>
+<p>It continues with the history of the program, the budgets that came and went, and the decisions that shaped the rocket into what stood on the pad that morning, waiting for the count.</p></div></div>
+<div class="ad-wrapper"><div class="ad">Advertisement placeholder text for a sponsor</div></div>
+<div class="relative col-span-2"><div class="post-content">
+<p>MIDDLE-PART The middle of the article turns to the launch itself, the long hold at T minus ten minutes, the weather balloon that went up twice, and the moment the engines finally lit.</p>
+<p>Observers on the causeway described the sound arriving seconds after the light, a crackle more felt than heard, and the long climb into a sky that had cleared just in time.</p></div></div>
+<div class="ad-wrapper"><div class="ad">Another advertisement placeholder for a sponsor</div></div>
+<div class="relative col-span-2"><div class="post-content">
+<p>CLOSING-PART The end of the article weighs what the flight means for the agency, its contracts and its plans, and what the engineers said they would change before the next attempt.</p>
+<p>None of them expected the next flight to be easier, they said, only better understood, which in this business is the most anyone can honestly hope to say before a launch.</p></div></div>
+</div></main></body></html>)HTML";
+
 // Right to left, and named in its own language.
 static const char k_rtl[] = R"HTML(<!doctype html>
 <html lang="ar" dir="rtl"><head><title>RTL</title></head><body><main>
@@ -287,6 +307,18 @@ int main(int argc, char *argv[]) {
 		check(a.html.contains("<h2>History</h2>") && a.html.contains("<h2>Geography</h2>"),
 		      "with the headings that sit between the folds");
 		check(a.title == "Sweden", "titled without the site's name: " + a.title);
+	}
+
+	section("an article cut into wrapped blocks with ads between");
+	{
+		reader_extract::article a;
+		QString why;
+		const bool ok = extract(view, k_wrapped, QUrl("https://tech.example/2026/10/launch"), &a, &why);
+		check(ok && a.html.contains("OPENING-PART") && a.html.contains("MIDDLE-PART") &&
+		        a.html.contains("CLOSING-PART"),
+		      QString("every block, from the opening (%1)").arg(ok ? "found" : why));
+		check(!a.html.contains("Advertisement placeholder"), "and none of the ads between them");
+		check(a.html.indexOf("OPENING-PART") < a.html.indexOf("CLOSING-PART"), "in order");
 	}
 
 	section("right to left");

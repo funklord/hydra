@@ -137,32 +137,41 @@ const char *k_source = R"JS(
 
   // The best container, and siblings that score or read like its paragraphs.
   var parts = [];
-  // A fold is the inside of a section, not a unit of its own: mobile
-  // Wikipedia puts each section's paragraphs in a collapsible div under the
-  // <section> that carries its heading. The series is looked for one level
-  // up from such a fold.
+  // **An article cut into a series of blocks is the whole series.** Each
+  // block scores alone, so the best one won and its siblings fell below the
+  // floor. Two shapes measured on the emulator, 2026-10-29: mobile
+  // Wikipedia's Sweden, thirteen <section>s each holding a heading and a
+  // folded div of paragraphs, came out a third long; Ars Technica's article,
+  // cut into "post-content" blocks each alone in a wrapper div with ads
+  // between the wrappers, came out from its middle. So: step up from the
+  // best block while it holds nearly all of its parent's text -- a fold, a
+  // wrapper -- and if that unit has two or more siblings of its own tag and
+  // class with real text, the article is every such sibling, and the
+  // headings between them.
   var unit = best;
-  if (folded(best) && best.parentElement && best.parentElement !== body)
-    unit = best.parentElement;
+  while (unit.parentElement && unit.parentElement !== body &&
+         text(unit).length >= 0.9 * text(unit.parentElement).length)
+    unit = unit.parentElement;
+  // Tag and class, not id: Wikipedia gives each of its sections an id.
+  var kind = function (n) {
+    return n.tagName + '.' + (typeof n.className === 'string' ? n.className : '');
+  };
+  var series = 0;
+  if (unit.parentElement)
+    for (var f2 = unit.parentElement.firstElementChild; f2; f2 = f2.nextElementSibling)
+      if (f2 !== unit && kind(f2) === kind(unit) && !chrome(f2) && text(f2).length > 200)
+        series++;
+  var whole = series >= 2;
+  if (!whole)
+    unit = best;
   var parent = unit.parentElement || body;
   var floor = Math.max(10, best_score * 0.2);
-  // **An article cut into a series of sections is the whole series.** Each
-  // section scores alone, so the best one won and the shorter ones fell
-  // below the sibling floor: mobile Wikipedia's Sweden -- thirteen plain
-  // <section>s under one parent -- came out a third long. When the best
-  // block has two or more siblings of its own kind holding real text, every
-  // sibling of that kind is the article, headings between them included.
-  var series = 0;
-  for (var f2 = parent.firstElementChild; f2; f2 = f2.nextElementSibling)
-    if (f2 !== unit && f2.tagName === unit.tagName && !chrome(f2) && text(f2).length > 200)
-      series++;
-  var whole = series >= 2;
   for (var c = parent.firstElementChild; c; c = c.nextElementSibling) {
     if (c === unit) { parts.push(c); continue; }
     if (chrome(c)) continue;
     var ix = find(c);
     if (ix >= 0 && scores[ix] >= floor) { parts.push(c); continue; }
-    if (whole && (c.tagName === unit.tagName || /^H[1-6]$/.test(c.tagName) ||
+    if (whole && (kind(c) === kind(unit) || /^H[1-6]$/.test(c.tagName) ||
                   /heading/i.test(label(c)))) { parts.push(c); continue; }
     if (c.tagName === 'P') {
       var ct = text(c), ld = link_density(c);
