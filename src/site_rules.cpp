@@ -23,11 +23,21 @@ site_rules site_rules::defaults() {
 	// Least permissive first. "Reject" is preferred wherever a banner offers it;
 	// accept is the last resort and is still better than a page nobody can read,
 	// which is the state the option exists to end.
+	// **Not only English.** A Swedish site's refusal reads "Avvisa
+	// personanpassad reklam", a German one's "Alle ablehnen"; with English
+	// alone every Schibsted page -- Aftonbladet, SvD -- was left behind its
+	// banner (measured on the emulator, 2026-10-29). A refusal that is also a
+	// purchase never counts as one; the script checks that separately.
 	builtin("reject",
 	         "^(reject|decline|refuse|deny)( all)?( cookies)?$"
 	         "|^(only |use )?(strictly )?necessary( cookies)?( only)?$"
-	         "|^essential( cookies)?( only)?$|^continue without accepting",
-	         "the wording reject buttons converge on");
+	         "|^essential( cookies)?( only)?$|^continue without accepting"
+	         "|^(avvisa|neka)( alla)?( cookies| kakor)?$|^avvisa [^|]{1,40}$"
+	         "|^(endast|bara) (nödvändiga|nödvändig)( cookies| kakor)?$"
+	         "|^(alle )?ablehnen$|^nur (notwendige|erforderliche)( cookies)?( akzeptieren)?$"
+	         "|^(tout )?refuser( tout)?$|^continuer sans accepter"
+	         "|^rechazar( todo| todas)?$|^rifiuta( tutto)?$",
+	         "the wording reject buttons converge on, in the languages met so far");
 	builtin("accept",
 	         "^(accept|allow|agree|got it|ok|okay|i agree|understood|continue)"
 	         "( all)?( cookies)?$",

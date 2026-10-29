@@ -156,6 +156,61 @@ static const char *k_framed_pay = R"HTML(
 <script>document.documentElement.style.overflow='hidden';
 document.body.style.overflow='hidden';</script>)HTML";
 
+// Schibsted's banner (Aftonbladet, SvD), measured on the emulator: Swedish,
+// in a vendor frame with nothing pinned inside, and a free refusal that is
+// not "reject all" but "refuse personalised advertising". That refusal is the
+// one to take.
+static const char *k_sv_inner = R"HTML(
+<div id="cc">
+  <p>Vi använder cookies för personanpassad reklam och för att mäta trafik.</p>
+  <button>Hantera cookies</button>
+  <button>Avvisa personanpassad reklam</button>
+  <button>Godkänn alla</button>
+</div>
+<script>wire('cc');</script>)HTML";
+static const char *k_framed_sv = R"HTML(
+<p>article text</p>
+<div style="position:fixed;inset:0;background:rgba(0,0,0,.6)">
+<iframe id="cc" src="__OTHER__/sv-inner" width="700" height="300"></iframe></div>)HTML";
+
+// Bild's wall: accept, or a subscription named without any word of refusal.
+// Still pay or consent, and set aside like the Guardian's.
+static const char *k_de_pay_inner = R"HTML(
+<div id="cc">
+  <p>Wir und unsere Partner verwenden Cookies und ähnliche Technologien.</p>
+  <button>Alle akzeptieren</button>
+  <button>Einstellungen</button>
+  <button>Jetzt BILD PUR abonnieren</button>
+</div>
+<script>wire('cc');</script>)HTML";
+static const char *k_framed_de_pay = R"HTML(
+<p>article text</p>
+<div style="position:fixed;inset:0;background:rgba(0,0,0,.6)">
+<iframe id="cc" src="__OTHER__/de-pay-inner" width="700" height="300"></iframe></div>
+<script>document.documentElement.style.overflow='hidden';
+document.body.style.overflow='hidden';</script>)HTML";
+
+// Spiegel's wall, traced on the emulator: in a frame, and faded in. The
+// buttons are transparent when the frame's script first looks, and become
+// visible through CSS alone, which changes no DOM -- so no mutation asks for
+// a second look. Pay or consent besides: "Subscribe now" beside a consent.
+static const char *k_fade_inner = R"HTML(
+<style>@keyframes show { to { opacity: 1; } }
+#cc button { opacity: 0; animation: show 0s 3s forwards; }</style>
+<div id="cc">
+  <p>Welcome! With advertising and tracking: storage and processing of data, cookies.</p>
+  <button>Consent and continue</button>
+  <button>Subscribe now</button>
+  <button>Preferences</button>
+</div>
+<script>wire('cc');</script>)HTML";
+static const char *k_framed_fade = R"HTML(
+<p>article text</p>
+<div style="position:fixed;inset:0;background:rgba(0,0,0,.6)">
+<iframe id="cc" src="__OTHER__/fade-inner" width="700" height="300"></iframe></div>
+<script>document.documentElement.style.overflow='hidden';
+document.body.style.overflow='hidden';</script>)HTML";
+
 // A real banner whose buttons say nothing the built-in patterns know. This is
 // the case the discovery signal exists for, and it is the normal case outside
 // English rather than an exotic one.
@@ -251,6 +306,12 @@ public:
 				else if (target.startsWith("/pay-inner"))  inner = k_pay_inner;
 				else if (target.startsWith("/pay"))        inner = k_pay;
 				else if (target.startsWith("/framed-pay")) inner = k_framed_pay;
+				else if (target.startsWith("/sv-inner"))   inner = k_sv_inner;
+				else if (target.startsWith("/framed-sv"))  inner = k_framed_sv;
+				else if (target.startsWith("/de-pay-inner")) inner = k_de_pay_inner;
+				else if (target.startsWith("/framed-de-pay")) inner = k_framed_de_pay;
+				else if (target.startsWith("/fade-inner")) inner = k_fade_inner;
+				else if (target.startsWith("/framed-fade")) inner = k_framed_fade;
 				else if (target.startsWith("/scrolllock")) inner = k_scrolllock;
 				// **Before `/foreign`, because it is a prefix of this.**
 				// Placed after it first, and `/foreign-inner` was served the
@@ -440,6 +501,23 @@ int main(int argc, char *argv[]) {
 	load("/framed-pay", 10000);
 	check(clicked_on("/framed-pay").isEmpty(), "nothing is clicked inside the frame either");
 	check(page_usable(), "and the top page puts the frame away and unlocks itself");
+
+	std::printf("\n== a Swedish banner in a frame, refused for free ==\n");
+	load("/framed-sv", 10000);
+	check(clicked_on("/framed-sv") == "Avvisa personanpassad reklam",
+	      "\"Avvisa personanpassad reklam\" is taken over \"Godkänn alla\": " +
+	        clicked_on("/framed-sv"));
+
+	std::printf("\n== a German pay wall in a frame, whose subscription says no refusal ==\n");
+	load("/framed-de-pay", 10000);
+	check(clicked_on("/framed-de-pay").isEmpty(), "neither \"Alle akzeptieren\" nor the subscription");
+	check(page_usable(), "and the wall is put away");
+
+	std::printf("\n== a wall in a frame that fades in without changing the DOM ==\n");
+	load("/framed-fade", 10000);
+	check(clicked_on("/framed-fade").isEmpty(), "nothing is clicked when it appears");
+	spin(3000);
+	check(page_usable(), "and it is put away once its buttons can be seen");
 
 	std::printf("\n== a banner whose only way out is accept ==\n");
 	load("/accept");

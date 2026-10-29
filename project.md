@@ -2295,6 +2295,39 @@ gone and the page scrolling, nothing clicked; YouTube still answered with
 the top and one in a frame with nothing pinned -- and the committed script
 fails them by clicking "Accept all": 53 of 53 now.
 
+### Nine sites on a phone: six walls left standing, and why
+
+**A survey on clean emulator profiles, 2026-10-29**, of sites a phone here
+is likely to meet: Aftonbladet, Expressen, DN, SvD, Spiegel, Zeit, Bild, Le
+Monde and the BBC. Before: only Zeit clear. The button labels were read out
+of each vendor's frame over DevTools, and the faults, each fixed with a
+fixture in `try_consent` that the code before it fails:
+
+- **The reject pattern was English only.** Schibsted's free refusal
+  (Aftonbladet, SvD) reads "Avvisa personanpassad reklam". The built-in
+  reject rule now carries Swedish, German, French, Spanish and Italian
+  refusals; a refusal that also sells something never counts.
+- **Pay or consent without a refusal word.** Spiegel's "Subscribe now",
+  Bild's "Jetzt BILD PUR abonnieren", Le Monde's "S'abonner" sit beside an
+  accept with no refusal at all. Any button that sells something now marks
+  the wall, unless a free refusal is also on offer -- then that is taken.
+- **Bild's frame lists every purpose as a button**: thirty-five of them, and
+  a box with more than twelve was never considered. A vendor frame's body
+  may have forty; a pinned box on a page keeps the twelve.
+- **Spiegel's dialog fades in.** Traced with temporary console lines in the
+  frame: the rules arrived, six looks found nothing, and then nothing asked
+  again, because the buttons were transparent at every mutation and a CSS
+  fade changes no DOM. A frame now looks once a second through its watch
+  window, which is a minute in a frame (fifteen seconds at the top), and
+  the top frame sends its rules to every frame as it starts.
+
+After: Aftonbladet, SvD, Spiegel, Bild, Le Monde, the Guardian and YouTube
+all clear and scrolling, measured on cleared profiles. **Still standing**:
+Expressen and DN (Bonnier, Didomi), whose banner offers only "Okej" and
+"Inställningar", and the BBC's "Yes, I agree"; both are accept-or-settings
+banners with no refusal and no price, and whether such a banner is accepted
+or set aside is put to the holder rather than decided here.
+
 ### YouTube's consent dialog was never answered on a phone
 
 **On a fresh profile on the emulator (2026-10-29), m.youtube.com showed

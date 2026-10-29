@@ -121,10 +121,7 @@ const char *k_script = R"JS(
     if (!TOP && !out.length && document.body &&
         CONSENTISH.test((document.body.textContent || '').slice(0, 2000)) &&
         buttons_in(document.body).some(function (b) {
-          return names_of(b).some(function (n) {
-            return (REJECT && REJECT.test(n)) || (ACCEPT && ACCEPT.test(n)) ||
-                   (REFUSE.test(n) && PAID.test(n));
-          });
+          return names_of(b).some(answers);
         }))
       out.push(document.body);
     return out;
@@ -152,8 +149,11 @@ const char *k_script = R"JS(
   // not paid. Nothing is clicked, so nothing is agreed to; the wall is
   // hidden and the scroll it locked is given back. The content is served
   // whole beneath these, so this is the same act as answering any banner.
-  var REFUSE = /reject|decline|refuse|deny|avvisa|neka|ablehnen|weiter ohne|refuser|rifiuta/i;
   var PAID = /subscri|prenumer|abonn|\babo\b|\bpay\b|\bbetala|bezahl|\bpur\b|ad-?lite|ad-?free|reklamfri|werbefrei|contentpass|without ads/i;
+  // A consent answer of any kind: what makes a frame's body a banner.
+  var answers = function (n) {
+    return (REJECT && REJECT.test(n)) || (ACCEPT && ACCEPT.test(n)) || PAID.test(n);
+  };
   var unlock = function () {
     [document.documentElement, document.body].forEach(function (n) {
       if (!n) return;
@@ -174,15 +174,17 @@ const char *k_script = R"JS(
         window.top.postMessage({ __hydra_consent_aside: label.slice(0, 60) }, '*');
       } catch (e) {}
   };
+  // Paid if any button sells something -- "Reject all and subscribe" on
+  // the Guardian, but also a bare "Subscribe now" (Spiegel), "Jetzt BILD PUR
+  // abonnieren" (Bild) or "S'abonner" (Le Monde) beside an accept -- and no
+  // button refuses for free. Where a free refusal exists it is taken instead.
   var pay_or_consent = function (buttons) {
     var paid = '', free_refusal = false;
     for (var i = 0; i < buttons.length; i++) {
       var names = names_of(buttons[i]);
       for (var n = 0; n < names.length; n++) {
-        if (REJECT && REJECT.test(names[n])) free_refusal = true;
-        if (REFUSE.test(names[n]) && PAID.test(names[n])) paid = names[n];
-        if (!paid && PAID.test(names[n]) && /^(subscribe|prenumerera|abonnieren|pur)\b/i.test(names[n]))
-          paid = names[n];
+        if (PAID.test(names[n])) { if (!paid) paid = names[n]; }
+        else if (REJECT && REJECT.test(names[n])) free_refusal = true;
       }
     }
     return free_refusal ? '' : paid;
@@ -195,7 +197,11 @@ const char *k_script = R"JS(
       var box = boxes[b];
       if (!visible(box)) continue;
       var buttons = buttons_in(box);
-      if (!buttons.length || buttons.length > 12) continue;
+      // Twelve keeps a pinned box on a page honest -- a toolbar of links is
+      // not a banner. A vendor frame's body is nothing but the dialog, and
+      // Bild's lists each purpose as a button: thirty-five of them, measured.
+      var most = (!TOP && box === document.body) ? 40 : 12;
+      if (!buttons.length || buttons.length > most) continue;
       var paid = pay_or_consent(buttons);
       if (paid) { set_aside(box, paid); return true; }
       // Whole banner per preference tier, so a reject anywhere beats an accept
@@ -205,8 +211,9 @@ const char *k_script = R"JS(
         if (!tiers[t].re) continue;
         for (var i = 0; i < buttons.length; i++) {
           var names = names_of(buttons[i]), label = '';
+          // A name that sells something is never clicked, in either tier.
           for (var n = 0; n < names.length && !label; n++)
-            if (tiers[t].re.test(names[n])) label = names[n];
+            if (tiers[t].re.test(names[n]) && !PAID.test(names[n])) label = names[n];
           if (!label) continue;
           try { buttons[i].click(); } catch (e) { continue; }
           done = true;
@@ -256,15 +263,36 @@ const char *k_script = R"JS(
   // Banners arrive late, often after their own round trip, so one pass at load
   // time misses most of them. Watch for a while and then stop: an observer for
   // the life of the page is a permanent cost for a thing that happens once.
+  //
+  // **Longer in a vendor's frame.** Its dialog is drawn only once the page
+  // has handed it its configuration, and a frame starts as soon as it has
+  // its rules -- so on a heavy page the frame's fifteen seconds ran out
+  // before Spiegel's Sourcepoint dialog existed. A frame watches for a
+  // minute; it is a small document, and the cost is its own.
+  // Decided in `begin`, which runs after TOP is known; read here it was
+  // still undefined.
+  var window_ms = 15000;
   var start = Date.now();
   var obs = new MutationObserver(function () {
-    if (act() || Date.now() - start > 15000) obs.disconnect();
+    if (act() || Date.now() - start > window_ms) obs.disconnect();
   });
   var begin = function () {
+    window_ms = TOP ? 15000 : 60000;
+    start = Date.now();
     if (act()) return;
     if (document.documentElement)
-      obs.observe(document.documentElement, { childList: true, subtree: true });
-    setTimeout(function () { obs.disconnect(); }, 15000);
+      obs.observe(document.documentElement, { childList: true, subtree: true,
+                                              attributes: !TOP });
+    setTimeout(function () { obs.disconnect(); }, window_ms);
+    // **And once a second in a frame**, because a dialog that fades in
+    // changes no DOM: Spiegel's Sourcepoint buttons were transparent at
+    // every mutation, so each look found nothing, and the fade finishing
+    // asked for no look at all (traced on the emulator, 2026-10-29).
+    if (!TOP) {
+      var tick = setInterval(function () {
+        if (act() || Date.now() - start > window_ms) clearInterval(tick);
+      }, 1000);
+    }
   };
 
   var TOP = (window.top === window);
@@ -342,9 +370,13 @@ const char *k_script = R"JS(
   // In a frame there is nothing to connect to; ask upward instead, until the
   // top frame has an answer to give.
   if (!TOP) {
+    // Thirty seconds, not ten: on a heavy page the top frame starts late --
+    // Spiegel's had not started when its consent frame stopped asking, and
+    // the wall stayed. The top frame also sends its rules to every frame as
+    // it starts, so a frame that asked too early is answered anyway.
     var tries = 0;
     var beg = function () {
-      if (started || ++tries > 40) return;
+      if (started || ++tries > 120) return;
       try { window.top.postMessage({ __hydra_consent_need: 1 }, '*'); } catch (e) {}
       setTimeout(beg, 250);
     };
@@ -377,6 +409,11 @@ const char *k_script = R"JS(
             REJECT = rx(RULES.reject);
             ACCEPT = rx(RULES.accept);
             started = true;
+            var frames = document.getElementsByTagName('iframe');
+            for (var f = 0; f < frames.length; f++)
+              try {
+                frames[f].contentWindow.postMessage({ __hydra_consent_rules: RULES }, '*');
+              } catch (e) {}
             begin();
           });
         });
