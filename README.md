@@ -467,8 +467,8 @@ make android ANDROID_ABI=x86_64    # which is what an emulator usually is
 found under `QT_ROOT` (`~/Qt`), newest Qt first, and is asked what it actually
 builds before anything compiles. It used to select nothing but the output
 filename, so that second line produced an arm64 apk called x86_64; a mismatch
-now fails, and `make apk` reads the ABI back out of the finished zip rather
-than trusting the name. Naming a kit by hand still works and is checked the
+now fails, and `make android` reads the ABI back out of the finished zip
+rather than trusting the name. Naming a kit by hand still works and is checked the
 same way:
 
 ```sh
@@ -487,6 +487,16 @@ content scripts, the file picker, external links, player handoff, downloads,
 cookies, the permission prompt, and camera and microphone capture with the
 platform's own permission asked in front of them. `make jni` checks every native
 method resolves against its Java declaration.
+
+On a phone it behaves like one. The system Back button steps back through the
+page's history before it leaves the app, and closes the tab drawer when that is
+open. Holding a finger on a link or a picture opens a menu: open it in a new or
+background tab, copy its address, save it. File ▸ Print goes to Android's own
+print dialog, which also saves a PDF. A link the page answers with a file is
+downloaded with the page's cookie and copied into the shared Downloads folder.
+Reader View, Find on Page and the address bar's suggestions work as they do on
+the desktop. The suggestions appear in a list inside the window rather than a
+popup, because a popup opened while typing cannot get a surface on Android.
 
 What does not cross over is listed under *What is not done* above.
 
