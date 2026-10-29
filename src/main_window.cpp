@@ -3136,7 +3136,15 @@ void main_window::wire_autofill(autofill_controller *c) {
 
 void main_window::wire_consent(consent_blocker *c) {
 	connect(c, &consent_blocker::acted, this,
-	         [this](const QString &host, const QString &choice) {
+	         [this, c](const QString &host, const QString &choice) {
+		// **Only for the tab in front.** Each view's blocker is owned by its
+		// view, and a tab loading behind the current one -- a session
+		// restored, a link opened in the background -- answered its banner
+		// and announced it over the page somebody was reading: "Set aside the
+		// consent wall on m.bild.de" with Expressen on screen (2026-10-29).
+		auto *owner = qobject_cast<web_view_backend *>(c->parent());
+		if (owner && owner != current_view())
+			return;
 		m_status->showMessage(
 		    choice == QLatin1String("aside")
 		        ? QString("Set aside the consent wall on %1 -- nothing was "

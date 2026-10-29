@@ -1043,6 +1043,35 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	section("a background tab's consent action is not announced over the front one");
+	{
+		main_window m(&factory, &policy, &filter);
+		m.show();
+		spin(200);
+		node *back = m.m_model->add_tab(nullptr, "behind", "https://behind.example/");
+		node *front = m.m_model->add_tab(nullptr, "in front", "https://front.example/");
+		auto show = [&](node *n) -> fake_view * {
+			const QModelIndex idx = m.m_proxy->mapFromSource(m.m_model->index_for_node(n));
+			emit m.m_tree->activated(idx);
+			spin(200);
+			return static_cast<fake_view *>(m.m_views_by_id.value(n->id, nullptr));
+		};
+		fake_view *vb = back ? show(back) : nullptr;
+		fake_view *vf = front ? show(front) : nullptr;
+		consent_blocker *cb = vb ? vb->findChild<consent_blocker *>() : nullptr;
+		consent_blocker *cf = vf ? vf->findChild<consent_blocker *>() : nullptr;
+		check(cb && cf, "each tab has its own consent blocker");
+		if (cb && cf) {
+			m.m_status->clearMessage();
+			emit cb->acted("behind.example", "aside");
+			check(m.m_status->currentMessage().isEmpty(),
+			      "the tab behind says nothing over the one in front");
+			emit cf->acted("front.example", "aside");
+			check(m.m_status->currentMessage().contains("front.example"),
+			      "the tab in front does: " + m.m_status->currentMessage());
+		}
+	}
+
 	section("Save Page hands the page to the backend, and greys where it cannot");
 	{
 		main_window m(&factory, &policy, &filter);
