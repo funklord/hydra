@@ -302,11 +302,12 @@ def main():
 			def pdfs():
 				return set(re.findall(r"[^\n]*\.pdf", adb("shell", "ls", "/sdcard/Download/")))
 			before_pdfs = pdfs()
-			# **From a fresh process**, because of an open fault rather than for
+			# **From a fresh process**, because of the emulator rather than for
 			# tidiness: once any Qt dialog has been shown and closed, coming
 			# back from another activity -- the print dialog is one -- kills
-			# the app in eglSwapBuffers (project.md, "Coming back after a
-			# dialog kills the app on the emulator"). The Annoyed report and the
+			# the app in the emulator's eglSwapBuffers. A phone does not
+			# (project.md, "Coming back after a dialog kills the app -- on the
+			# emulator only"). The Annoyed report and the
 			# Downloads list have both been up by now.
 			adb("shell", "am", "force-stop", APP)
 			adb("shell", "am", "start", "-a", "android.intent.action.VIEW",

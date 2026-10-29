@@ -26959,7 +26959,7 @@ Verified on the emulator in `tool/emulator_checks.py`: File, Print..., Save as
 PDF, the PDF button and SAVE, then "Printed." in the status bar and a new PDF
 in Download.
 
-## Open: coming back after a dialog kills the app on the emulator
+## Coming back after a dialog kills the app -- on the emulator only
 
 **Found 2026-10-29 while testing printing, reproduced without it.** Open any
 Qt dialog and close it (Tools > Downloads..., Close), switch to another
@@ -26982,13 +26982,17 @@ What was tried, so it is not tried again blind:
   fix that hides the browser from TalkBack is not one to ship, so it was
   reverted.
 
-**Whether a phone does this is the open question, and it is the phone's to
-answer**: the crash is in the GPU driver's code path, which is exactly what
-an emulator cannot stand in for. If the Fold3 survives the same sequence --
-Downloads list open and closed, home, back -- this is the emulator's driver;
-if it dies, the window-release experiment above is the starting point, with
-the accessibility tree as the thing to keep. Meanwhile `emulator_checks.py`
-prints from a fresh process and says why.
+**Answered on the phone the same night: the Fold3 survives it.** The holder
+ran the sequence -- Downloads list open and closed, home, back -- on the
+build at `755034a`, and the app came back. So this is the emulator's driver
+(`libEGL_emulation.so`), not a fault phones have, and nothing in the app
+changes for it. If a device ever does crash the same way, the
+window-release experiment above is the starting point, with the
+accessibility tree as the thing to keep.
+
+What stays is the workaround in `emulator_checks.py`, which prints from a
+fresh process and says why: on the emulator the crash is real, and a check
+that walked into it would report a print fault that is not one.
 
 ## A page's download on Android was dropped, and the record said otherwise
 
