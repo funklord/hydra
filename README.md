@@ -66,8 +66,6 @@ The same goes for filter rules it learns from pages you visit.
 - **The KeePassXC-Browser extension** needs a native-messaging host beside the
   browser. Hydra speaks the protocol itself, with libsodium for the crypto, and
   fills passwords only behind a strict origin match and the site's policy.
-  (This is written and tested against the protocol, but not yet against a
-  running KeePassXC; see *What is not done*.)
 - **Firefox's Reader View** shows an article alone. So does Hydra's
   (View ▸ Reader View), on the desktop and on Android alike. It runs its own
   extractor, and the reader page refuses every script.
@@ -295,27 +293,19 @@ work, and most of them were got wrong here first and are written up in
 
 Kept here rather than left for you to discover.
 
-- **Android geolocation is built but unproven.** It was three missing pieces —
-  no permission declared, none requested, and the WebView's prompt callback not
-  handled, which is worse than it sounds: the base implementation never invokes
-  the callback, so the page is told it was denied by a person who was never
-  asked. All three are done and the permissions are in the apk; what has not
-  happened is a page asking for a position on a real handset.
+- **Android geolocation is built but unproven**: no page has yet asked for a
+  position on a real handset.
 - **Android has no screen sharing**, and the desktop's has never met a real
   `getDisplayMedia` — everything up to the engine call is tested against fakes.
 - **The desktop has no application-level camera gate.** Android's OS permission
   stands in front of the camera; on Linux there is no equivalent, so a page that
   asks gets it. Set `camera=ask` in `policy.ini` for a prompt.
-- **Media detection and the extractor loop are measured, not finished.** The loop
-  returns a usable extractor roughly three times in five on a clean media host
-  and once in five on a noisy one. `project.md` has the numbers and the failures.
+- **The site-extractor loop is not finished**: it does not yet produce a usable
+  extractor reliably on every media host. `project.md` has the measurements.
 - **The KeePassXC bridge has never met a real KeePassXC.** The protocol is
   implemented and its socket path settled, but framing, key exchange and
   association have only been tested against the protocol, not a running
   KeePassXC.
-- **Android's Back button was answered only recently**, and the drawer only
-  learned to close on an outside tap at the same time. Both are on the phone and
-  neither has had long enough to be trusted.
 - **A saved `policy.ini` pins the defaults that were current when it was
   written**, so a default changed later does not reach an existing profile.
 
