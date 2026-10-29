@@ -275,6 +275,11 @@ Java_se_vibes_hydra_HydraWebView_onDownload(JNIEnv *env, jclass, jlong id, jstri
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onPrintFinished(JNIEnv *, jclass, jlong id, jboolean ok) {
+	android_view::report_print(id, ok == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_se_vibes_hydra_HydraWebView_onFindResult(JNIEnv *, jclass, jlong id,
                                                jint matches, jint active) {
 	android_view::report_find(id, int(matches), int(active));
@@ -1162,6 +1167,21 @@ void android_view::exit_fullscreen() {
 		return;
 	QJniObject::callStaticMethod<void>(k_cls, "exitFullscreen", "(J)V",
 	                                    jlong(m_id));
+}
+
+void android_view::print() {
+	if (!m_native)
+		return;
+	QJniObject::callStaticMethod<void>(
+	  k_cls, "print", "(JLjava/lang/String;)V", jlong(m_id),
+	  QJniObject::fromString(page_title()).object<jstring>());
+}
+
+void android_view::report_print(qint64 id, bool ok) {
+	QMetaObject::invokeMethod(qApp, [id, ok] {
+		if (android_view *v = s_views.value(id))
+			emit v->print_finished(ok);
+	}, Qt::QueuedConnection);
 }
 
 // **The base class reports no matches and does nothing**, so before this the

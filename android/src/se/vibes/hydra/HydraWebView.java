@@ -2157,6 +2157,50 @@ public class HydraWebView {
      * route has to be remembered -- `load`, `shouldOverrideUrlLoading` and
      * `setDesktopSite` were remembered and these two were not.
      */
+    /** How a print job ended: true when it completed. */
+    public static native void onPrintFinished(long id, boolean ok);
+
+    /**
+     * **Print the page, through the system's own print dialog** -- which on a
+     * phone is mostly "Save as PDF", the one way to keep a page as it looks.
+     * The menu entry was greyed on Android because nothing was wired to this.
+     *
+     * A PrintJob reports nothing by itself, so its state is read once a second
+     * until it ends, and for no longer than ten minutes: a dialog left open
+     * past that is reported as nothing printed rather than watched for ever.
+     */
+    public static void print(final long id, final String title) {
+        onUi(new Runnable() {
+            @Override public void run() {
+                WebView w = VIEWS.get(id);
+                if (w == null || ACTIVITY == null) {
+                    onPrintFinished(id, false);
+                    return;
+                }
+                final String name = title == null || title.isEmpty() ? "Hydra page" : title;
+                final android.print.PrintManager pm = (android.print.PrintManager)
+                  ACTIVITY.getSystemService(android.content.Context.PRINT_SERVICE);
+                final android.print.PrintJob job = pm.print(
+                  name, w.createPrintDocumentAdapter(name),
+                  new android.print.PrintAttributes.Builder().build());
+                final android.os.Handler h =
+                  new android.os.Handler(android.os.Looper.getMainLooper());
+                h.postDelayed(new Runnable() {
+                    int left = 600;
+                    @Override public void run() {
+                        if (job.isCompleted()) {
+                            onPrintFinished(id, true);
+                        } else if (job.isCancelled() || job.isFailed() || --left <= 0) {
+                            onPrintFinished(id, false);
+                        } else {
+                            h.postDelayed(this, 1000);
+                        }
+                    }
+                }, 1000);
+            }
+        });
+    }
+
     public static void reload(final long id, final String url, final String startJs) {
         onUi(new Runnable() {
             @Override public void run() {

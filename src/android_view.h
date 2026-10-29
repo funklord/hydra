@@ -270,6 +270,10 @@ public:
 	QString page_title() const override { return m_title; }
 	void stop() override;
 	void exit_fullscreen() override;
+	// Through the system's print dialog, which saves a PDF as well.
+	void print() override;
+	bool can_print() const override { return m_native; }
+	static void report_print(qint64 id, bool ok);
 	void find_text(const QString &text, bool forward, bool fresh,
 	                bool case_sensitive) override;
 	void set_permission_decider(permission_decider fn) override { m_decider = std::move(fn); }

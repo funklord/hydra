@@ -27,7 +27,9 @@
 #      to arrive on the device: the WebView fetches it itself while
 #      navigating, cookie and all, and then drops it unless something
 #      listens, so a request at the server proves nothing (measured: a build
-#      without the listener passed a check that only read the server).
+#      without the listener passed a check that only read the server);
+#   6. File > Print reaches the system's print dialog, Save as PDF writes a
+#      PDF, and the window hears that it finished.
 #
 # What makes it stop: every adb call has a timeout, every wait is bounded,
 # and the emulator -- started in its own session -- is killed in `finally`,
@@ -82,18 +84,25 @@ def probe(expression=None):
 	return subprocess.run(cmd, capture_output=True, text=True, timeout=120).stdout
 
 def tap(label, limit=30):
-	# Taps the node whose description or text starts with `label`.
+	# Taps the node whose description or text starts with `label`, or whose
+	# resource id is `label` -- the system's own dialogs name their controls.
 	def found():
 		adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
 		tree = et.fromstring(adb("shell", "cat", "/sdcard/ui.xml") or "<x/>")
 		for n in tree.iter("node"):
 			name = n.get("content-desc") or n.get("text") or ""
-			if name.startswith(label):
+			if name.startswith(label) or n.get("resource-id") == label:
 				x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds")))
 				adb("shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
 				return True
 		return False
-	return wait_for(f"'{label}' on screen", found, limit)
+	if wait_for(f"'{label}' on screen", found, limit):
+		return True
+	# What was there instead, which is the first thing anybody asks.
+	tree = et.fromstring(adb("shell", "cat", "/sdcard/ui.xml") or "<x/>")
+	shown = sorted({n.get("content-desc") or n.get("text") for n in tree.iter("node")} - {"", None})
+	print("  on screen instead: " + ", ".join(shown)[:600])
+	return False
 
 def reports():
 	text = adb("shell", "run-as", APP, "cat", "files/annoyances.ini")
@@ -288,8 +297,44 @@ def main():
 			check("hydra_check=present" in sent.get("Cookie", ""),
 			      f"the download sent the page's cookie ({sent.get('Cookie', 'none')}, "
 			      f"{len(fetched())} request(s) for the file)")
+
+			print("\n== File > Print saves a PDF through the system's dialog ==")
+			def pdfs():
+				return set(re.findall(r"[^\n]*\.pdf", adb("shell", "ls", "/sdcard/Download/")))
+			before_pdfs = pdfs()
+			# **From a fresh process**, because of an open fault rather than for
+			# tidiness: once any Qt dialog has been shown and closed, coming
+			# back from another activity -- the print dialog is one -- kills
+			# the app in eglSwapBuffers (project.md, "Coming back after a
+			# dialog kills the app on the emulator"). The Annoyed report and the
+			# Downloads list have both been up by now.
+			adb("shell", "am", "force-stop", APP)
+			adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
+			    "-d", f"http://127.0.0.1:{port}/page", "-n", f"{APP}/.HydraActivity")
+			time.sleep(10)
+			spool = "com.android.printspooler:id/"
+			ok = (tap("File") and tap("Print") and tap(spool + "destination_spinner") and
+			      tap("Save as PDF") and tap(spool + "print_button") and tap("SAVE"))
+			check(ok, "File, Print..., Save as PDF, the PDF button, SAVE")
+			def heard():
+				adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+				return "Printed." in adb("shell", "cat", "/sdcard/ui.xml")
+			check(wait_for("the window to hear the job finish", heard, 15, step=1),
+			      "the window said \"Printed.\"")
+			made = set()
+			def written():
+				made.update(pdfs() - before_pdfs)
+				return bool(made)
+			check(wait_for("a PDF in Download", written, 20), f"a PDF was written {sorted(made)}")
 		finally:
 			adb("reverse", "--remove", f"tcp:{port}")
+			# The AVD keeps its data between runs, so what this run wrote
+			# into it is taken out again, by name.
+			for name in [files.name] + sorted(made if "made" in locals() else []):
+				# Quoted: adb joins its arguments into one shell line, and a
+				# PDF is named after its page, spaces and all.
+				adb("shell", "rm", "-f", f"'/sdcard/Download/{name}'",
+				    f"'/sdcard/Android/data/{APP}/files/Download/{name}'")
 			server.shutdown()
 			server.server_close()
 	finally:

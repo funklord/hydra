@@ -26922,6 +26922,53 @@ them never was is a present-tense claim about an environment, quoted rather
 than re-derived. Recorded so the next session does not run `test_live_model`
 and conclude the suite is broken.
 
+## Android prints, and saves a page as a PDF
+
+**File > Print was greyed on Android**, with a comment saying the WebView
+prints through the system `PrintManager` and was not wired to it. It is now:
+`android_view::print` hands the page to `PrintManager` through
+`WebView.createPrintDocumentAdapter`, and the system's own dialog does the
+rest -- which on a phone is mostly **Save as PDF**, the one way to keep a
+page as it looks. A `PrintJob` reports nothing by itself, so its state is
+read once a second until it completes, fails or is cancelled, for at most
+ten minutes; the answer comes back as `print_finished`, and the window says
+"Printed." or "Nothing was printed." as on the desktop.
+
+Verified on the emulator in `tool/emulator_checks.py`: File, Print..., Save as
+PDF, the PDF button and SAVE, then "Printed." in the status bar and a new PDF
+in Download.
+
+## Open: coming back after a dialog kills the app on the emulator
+
+**Found 2026-10-29 while testing printing, reproduced without it.** Open any
+Qt dialog and close it (Tools > Downloads..., Close), switch to another
+activity (Settings, or the print dialog), come back: the process dies with
+SIGSEGV, a null dereference in `eglSwapBuffers` under Qt's backing-store flush
+on the expose that follows `applicationStateChanged`. Three of three with a
+dialog first; none of three rounds without one.
+
+What was tried, so it is not tried again blind:
+
+- **`-gpu guest` instead of `swiftshader_indirect`: still crashes.** The
+  vendor EGL library is `libEGL_emulation.so` in both, so this did not
+  separate the emulator's driver from the app -- inconclusive, not a
+  disproof.
+- **Releasing a hidden dialog's platform window** (`QWindow::destroy()` on
+  Hide, in `android_dialogs`): **the crash stopped**, two rounds of two -- but
+  the browser's own controls then vanished from the accessibility tree until
+  the app next went to the background, where the unchanged build keeps them.
+  Handing activation back to the window underneath did not restore them. A
+  fix that hides the browser from TalkBack is not one to ship, so it was
+  reverted.
+
+**Whether a phone does this is the open question, and it is the phone's to
+answer**: the crash is in the GPU driver's code path, which is exactly what
+an emulator cannot stand in for. If the Fold3 survives the same sequence --
+Downloads list open and closed, home, back -- this is the emulator's driver;
+if it dies, the window-release experiment above is the starting point, with
+the accessibility tree as the thing to keep. Meanwhile `emulator_checks.py`
+prints from a fresh process and says why.
+
 ## A page's download on Android was dropped, and the record said otherwise
 
 **A link a page answers with a file did nothing on Android**, and had done

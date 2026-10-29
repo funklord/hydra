@@ -1612,10 +1612,10 @@ QMenuBar *main_window::build_menu_bar() {
 	ext->setStatusTip("Hand this address to another application — on a phone "
 	                   "that is how audio keeps playing with the screen off");
 
-	// Greyed rather than absent when there is no page, and greyed again on a
-	// backend that cannot print at all: Android's WebView prints through the
-	// system PrintManager and is not wired to it, so an unconditional entry
-	// there would be a menu item that does nothing.
+	// Greyed rather than absent when there is no page, and on a backend that
+	// cannot print. Android's WebView prints through the system PrintManager,
+	// whose dialog also saves a PDF; it was not wired to it until 2026-10-29,
+	// and this entry was greyed there until then.
 	m_print_action = file_menu->addAction("&Print…", QKeySequence::Print, this,
 	                                       [this] {
 		if (web_view_backend *v = current_view())
