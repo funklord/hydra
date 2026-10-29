@@ -37899,9 +37899,26 @@ plain `userAgent` -- nothing of this browser's own, and nothing refused.
 
 **For the holder:** when the wall appears, press the Annoyed button on
 that page. The report lands in `annoyances.ini` with what was refused and
-what the page could see. On Android the probe is not wired yet
-(`run_page_probe` and `run_probe` are both the empty default there);
-`tool/webview_probe.py` asks the same questions from outside.
+what the page could see.
+
+**On Android too, since 2026-10-29.** Both probes were the empty default
+there, so a report filed on the phone carried neither what was on screen
+nor what the page could see. `android_view` now runs them through
+`evaluateJavascript` -- in the page's own world, the only one Android has
+-- and hands the JSON-encoded answer back by token (`runProbe` and
+`onProbeResult`). Verified on the phone: with a global planted in the
+visible tab through DevTools, a report filed from Tools named it. Two
+gaps the phone's reports showed are closed with it: a request answered
+with a stand-in was listed as refused, and is now recorded with the
+resource that answered it; and no console line reached the shell on
+Android, so `patches` was always empty -- the WebView's console now
+forwards the scriptlet runner's own report line, and nothing else a page
+logs. That last one is built and not yet seen on the phone, which locked
+before it could be.
+
+The phone's report also showed the stand-in working there: `fetch` of
+`static.doubleclick.net/instream/ad_status.js` on `m.youtube.com` returned
+200 with `window.google_ad_status = 1;`.
 
 ### The wall was a refused request: `redirect=` is read now
 

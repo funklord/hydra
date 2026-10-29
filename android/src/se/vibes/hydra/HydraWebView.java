@@ -233,6 +233,35 @@ public class HydraWebView {
      */
     public static native void onFindResult(long id, int matches, int active);
 
+    /** What a probe the shell asked for answered, JSON-encoded, by token. */
+    public static native void onProbeResult(long id, int token, String json);
+
+    /** A console line the shell wants: the page patches' own report. */
+    public static native void onConsole(long id, String text);
+
+    /**
+     * One question asked of the page now, in its own world -- the only one an
+     * Android page has -- answered through `onProbeResult`. No view, no
+     * answer: the shell is told so with an empty one rather than left
+     * waiting.
+     */
+    public static void runProbe(final long id, final int token, final String js) {
+        onUi(new Runnable() {
+            @Override public void run() {
+                WebView w = VIEWS.get(id);
+                if (w == null) {
+                    onProbeResult(id, token, "");
+                    return;
+                }
+                w.evaluateJavascript(js, new ValueCallback<String>() {
+                    @Override public void onReceiveValue(String value) {
+                        onProbeResult(id, token, value == null ? "" : value);
+                    }
+                });
+            }
+        });
+    }
+
     /**
      * Asks the shared request_filter about one request. Called on the WebView's
      * network thread, not the UI thread; the C++ side only reads the policy
@@ -872,6 +901,20 @@ public class HydraWebView {
                     }
                 });
                 w.setWebChromeClient(new WebChromeClient() {
+                    /**
+                     * The page patches' report of what ran, and nothing else
+                     * a page logs: the shell files it with the site's other
+                     * signals, as the desktop does, and on Android no console
+                     * line reached the shell at all, so a report filed on the
+                     * phone never said which patches had run.
+                     */
+                    @Override
+                    public boolean onConsoleMessage(android.webkit.ConsoleMessage m) {
+                        final String text = m == null ? null : m.message();
+                        if (text != null && text.startsWith("hydra-scriptlets "))
+                            onConsole(id, text);
+                        return false;
+                    }
                     /**
                      * The page said what it is called.
                      *

@@ -58,7 +58,14 @@ void filter_signals::on_request(const request_context &ctx, const request_decisi
 		QUrl bare = ctx.url;
 		bare.setQuery(QString());
 		bare.setFragment(QString());
-		const QString b = bare.toString();
+		// **A stand-in is not a refusal**, and the report says which: the
+		// page received something for this one (`network_rules.h`). Seen in
+		// a report from the phone, where ad_status.js was answered and
+		// listed as refused all the same.
+		const QString b = d.redirect.isEmpty()
+		  ? bare.toString()
+		  : bare.toString() + QStringLiteral(" (answered with ") + d.redirect +
+		      QLatin1Char(')');
 		QStringList &ref = m_refused[ctx.site_host];
 		if (ref.size() < k_max_per_site && !ref.contains(b))
 			ref << b;

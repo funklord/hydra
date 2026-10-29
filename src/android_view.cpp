@@ -216,6 +216,25 @@ Java_se_vibes_hydra_HydraWebView_onFullscreen(JNIEnv *, jclass, jlong id,
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onProbeResult(JNIEnv *env, jclass, jlong id,
+                                               jint token, jstring json) {
+	const char *utf = json ? env->GetStringUTFChars(json, nullptr) : nullptr;
+	const QString s = QString::fromUtf8(utf ? utf : "");
+	if (utf)
+		env->ReleaseStringUTFChars(json, utf);
+	android_view::report_probe(id, int(token), s);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onConsole(JNIEnv *env, jclass, jlong id, jstring text) {
+	const char *utf = text ? env->GetStringUTFChars(text, nullptr) : nullptr;
+	const QString s = QString::fromUtf8(utf ? utf : "");
+	if (utf)
+		env->ReleaseStringUTFChars(text, utf);
+	android_view::report_console(id, s);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_se_vibes_hydra_HydraWebView_onFindResult(JNIEnv *, jclass, jlong id,
                                                jint matches, jint active) {
 	android_view::report_find(id, int(matches), int(active));
@@ -1130,6 +1149,50 @@ void android_view::find_text(const QString &text, bool forward, bool fresh,
 	  k_cls, "findText", "(JLjava/lang/String;ZZ)V", jlong(m_id),
 	  QJniObject::fromString(text).object<jstring>(), jboolean(forward),
 	  jboolean(fresh));
+}
+
+void android_view::run_probe(const QString &source,
+                             std::function<void(const QString &)> done) {
+	if (!m_native) {
+		done(QString());
+		return;
+	}
+	const int token = m_next_probe++;
+	m_probes.insert(token, std::move(done));
+	QJniObject::callStaticMethod<void>(
+	  k_cls, "runProbe", "(JILjava/lang/String;)V", jlong(m_id), jint(token),
+	  QJniObject::fromString(source).object<jstring>());
+}
+
+void android_view::run_page_probe(const QString &source,
+                                  std::function<void(const QString &)> done) {
+	run_probe(source, std::move(done));
+}
+
+void android_view::report_probe(qint64 id, int token, const QString &json) {
+	QMetaObject::invokeMethod(qApp, [id, token, json] {
+		android_view *v = s_views.value(id);
+		if (!v)
+			return;
+		const auto done = v->m_probes.take(token);
+		if (!done)
+			return;
+		// `evaluateJavascript` hands back the value JSON-encoded, so a probe
+		// that returns a string arrives quoted and escaped. Read it as the
+		// one element of an array, which takes any JSON value.
+		const QJsonArray a = QJsonDocument::fromJson(("[" + json + "]").toUtf8()).array();
+		done(a.isEmpty() ? QString()
+		     : a.at(0).isString() ? a.at(0).toString()
+		     : QString::fromUtf8(QJsonDocument(QJsonArray{ a.at(0) })
+		                           .toJson(QJsonDocument::Compact)).mid(1).chopped(1));
+	}, Qt::QueuedConnection);
+}
+
+void android_view::report_console(qint64 id, const QString &text) {
+	QMetaObject::invokeMethod(qApp, [id, text] {
+		if (android_view *v = s_views.value(id))
+			emit v->console_message(0, text, 0, QString());
+	}, Qt::QueuedConnection);
 }
 
 void android_view::report_find(qint64 id, int matches, int active) {

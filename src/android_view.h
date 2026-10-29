@@ -355,6 +355,22 @@ public:
 	QByteArray save_state() const override;
 	bool       restore_state(const QByteArray &blob) override;
 
+	// **The Annoyed report's two questions, asked of an Android page.** Both
+	// were the base class's empty answer here, so a report filed on the phone
+	// carried neither what the page showed nor what it could see of this
+	// browser. Android has one world, so both run in the page's own -- the
+	// page could notice being asked, which is why this happens only when a
+	// person presses the button.
+	void run_probe(const QString &source,
+	               std::function<void(const QString &)> done) override;
+	void run_page_probe(const QString &source,
+	                    std::function<void(const QString &)> done) override;
+	// From Java, on its UI thread: what `evaluateJavascript` answered for one
+	// probe, JSON-encoded as it hands it over.
+	static void report_probe(qint64 id, int token, const QString &json);
+	// The page patches' report, from the WebView's console (`onConsole`).
+	static void report_console(qint64 id, const QString &text);
+
 protected:
 	// The native view lives outside Qt's widget tree, so it has to be told
 	// where to be, every time this widget moves, resizes, or is covered.
@@ -370,6 +386,8 @@ private:
 	static request_filter *s_filter;   // one per process; see should_block()
 	static std::function<void(const QUrl &)> s_external;
 	qint64 m_id = 0;
+	QHash<int, std::function<void(const QString &)>> m_probes;   // by token
+	int    m_next_probe = 1;
 	bool   m_native = false;   // false when there is no WebView to talk to
 	bool   m_blocked = false;  // a modal dialog is over the window
 	bool   m_obscured = false; // the shell says something else is (the drawer)

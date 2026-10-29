@@ -113,6 +113,16 @@ int main(int argc, char **argv) {
 		feed(s, "https://ads.other.example/x.js", "a.example", true);
 		check(s.clear_all() == 1 && s.refused_for("a.example").isEmpty(),
 		      "and counted and gone in a clear of browsing data");
+		request_decision answered;
+		answered.block = true;
+		answered.redirect = QStringLiteral("doubleclick_instream_ad_status.js");
+		s.on_request(ctx_for("https://static.doubleclick.net/instream/ad_status.js?x=1",
+		                     "www.youtube.com"), answered);
+		const QString answered_line = QStringLiteral(
+		  "https://static.doubleclick.net/instream/ad_status.js "
+		  "(answered with doubleclick_instream_ad_status.js)");
+		check(s.refused_for("www.youtube.com") == QStringList(answered_line),
+		      "and one answered with a stand-in says so");
 	}
 
 	section("repeats do not inflate the evidence");
