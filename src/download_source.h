@@ -148,8 +148,10 @@ struct download_request {
 
 // What the caller knows about an address that its shape does not say.
 struct download_hints {
-	// yt-dlp said it is a media file: sources are asked
-	// `accepts_known_media` rather than judging it by its shape.
+	// Something that knows said this is a file, not a page: yt-dlp naming a
+	// media file, or on Android a server answering with an attachment and a
+	// person choosing Save. Sources are asked `accepts_known_media` rather
+	// than judging the address by its shape, which `/file?id=7` fails.
 	bool   known_media = false;
 	qint64 chunk_size  = 0;   // as `download_request::chunk_size`
 	// A tracklist to write into the saved file as chapters, in ffmpeg's

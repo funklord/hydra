@@ -252,7 +252,12 @@ private slots:
 	// they start, never after.
 	void confirm_public_download(const QString &source_id, const QString &note,
 	                              int job_id);
-	void start_download(const QUrl &url);
+	// `headers` go with the request: a page's own download on Android carries
+	// the WebView's cookie, user agent and referer, since the fetch is ours.
+	// `file_name` is the server's own, where it gave one, and `vouched` says
+	// something that knows called this a file, so its shape is not judged.
+	void start_download(const QUrl &url, const QMap<QString, QString> &headers = {},
+	                    const QString &file_name = QString(), bool vouched = false);
 	void open_downloads();
 	// Look the current page up with yt-dlp, unless a good answer for it is
 	// already cached (`media_lookups`). `forced` is Refresh: the cached one is

@@ -247,6 +247,32 @@ public class HydraWebView {
     public static native String linkMenu(String link, String image);
     /** One entry of that menu was chosen. */
     public static native void onLinkMenu(long id, String action, String value);
+    /** A file to save, with what this WebView would have sent to fetch it. */
+    public static native void onDownload(long id, String url, String cookie,
+                                         String userAgent, String referer,
+                                         String fileName);
+
+    /**
+     * **Hand a download to the C++ side, as the request the page would have
+     * made.** The fetch is made again there rather than by the WebView, so
+     * the cookie this WebView holds for the address goes with it -- without
+     * it a file behind a sign-in arrives as the sign-in page.
+     */
+    static void startDownload(long id, WebView w, String url, String disposition,
+                              String mime) {
+        if (url == null || url.isEmpty())
+            return;
+        final String cookie = CookieManager.getInstance().getCookie(url);
+        // The name the server gave in Content-Disposition, or one made from
+        // the address and type -- the platform's rule, the one Chrome uses.
+        // A Save from the menu has asked the server nothing yet, so it leaves
+        // the name to the download queue, which reads the answer.
+        final String name = disposition == null && mime == null ? ""
+          : android.webkit.URLUtil.guessFileName(url, disposition, mime);
+        onDownload(id, url, cookie == null ? "" : cookie,
+                   w.getSettings().getUserAgentString(),
+                   w.getUrl() == null ? "" : w.getUrl(), name == null ? "" : name);
+    }
 
     /**
      * **A held finger on a link or an image**, which the system WebView
@@ -950,6 +976,20 @@ public class HydraWebView {
                 // this repeatedly while it is still counting, with a partial
                 // total, so forwarding every call made the bar's number climb
                 // and then fall back. `isDoneCounting` is the one that is true.
+                // **A link the page answers with a file**, which the WebView
+                // drops without a word unless something listens: no download,
+                // no error, a click indistinguishable from one the page
+                // ignored. The desktop had the same fault and lost it in
+                // c838dc4, whose record said this listener fed Android's half;
+                // it had never been written.
+                final Player self = w;
+                w.setDownloadListener(new android.webkit.DownloadListener() {
+                    @Override public void onDownloadStart(String url, String userAgent,
+                                                          String disposition, String mime,
+                                                          long length) {
+                        startDownload(id, self, url, disposition, mime);
+                    }
+                });
                 w.setOnLongClickListener(new View.OnLongClickListener() {
                     @Override public boolean onLongClick(View v) {
                         return offerLinkMenu(id, (Player) v);
@@ -1543,7 +1583,10 @@ public class HydraWebView {
                 m.add(android.view.Menu.NONE, i, i, f[1]).setOnMenuItemClickListener(
                   new android.view.MenuItem.OnMenuItemClickListener() {
                     @Override public boolean onMenuItemClick(android.view.MenuItem item) {
-                        onLinkMenu(id, f[0], f[2]);
+                        if ("save".equals(f[0]))
+                            startDownload(id, Player.this, f[2], null, null);
+                        else
+                            onLinkMenu(id, f[0], f[2]);
                         return true;
                     }
                 });

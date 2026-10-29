@@ -4724,9 +4724,30 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 			          line, qPrintable(text));
 		});
 		connect(view, &web_view_backend::download_requested, this,
-		         [this, view](const QUrl &u) {
-			if (view == current_view())
-				start_download(u);
+		         [this, view](const QUrl &u, const QMap<QString, QString> &headers,
+		                       const QString &file_name) {
+			if (view != current_view())
+				return;
+			// **A file the page made itself cannot be fetched again**, and
+			// fetching again is how this path saves: a `blob:` lives in the
+			// page and a `data:` address is its own content. Said rather than
+			// dropped, which is the fault this signal exists to end.
+			const QString scheme = u.scheme().toLower();
+			if (scheme == QLatin1String("blob") || scheme == QLatin1String("data")) {
+				m_status->showMessage("This page made the file itself, and this "
+				                      "build cannot save one of those yet.", 8000);
+				return;
+			}
+			// The rule the media dialog keeps (Play's, on YouTube), kept here
+			// too: a page's own download is not a way around it.
+			QString why;
+			if (!media_saving_allowed(view->url().host(), u, &why)) {
+				m_status->showMessage(why, 8000);
+				return;
+			}
+			// Vouched for: the server answered with a file, or the person
+			// chose Save. Either way its address's shape is not the question.
+			start_download(u, headers, file_name, /*vouched=*/true);
 		});
 		connect(view, &web_view_backend::link_hovered, this,
 		         [this, view](const QUrl &u) {
@@ -7111,7 +7132,9 @@ void main_window::navigate_to_address() {
 		                                                        : target.host()), 6000);
 }
 
-void main_window::start_download(const QUrl &url) {
+void main_window::start_download(const QUrl &url,
+                                  const QMap<QString, QString> &headers,
+                                  const QString &file_name, bool vouched) {
 	QString error;
 	// A download belongs to the node it came from (sec 11.2), so a torrent lands
 	// in the tree beside every other download rather than in a separate world.
@@ -7126,7 +7149,9 @@ void main_window::start_download(const QUrl &url) {
 	// the url as a job already running and handed back the existing id, which
 	// is a second call arriving for one click.
 	const int before_jobs = int(m_downloads->jobs().size());
-	const int id = m_downloads->enqueue(url, node_id, &error);
+	download_hints hints;
+	hints.known_media = vouched;
+	const int id = m_downloads->enqueue(url, node_id, &error, headers, file_name, hints);
 	if (!id) {
 		m_status->showMessage(error, 8000);
 		return;

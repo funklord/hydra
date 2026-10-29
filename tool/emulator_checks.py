@@ -20,14 +20,21 @@
 #      the page's tells -- one planted, so an empty list cannot pass -- and
 #      the patches that ran;
 #   4. a held finger on a link opens the long-press menu (`link_menu.h`),
-#      and "Open in Background Tab" puts the link in the tree.
+#      and "Open in Background Tab" puts the link in the tree;
+#   5. a link the page answers with a file is downloaded, with the WebView's
+#      cookie -- from a server this script runs, reached through
+#      `adb reverse`, so what the download sent can be read. The file has
+#      to arrive on the device: the WebView fetches it itself while
+#      navigating, cookie and all, and then drops it unless something
+#      listens, so a request at the server proves nothing (measured: a build
+#      without the listener passed a check that only read the server).
 #
 # What makes it stop: every adb call has a timeout, every wait is bounded,
 # and the emulator -- started in its own session -- is killed in `finally`,
 # by `adb emu kill` and then by its process group if that did not take.
 # `store` is refused: the screenshot target wipes it every run. An AVD that
 # is already running is refused rather than shared.
-import json, os, re, signal, subprocess, sys, time
+import http.server, json, os, re, signal, subprocess, sys, threading, time
 import xml.etree.ElementTree as et
 
 SDK = os.environ.get("ANDROID_SDK_ROOT", os.path.expanduser("~/Android/Sdk"))
@@ -96,6 +103,35 @@ def reports():
 		if m:
 			out.setdefault(int(m.group(1)), {})[m.group(2)] = m.group(3)
 	return out
+
+class files(http.server.BaseHTTPRequestHandler):
+	# A page that sets a cookie and is one big link, and the file it links to,
+	# sent as an attachment. Every request is kept, so the check can read what
+	# the download sent.
+	seen = []
+	name = "held.bin"
+
+	def do_GET(self):
+		files.seen.append((self.path, dict(self.headers)))
+		if self.path.startswith("/file"):
+			body = b"hydra download check\n"
+			self.send_response(200)
+			self.send_header("Content-Type", "application/octet-stream")
+			self.send_header("Content-Disposition",
+			                 f'attachment; filename="{files.name}"')
+		else:
+			body = ("<!doctype html><meta name=viewport content='width=device-width'>"
+			        f"<a href='/file/{files.name}' style='position:fixed;inset:0;"
+			        "display:block;background:#9cf;font-size:40px'>DOWNLOAD</a>").encode()
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
+			self.send_header("Set-Cookie", "hydra_check=present; Path=/")
+		self.send_header("Content-Length", str(len(body)))
+		self.end_headers()
+		self.wfile.write(body)
+
+	def log_message(self, *args):
+		pass
 
 def main():
 	if AVD == "store":
@@ -222,6 +258,40 @@ def main():
 				return target in adb("shell", "run-as", APP, "cat", "files/tree.txt")
 			check(wait_for("the link in the tree", in_tree, 20),
 			      "Open in Background Tab put the link in the tree")
+
+		print("\n== a link the page answers with a file is downloaded ==")
+		files.name = f"held-{int(time.time())}.bin"
+		server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), files)
+		port = server.server_address[1]
+		threading.Thread(target=server.serve_forever, daemon=True).start()
+		try:
+			adb("reverse", f"tcp:{port}", f"tcp:{port}")
+			adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
+			    "-d", f"http://127.0.0.1:{port}/page", "-n", f"{APP}/.HydraActivity")
+			check(wait_for("the page from this script's server",
+			               lambda: any(p == "/page" for p, _ in files.seen), 30),
+			      "the page loaded")
+			time.sleep(3)
+			adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+			tree = et.fromstring(adb("shell", "cat", "/sdcard/ui.xml") or "<x/>")
+			views = [n for n in tree.iter("node") if n.get("class") == "android.webkit.WebView"]
+			if views:
+				x1, y1, x2, y2 = map(int, re.findall(r"\d+", views[0].get("bounds")))
+				adb("shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
+			fetched = lambda: [h for p, h in files.seen if p.startswith("/file")]
+			landed = lambda: files.name in adb(
+			  "shell", "ls", f"/sdcard/Android/data/{APP}/files/Download/", "/sdcard/Download/")
+			check(wait_for("the file on the device", landed, 40),
+			      f"tapping the link saved {files.name} on the device")
+			# The WebView's own request is first; the download's is the last.
+			sent = fetched()[-1] if len(fetched()) > 1 else {}
+			check("hydra_check=present" in sent.get("Cookie", ""),
+			      f"the download sent the page's cookie ({sent.get('Cookie', 'none')}, "
+			      f"{len(fetched())} request(s) for the file)")
+		finally:
+			adb("reverse", "--remove", f"tcp:{port}")
+			server.shutdown()
+			server.server_close()
 	finally:
 		try:
 			adb("emu", "kill", timeout=20)

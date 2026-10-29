@@ -4550,8 +4550,12 @@ one that matters most and the one a url-refetching design could never have
 served: it proves the transfer is the engine's.
 
 Android is not wired and says so at the seam rather than accepting the handler
-and dropping it. Its path is the platform `DownloadManager` in
-`android_downloads`, fed by the WebView's own `setDownloadListener`.
+and dropping it. ~~Its path is the platform `DownloadManager` in
+`android_downloads`, fed by the WebView's own `setDownloadListener`.~~ **That
+sentence described a listener nobody had written**, and for two months a link
+a page answered with a file did nothing on Android -- this section's own fault,
+on the other platform. Found and fixed 2026-10-29: see *A page's download on
+Android was dropped, and the record said otherwise*.
 
 ## OAuth popups, and the opener that was never wired
 
@@ -26917,6 +26921,41 @@ So both halves of item 4 are blocked here, and the sentence that said one of
 them never was is a present-tense claim about an environment, quoted rather
 than re-derived. Recorded so the next session does not run `test_live_model`
 and conclude the suite is broken.
+
+## A page's download on Android was dropped, and the record said otherwise
+
+**A link a page answers with a file did nothing on Android**, and had done
+nothing since the port began: no download, no error, a tap indistinguishable
+from one the page ignored. It is the fault c838dc4 fixed on the desktop --
+whose own record then said Android's half was "fed by the WebView's own
+`setDownloadListener`". No commit ever wrote that call; `git log -S` finds
+only the sentences. Found 2026-10-29 by asking, after the long-press menu,
+what else had been filed as the platform's default without anybody looking.
+
+**The WebView's listener now hands the address to the download queue**,
+through a seam signal, `download_requested`, carrying what the fetch has to
+send to be the same request: the WebView's cookie for the address, its user
+agent and the page as referer. The queue fetches again rather than taking the
+WebView's bytes -- the engine hands nothing over on Android -- so without the
+cookie a file behind a sign-in would arrive as the sign-in page. The name is
+the server's own, through `URLUtil.guessFileName`, the platform's rule.
+
+**And the address is vouched for**, which the first version did not do: the
+queue judges an address by its shape, and `/file/held.bin` passed while
+`/download?id=7` would not, so the first build answered a real attachment with
+"That URL does not look like a saveable file." The server has said it is a
+file, which is better evidence than the shape, so the hint yt-dlp already uses
+(`known_media`, the shape test waived and nothing else) is given here too, and
+to the long-press menu's Save. The Play rule for YouTube is kept on this path
+-- `media_saving_allowed`, as the media dialog asks -- and a `blob:` or
+`data:` file, which no fetch can get again, is refused out loud.
+
+**What the check had to learn**: it first read only the test server's log, and
+the build without the listener passed it, because the WebView itself fetches
+the file while navigating, cookie and all, before dropping it. The check now
+requires the file on the device and the download's own second request with
+the cookie; the old build fails it (two failures), the new one passes it, in
+`tool/emulator_checks.py`.
 
 ## A held finger on a link has a menu on Android
 

@@ -265,6 +265,16 @@ Java_se_vibes_hydra_HydraWebView_onLinkMenu(JNIEnv *env, jclass, jlong id,
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onDownload(JNIEnv *env, jclass, jlong id, jstring url,
+                                            jstring cookie, jstring user_agent,
+                                            jstring referer, jstring file_name) {
+	android_view::report_download(id, java_string(env, url), java_string(env, cookie),
+	                              java_string(env, user_agent),
+	                              java_string(env, referer),
+	                              java_string(env, file_name));
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_se_vibes_hydra_HydraWebView_onFindResult(JNIEnv *, jclass, jlong id,
                                                jint matches, jint active) {
 	android_view::report_find(id, int(matches), int(active));
@@ -1245,9 +1255,27 @@ void android_view::report_link_menu(qint64 id, const QString &word,
 				QGuiApplication::clipboard()->setText(value);
 				break;
 			case link_menu::action::save:
-				emit v->download_requested(QUrl(value));
+				emit v->download_requested(QUrl(value), {}, QString());
 				break;
 		}
+	}, Qt::QueuedConnection);
+}
+
+void android_view::report_download(qint64 id, const QString &url,
+                                   const QString &cookie,
+                                   const QString &user_agent,
+                                   const QString &referer,
+                                   const QString &file_name) {
+	QMap<QString, QString> headers;
+	if (!cookie.isEmpty())
+		headers.insert(QStringLiteral("Cookie"), cookie);
+	if (!user_agent.isEmpty())
+		headers.insert(QStringLiteral("User-Agent"), user_agent);
+	if (!referer.isEmpty())
+		headers.insert(QStringLiteral("Referer"), referer);
+	QMetaObject::invokeMethod(qApp, [id, url, headers, file_name] {
+		if (android_view *v = s_views.value(id))
+			emit v->download_requested(QUrl(url), headers, file_name);
 	}, Qt::QueuedConnection);
 }
 

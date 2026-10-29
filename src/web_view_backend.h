@@ -514,11 +514,16 @@ signals:
 	void new_window_requested(const QUrl &url, bool user_initiated,
 	                           bool background, web_view_backend **adopt);
 
-	// The person asked to save something the page links to -- "Save Link" or
-	// "Save Image" from Android's long-press menu (`link_menu.h`). The desktop
-	// engine's own menu downloads through the profile instead, so only a
-	// backend that builds its own menu emits this.
-	void download_requested(const QUrl &url);
+	// Something should be saved: a link the page answered with a file rather
+	// than a page, or "Save Link" and "Save Image" from Android's long-press
+	// menu (`link_menu.h`). `headers` are what the fetch has to send to be the
+	// same request -- the WebView's cookie, user agent and referer -- because
+	// the download is made again by this program rather than handed over by
+	// the engine. The desktop engine hands its downloads over through the
+	// profile instead, so only the Android backend emits this.
+	// `file_name` is the one the server gave, or empty.
+	void download_requested(const QUrl &url, const QMap<QString, QString> &headers,
+	                        const QString &file_name);
 
 	// Where the link under the pointer would take you. An empty url means the
 	// pointer left one. **This is the browser's oldest security affordance**:

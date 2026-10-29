@@ -374,6 +374,11 @@ public:
 	// the word `link_menu::encode` wrote, `value` the address or the text.
 	static void report_link_menu(qint64 id, const QString &action,
 	                             const QString &value);
+	// A file to save, from the WebView's download listener or the menu's
+	// Save: the address and what the WebView would have sent for it.
+	static void report_download(qint64 id, const QString &url, const QString &cookie,
+	                            const QString &user_agent, const QString &referer,
+	                            const QString &file_name);
 
 protected:
 	// The native view lives outside Qt's widget tree, so it has to be told
@@ -436,10 +441,11 @@ public:
 	void set_external_url_handler(external_url_handler fn) override {
 		android_view::set_external_handler(fn);
 	}
-	// Not wired: Android's downloads go through the platform `DownloadManager`
-	// in `android_downloads`, which the WebView's own `setDownloadListener`
-	// would feed. Taking the handler and never calling it would be worse than
-	// saying so here.
+	// Not wired: the engine hands nothing over on Android. A page's download
+	// arrives at the WebView's `setDownloadListener` instead, and goes out as
+	// `download_requested` with the WebView's cookie, to be fetched again by
+	// the download queue. Taking this handler and never calling it would be
+	// worse than saying so here.
 	void set_download_handler(download_note) override {}
 
 	// **What the phone can and cannot forget**, answered honestly rather than
