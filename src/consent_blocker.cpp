@@ -109,6 +109,24 @@ const char *k_script = R"JS(
       if (!CONSENTISH.test(text)) continue;
       out.push(el);
     }
+    // **In a vendor's frame the frame is the banner.** The page pins the
+    // frame; nothing inside it need be pinned at all -- Sourcepoint's, on
+    // the Guardian, has no fixed element, so the scan found nothing to answer
+    // (measured over DevTools on the emulator, 2026-10-29). In a subframe
+    // that talks about cookies, its body stands in for the box -- but only
+    // when one of its buttons reads like a consent answer. A frame that
+    // merely mentions privacy is not a banner: YouTube embeds Google's
+    // sign-in page, whose footer does, and it would otherwise have been
+    // reported as a banner nothing could answer.
+    if (!TOP && !out.length && document.body &&
+        CONSENTISH.test((document.body.textContent || '').slice(0, 2000)) &&
+        buttons_in(document.body).some(function (b) {
+          return names_of(b).some(function (n) {
+            return (REJECT && REJECT.test(n)) || (ACCEPT && ACCEPT.test(n)) ||
+                   (REFUSE.test(n) && PAID.test(n));
+          });
+        }))
+      out.push(document.body);
     return out;
   };
 
@@ -127,6 +145,49 @@ const char *k_script = R"JS(
       } catch (e) {}
   };
 
+  // **Pay or consent: neither is taken.** A banner whose only refusal is
+  // a paid one -- "Reject all and subscribe", an ad-free or "Ad-Lite" tier,
+  // a "PUR Abo" -- is not offering a choice, it is selling the refusal. The
+  // holder's call, 2026-10-29: such a wall is set aside, not accepted and
+  // not paid. Nothing is clicked, so nothing is agreed to; the wall is
+  // hidden and the scroll it locked is given back. The content is served
+  // whole beneath these, so this is the same act as answering any banner.
+  var REFUSE = /reject|decline|refuse|deny|avvisa|neka|ablehnen|weiter ohne|refuser|rifiuta/i;
+  var PAID = /subscri|prenumer|abonn|\babo\b|\bpay\b|\bbetala|bezahl|\bpur\b|ad-?lite|ad-?free|reklamfri|werbefrei|contentpass|without ads/i;
+  var unlock = function () {
+    [document.documentElement, document.body].forEach(function (n) {
+      if (!n) return;
+      var st = getComputedStyle(n);
+      if (st.overflow === 'hidden' || st.overflowY === 'hidden')
+        n.style.setProperty('overflow', 'auto', 'important');
+      if (st.position === 'fixed' && n === document.body)
+        n.style.setProperty('position', 'static', 'important');
+    });
+  };
+  var set_aside = function (box, label) {
+    done = true;
+    box.style.setProperty('display', 'none', 'important');
+    unlock();
+    if (bridge) bridge.report_dismissed(label.slice(0, 60), 'aside');
+    else if (!TOP)
+      try {
+        window.top.postMessage({ __hydra_consent_aside: label.slice(0, 60) }, '*');
+      } catch (e) {}
+  };
+  var pay_or_consent = function (buttons) {
+    var paid = '', free_refusal = false;
+    for (var i = 0; i < buttons.length; i++) {
+      var names = names_of(buttons[i]);
+      for (var n = 0; n < names.length; n++) {
+        if (REJECT && REJECT.test(names[n])) free_refusal = true;
+        if (REFUSE.test(names[n]) && PAID.test(names[n])) paid = names[n];
+        if (!paid && PAID.test(names[n]) && /^(subscribe|prenumerera|abonnieren|pur)\b/i.test(names[n]))
+          paid = names[n];
+      }
+    }
+    return free_refusal ? '' : paid;
+  };
+
   var act = function () {
     if (done) return true;
     var boxes = candidates();
@@ -135,6 +196,8 @@ const char *k_script = R"JS(
       if (!visible(box)) continue;
       var buttons = buttons_in(box);
       if (!buttons.length || buttons.length > 12) continue;
+      var paid = pay_or_consent(buttons);
+      if (paid) { set_aside(box, paid); return true; }
       // Whole banner per preference tier, so a reject anywhere beats an accept
       // that happens to come first in the DOM.
       var tiers = [ { re: REJECT, as: 'reject' }, { re: ACCEPT, as: 'accept' } ];
@@ -236,6 +299,30 @@ const char *k_script = R"JS(
       var d = e.data.__hydra_consent_did;
       bridge.report_dismissed_in_frame(String(d.label || '').slice(0, 60),
                                         String(d.as || '').slice(0, 20));
+      return;
+    }
+    if (TOP && e.data.__hydra_consent_aside && e.source) {
+      // Only the frame that sent this is hidden, found by its own window, so
+      // a frame can put away itself and nothing else. With it go any pinned
+      // ancestors holding it, which is where vendors draw the dimmed
+      // backdrop, and the page's scroll lock.
+      if (!started) return;
+      var frames = document.getElementsByTagName('iframe');
+      for (var f = 0; f < frames.length; f++) {
+        if (frames[f].contentWindow !== e.source) continue;
+        var el = frames[f];
+        el.style.setProperty('display', 'none', 'important');
+        for (var up = el.parentElement; up && up !== document.body; up = up.parentElement) {
+          var ps = getComputedStyle(up).position;
+          if (ps === 'fixed' || ps === 'sticky')
+            up.style.setProperty('display', 'none', 'important');
+        }
+        unlock();
+        if (bridge)
+          bridge.report_dismissed_in_frame(
+            String(e.data.__hydra_consent_aside).slice(0, 60), 'aside');
+        break;
+      }
       return;
     }
     if (TOP && e.data.__hydra_consent_none && bridge) {
@@ -416,6 +503,11 @@ void consent_blocker::report_dismissed(const QString &what, const QString &choic
 	// the moment it happens. What was left was a per-site record of pages
 	// somebody had been on, maintained for nobody and clearable by nothing.
 	emit acted(host, choice.left(20));
+	// **A wall set aside records no choice**, so there is nothing for a cookie
+	// to remember and no reason to relax one: pay-or-consent banners are
+	// hidden, not answered (see `set_aside` in the script).
+	if (choice == QLatin1String("aside"))
+		return;
 
 	// The choice has to survive the next load or the banner simply returns, and
 	// a consent choice is recorded in a cookie. First-party only: third-party

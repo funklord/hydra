@@ -3138,7 +3138,10 @@ void main_window::wire_consent(consent_blocker *c) {
 	connect(c, &consent_blocker::acted, this,
 	         [this](const QString &host, const QString &choice) {
 		m_status->showMessage(
-		    QString("Answered the cookie banner on %1 (%2)").arg(host, choice),
+		    choice == QLatin1String("aside")
+		        ? QString("Set aside a pay-or-consent wall on %1 -- nothing was "
+		                  "accepted").arg(host)
+		        : QString("Answered the cookie banner on %1 (%2)").arg(host, choice),
 		    6000);
 	});
 	// A policy change nobody asked for has to be visible when it happens, not

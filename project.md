@@ -2261,6 +2261,40 @@ There is one channel per page now, built by a bootstrap injected once beside
 Every script waits on that instead. The four live drivers report **zero** of
 those console errors afterwards, where before they appeared in nearly every run.
 
+### Pay-or-consent walls are set aside, never accepted
+
+**The holder's decision, 2026-10-29**, asked when the Guardian's banner
+offered only "Accept all" or "Reject all and subscribe": *"We want to bypass
+annoying website paywalls, not agree to the little bait-and-switch games
+they play with users. Accepting may work for a while, but it doesn't solve
+the core problem."* So a banner whose only refusal costs money -- a refusal
+word and a payment word in one button, or a bare "Subscribe" / "PUR" with no
+free refusal beside it -- is **set aside**: nothing is clicked, so nothing is
+agreed to and nothing is bought; the wall is hidden and the scroll it locked
+is given back. The articles are served whole beneath these walls, so this is
+the same act as answering any banner, not a way past a content paywall. A
+set-aside relaxes no cookie policy (there is no choice to remember), and the
+status line says "Set aside a pay-or-consent wall ... nothing was accepted".
+Consequence, accepted with the decision: the site asks again on each visit,
+and it is set aside again each time.
+
+**The Guardian needed two more things**, both measured over DevTools on the
+emulator: its wall is a Sourcepoint iframe, so the frame asks the top page
+-- by `postMessage`, the relay that already carried dismissals -- to hide
+the frame that sent it (found by its own window, so a frame can put away
+itself and nothing else) and any pinned backdrop around it; and inside the
+frame nothing is pinned at all, so in a subframe whose text is about
+consent and whose buttons read like consent answers, the body stands in for
+the banner. The button requirement is not decoration: YouTube embeds
+Google's sign-in page in a frame that mentions privacy, and without it that
+frame would have been reported as an unanswerable banner.
+
+Measured afterwards, twice each on a cleared profile: the Guardian's wall
+gone and the page scrolling, nothing clicked; YouTube still answered with
+"Reject all" and `SOCS` set. `try_consent` carries both shapes -- a wall at
+the top and one in a frame with nothing pinned -- and the committed script
+fails them by clicking "Accept all": 53 of 53 now.
+
 ### YouTube's consent dialog was never answered on a phone
 
 **On a fresh profile on the emulator (2026-10-29), m.youtube.com showed

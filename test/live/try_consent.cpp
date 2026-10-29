@@ -123,6 +123,39 @@ static const char *k_scrolllock = R"HTML(
 <script>document.documentElement.style.overflow='hidden';
 document.body.style.overflow='hidden'; wire('cc');</script>)HTML";
 
+// **Pay or consent**: the only refusal on offer costs money, as on the
+// Guardian (measured on the emulator, 2026-10-29). The holder's call is that
+// such a wall is set aside -- nothing accepted, nothing paid -- so nothing
+// may be clicked here, and the page must still end up usable.
+static const char *k_pay = R"HTML(
+<div id="cc" style="position:fixed;inset:0;background:rgba(0,0,0,.6)">
+  <p>Personalised advertising: it's your choice. We use cookies and similar technologies.</p>
+  <button>Accept all</button>
+  <button>Reject all and subscribe</button>
+</div>
+<script>document.documentElement.style.overflow='hidden';
+document.body.style.overflow='hidden'; wire('cc');</script>)HTML";
+
+// The same wall where the Guardian has it: in a cross-origin frame, inside a
+// pinned backdrop, with the page's scroll locked by the top document. The
+// frame can only ask; the top page has to put the frame away. And inside the
+// frame nothing is pinned -- the page pins the frame -- which is the shape
+// Sourcepoint's has, and which a scan for pinned boxes never found.
+static const char *k_pay_inner = R"HTML(
+<div id="cc">
+  <p>Personalised advertising: it's your choice. We use cookies and similar technologies.</p>
+  <button>Accept all</button>
+  <button>Reject all and subscribe</button>
+</div>
+<script>wire('cc');</script>)HTML";
+
+static const char *k_framed_pay = R"HTML(
+<p>article text</p>
+<div style="position:fixed;inset:0;background:rgba(0,0,0,.6)">
+<iframe id="cc" src="__OTHER__/pay-inner" width="700" height="300"></iframe></div>
+<script>document.documentElement.style.overflow='hidden';
+document.body.style.overflow='hidden';</script>)HTML";
+
 // A real banner whose buttons say nothing the built-in patterns know. This is
 // the case the discovery signal exists for, and it is the normal case outside
 // English rather than an exotic one.
@@ -214,6 +247,10 @@ public:
 				if (target.startsWith("/reject"))          inner = k_reject;
 				else if (target.startsWith("/decoy"))      inner = k_decoy;
 				else if (target.startsWith("/custom"))     inner = k_custom;
+				// Longer names first, as below: `/pay-inner` starts with `/pay`.
+				else if (target.startsWith("/pay-inner"))  inner = k_pay_inner;
+				else if (target.startsWith("/pay"))        inner = k_pay;
+				else if (target.startsWith("/framed-pay")) inner = k_framed_pay;
 				else if (target.startsWith("/scrolllock")) inner = k_scrolllock;
 				// **Before `/foreign`, because it is a prefix of this.**
 				// Placed after it first, and `/foreign-inner` was served the
@@ -392,6 +429,17 @@ int main(int argc, char *argv[]) {
 	std::printf("  page clicked: %s\n", qPrintable(clicked_on("/custom")));
 	check(clicked_on("/custom") == "Reject all",
 	      "a banner that is a custom element, as YouTube's is, is answered too");
+
+	std::printf("\n== pay or consent: set aside, not accepted ==\n");
+	load("/pay");
+	check(clicked_on("/pay").isEmpty(),
+	      "neither \"Accept all\" nor the paid refusal is clicked");
+	check(page_usable(), "and the wall is gone and the page scrolls again");
+
+	std::printf("\n== pay or consent in a frame, as the Guardian ships it ==\n");
+	load("/framed-pay", 10000);
+	check(clicked_on("/framed-pay").isEmpty(), "nothing is clicked inside the frame either");
+	check(page_usable(), "and the top page puts the frame away and unlocks itself");
 
 	std::printf("\n== a banner whose only way out is accept ==\n");
 	load("/accept");
