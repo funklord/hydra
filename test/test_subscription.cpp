@@ -23,6 +23,7 @@
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
+#include <QJsonDocument>
 #include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -1360,6 +1361,85 @@ int main(int argc, char **argv) {
 		        rep.elemhide == QStringList({ "bare.example" }),
 		      "$generichide and $ehide hosts, each in its own list");
 		check(rep.unsupported >= 1, "a scriptlet exception is still unsupported");
+	}
+
+	section("a procedural selector is read into steps, and :style() is refused");
+	{
+		using namespace procedural_cosmetic;
+		auto json = [](const QString &sel) {
+			rule r;
+			QString why;
+			if (!parse(sel, &r, &why))
+				return "refused: " + why;
+			return QString::fromUtf8(QJsonDocument(to_json(r)).toJson(QJsonDocument::Compact));
+		};
+		check(!is_procedural("div.ad") && !is_procedural("div:has(> .ad)") &&
+		        !is_procedural("a:not(.x)") && !is_procedural("p:nth-child(2)"),
+		      "plain CSS, :has() and :not() of CSS included, is not procedural");
+		check(is_procedural("div:has-text(Sponsored)") &&
+		        is_procedural("div:has(span:has-text(Ad))") &&
+		        is_procedural("div:style(color: red)"),
+		      "an operator, one nested in :has(), and a refused one are");
+		check(json("div.post:has-text(Sponsored)") ==
+		        "{\"action\":\"hide\",\"arg\":\"\",\"steps\":[{\"css\":\"div.post\"},"
+		        "{\"arg\":\"Sponsored\",\"op\":\"has-text\"}]}",
+		      "css then has-text, hidden: " + json("div.post:has-text(Sponsored)"));
+		check(json("span:has-text(/^Ad(vert)?$/i):upward(3) > div") ==
+		        "{\"action\":\"hide\",\"arg\":\"\",\"steps\":[{\"css\":\"span\"},"
+		        "{\"arg\":\"/^Ad(vert)?$/i\",\"op\":\"has-text\"},"
+		        "{\"arg\":\"3\",\"op\":\"upward\"},{\"css\":\"> div\"}]}",
+		      "a regex holding parentheses, upward, and CSS relative after it: " +
+		        json("span:has-text(/^Ad(vert)?$/i):upward(3) > div"));
+		check(json("article:has(h2:has-text(Annons)):not(.keep)") ==
+		        "{\"action\":\"hide\",\"arg\":\"\",\"steps\":[{\"css\":\"article\"},"
+		        "{\"op\":\"has\",\"steps\":[{\"css\":\"h2\"},"
+		        "{\"arg\":\"Annons\",\"op\":\"has-text\"}]},{\"css\":\":not(.keep)\"}]}",
+		      "a procedural :has() nests its steps; a CSS :not() stays CSS: " +
+		        json("article:has(h2:has-text(Annons)):not(.keep)"));
+		check(json(":matches-path(/^\\/news/) div.ad:has-text(Ad)") ==
+		        "{\"action\":\"hide\",\"arg\":\"\",\"steps\":[{\"arg\":\"/^\\\\/news/\","
+		        "\"negate\":false,\"op\":\"path\"},{\"css\":\"div.ad\"},"
+		        "{\"arg\":\"Ad\",\"op\":\"has-text\"}]}" &&
+		        json(":not(:matches-path(/amafav/)) a.x").contains("\"negate\":true"),
+		      "a path gate opening a rule, and its negation: " +
+		        json(":matches-path(/^\\/news/) div.ad:has-text(Ad)"));
+		check(json(":xpath(\"//span[text()='Ad']\")").contains("\"arg\":\"//span[text()='Ad']\""),
+		      "a quoted xpath loses its quotes");
+		check(json("div.wall:remove()").contains("\"action\":\"remove\"") &&
+		        json("body:remove-class(no-scroll)").contains("\"arg\":\"no-scroll\"") &&
+		        json("img:remove-attr(srcset)").contains("\"action\":\"remove-attr\""),
+		      "the three actions, each with its argument");
+		check(json("div:style(position: static !important)").startsWith("refused: :style()") &&
+		        json("div:others()").startsWith("refused: :others()"),
+		      ":style() and :others() are refused by name: " +
+		        json("div:style(position: static !important)"));
+		check(json("div:remove():has-text(x)").startsWith("refused") &&
+		        json(":has-text(x)").startsWith("refused") &&
+		        json("div:has-text(x").startsWith("refused") &&
+		        json("div{color:red}:has-text(x)").startsWith("refused"),
+		      "an action not last, no selector first, unclosed, and unsafe CSS are refused");
+	}
+
+	section("a list's procedural rules are kept with their scope, and refused unscoped");
+	{
+		const subscription_read rep = filter_subscription::read(
+		  "[Adblock Plus 2.0]\n"
+		  "news.example##div.post:has-text(Sponsored)\n"
+		  "a.example,b.example#?#.box:upward(2)\n"
+		  "##div:has-text(Advertisement)\n"
+		  "shop.example##div:style(display: block !important)\n"
+		  "plain.example##.ad\n",
+		  0, true);
+		check(rep.procedural.size() == 2 &&
+		        rep.procedural[0].scope == "news.example" &&
+		        rep.procedural[0].selector == "div.post:has-text(Sponsored)" &&
+		        rep.procedural[1].scope == "a.example,b.example",
+		      "the scoped ## and #?# rules, each with its scope");
+		check(rep.generic.isEmpty(),
+		      "the unscoped one is not taken as a generic CSS selector: " + rep.generic.join(" | "));
+		check(rep.rules.size() == 1 && rep.accepted == 3 && rep.unsupported == 2,
+		      QString("the plain rule stays a rule; two refused (accepted %1, unsupported %2)")
+		        .arg(rep.accepted).arg(rep.unsupported));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

@@ -6571,6 +6571,7 @@ int main_window::load_subscriptions() {
 	generic_cosmetics generic;
 	QList<QPair<QString, QString>> lifted;
 	QSet<QString> generic_seen;
+	QSet<QString> procedural_seen;
 	int taken = 0;
 	for (const subscription &sub : m_sub_updater->subscriptions()) {
 		if (!sub.enabled || sub.file.isEmpty())
@@ -6614,6 +6615,11 @@ int main_window::load_subscriptions() {
 			if (!generic_seen.contains(g)) {
 				generic_seen.insert(g);
 				generic.selectors << g;
+			}
+		for (const procedural_cosmetic::scoped_rule &r : rep.procedural)
+			if (!procedural_seen.contains(r.scope + QLatin1Char('#') + r.selector)) {
+				procedural_seen.insert(r.scope + QLatin1Char('#') + r.selector);
+				generic.procedural << r;
 			}
 		lifted += rep.cosmetic_exceptions;
 		for (const QString &h : rep.generichide)

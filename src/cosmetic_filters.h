@@ -5,6 +5,9 @@
 #include <QStringList>
 #include <QSet>
 #include <QHash>
+#include <QJsonArray>
+
+#include "procedural_cosmetic.h"
 
 class filter_list;
 class policy_engine;
@@ -47,6 +50,11 @@ struct generic_cosmetics {
 	QHash<QString, QSet<QString>>   excepted;    // host -> selectors lifted there
 	QSet<QString>                   generichide; // hosts with generic hiding off
 	QSet<QString>                   elemhide;    // hosts with all hiding off
+	// **The lists' procedural rules ride here although they are scoped**:
+	// they are built in the same pass, answer to the same exceptions and
+	// `$elemhide`, and are as much the same for every view. A `filter_rule`
+	// carries a CSS selector, which these are not.
+	QList<procedural_cosmetic::scoped_rule> procedural;
 
 	void add_exception(const QString &host, const QString &selector);
 	// The rule hosts apply to their subdomains, as network rules do.
@@ -55,6 +63,9 @@ struct generic_cosmetics {
 	// The generic selectors that apply on `host`: none where generic hiding is
 	// off, and the rest minus whatever is lifted on the host or a parent.
 	QStringList for_host(const QString &host) const;
+	// The procedural rules whose scope matches `host`, minus those excepted
+	// on it or a parent, as the page script reads them. None under `$elemhide`.
+	QJsonArray procedural_for(const QString &host) const;
 };
 
 class cosmetic_filters : public QObject {
@@ -114,6 +125,9 @@ public:
 public slots:
 	// A JSON array of CSS selectors for the host currently on screen.
 	QString selectors_json() const;
+	// A JSON array of procedural rules (`procedural_cosmetic::to_json`) for
+	// the same host, run by the page script rather than written as CSS.
+	QString procedural_json() const;
 
 private:
 	const filter_list   *m_list   = nullptr;

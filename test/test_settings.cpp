@@ -1709,6 +1709,45 @@ int main(int argc, char **argv) {
 		       "and is gone once the trial ends");
 	}
 
+	section("cosmetic rules: procedural ones are served by scope, and lifted");
+	{
+		generic_cosmetics generic;
+		procedural_cosmetic::rule r;
+		procedural_cosmetic::parse("div:has-text(Sponsored)", &r, nullptr);
+		generic.procedural << procedural_cosmetic::scoped_rule{
+			"news.example,~m.news.example", "div:has-text(Sponsored)",
+			procedural_cosmetic::to_json(r) };
+		procedural_cosmetic::parse(".box:upward(2)", &r, nullptr);
+		generic.procedural << procedural_cosmetic::scoped_rule{
+			"news.example", ".box:upward(2)", procedural_cosmetic::to_json(r) };
+		check(generic.procedural_for("www.news.example").size() == 2 &&
+		        generic.procedural_for("m.news.example").size() == 1 &&
+		        generic.procedural_for("other.example").isEmpty(),
+		      "each rule where its scope matches, and not under an excluded host");
+		generic.add_exception("www.news.example", ".box:upward(2)");
+		check(generic.procedural_for("www.news.example").size() == 1 &&
+		        generic.procedural_for("news.example").size() == 2,
+		      "a site exception lifts one on that site only");
+		generic.add_exception(QString(), "div:has-text(Sponsored)");
+		check(generic.procedural_for("www.news.example").isEmpty(),
+		      "and one for everywhere lifts it everywhere");
+		generic.elemhide.insert("news.example");
+		check(generic.procedural_for("news.example").isEmpty(),
+		      "$elemhide turns them off with the rest");
+		generic.elemhide.clear();
+
+		filter_list own;
+		policy_engine pol;
+		cosmetic_filters bridge(&own, &pol);
+		bridge.set_generic(&generic);
+		bridge.set_page_host("news.example");
+		check(bridge.procedural_json().contains("upward"),
+		      "the bridge hands the page the host's rules: " + bridge.procedural_json());
+		pol.set_setting("news.example", policy::feature::ads, policy::setting::allow);
+		check(bridge.procedural_json() == "[]",
+		      "and none where ads are allowed: " + bridge.procedural_json());
+	}
+
 	section("cosmetic rules: an unscoped one is not applied everywhere");
 	{
 		// evaluate() rejects an unscoped cosmetic rule at accept time for being

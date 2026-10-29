@@ -38695,6 +38695,44 @@ with more than 300 characters of text. `test_subscription` reads the shapes
 escape hatch included.
 
 
+### Procedural cosmetic rules: what an element says, not only what it is
+
+**The lists' second-largest gap after `$popup`** (counted above): rules such
+as `dailymail.co.uk##.pufftext:has-text(/SPONSORED/):upward(2)`, which select
+by text, by an ancestor, by computed style or by the page's path -- things a
+stylesheet cannot ask. A scoped one was read as an ordinary selector and
+handed to the engine, which refused it and hid nothing; `#?#` was refused by
+name. Now `procedural_cosmetic` reads one into steps (CSS, then operators
+that filter or move the set: `has-text`, `upward`, `has`, `not`,
+`matches-css(-before/-after)`, `matches-attr`, `matches-path`,
+`min-text-length`, `xpath`) and an action (hide, `remove`, `remove-attr`,
+`remove-class`). The cosmetic page script runs them, and runs them again on
+a DOM change at most every 150 ms, because what they select is usually
+rendered late. A rule hides with an inline `display: none !important`.
+
+**Refused on purpose: `:style()` (707 lines) and `:others()` (66)**, with
+the reason named in the count. `:style()` writes declarations of the list's
+choosing, which is the CSS `why_selector_unsafe` exists to keep out of a
+cosmetic rule; `:others()` hides everything but its target. Unscoped
+procedural rules are refused too: a text search over every page is not
+something a list gets to start. The CSS parts of a rule pass
+`why_selector_unsafe` like any selector, so an attribute value holding `;`
+is refused here as it is there (13 lines).
+
+**Measured 2026-10-29 over the six default lists: 848 rules read, 819
+refused**, 773 of them the two refused on purpose. **Checked on the
+emulator with the real lists**: on www.dailymail.com, a `.pufftext`
+reading "SPONSORED" added to the live page had its second ancestor hidden
+by the list's rule, through the Android bridge, and an identical one
+reading "Story" did not. `try_procedural` runs every operator on a fixture,
+each beside a twin it must leave alone; `test_subscription` holds the
+reading and `test_settings` the serving (scope, exceptions, `$elemhide`,
+the shield).
+
+**Not yet: uBlock's entity scopes**, `google.*` and `amazon.*`, which
+`filter_list::scope_matches` reads as a literal host -- so they apply
+nowhere. That gap is every scoped rule kind's, not this one's.
+
 ## uBlock's whole default set, and the includes its main list is made of
 
 The Dailymotion ads went once the subscribed cosmetic rules were applied,

@@ -363,7 +363,8 @@ all:
 # written after exactly that.
 COVERAGE_BIN  = $(BUILD_DIR)/list-coverage
 COVERAGE_SRCS = tool/list_coverage.cpp src/filter_subscription.cpp \
-                 src/filter_list.cpp src/scriptlets.cpp src/site_rules.cpp
+                 src/filter_list.cpp src/scriptlets.cpp src/site_rules.cpp \
+                 src/procedural_cosmetic.cpp
 
 $(COVERAGE_BIN): $(COVERAGE_SRCS) $(wildcard src/*.h)
 	@mkdir -p $(BUILD_DIR)

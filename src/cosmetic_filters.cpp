@@ -14,9 +14,12 @@ void cosmetic_filters::set_page_host(const QString &host) {
 }
 
 void generic_cosmetics::add_exception(const QString &host, const QString &selector) {
-	if (host.isEmpty())
+	if (host.isEmpty()) {
 		selectors.removeAll(selector);
-	else
+		procedural.removeIf([&](const procedural_cosmetic::scoped_rule &r) {
+			return r.selector == selector;
+		});
+	} else
 		excepted[host].insert(selector);
 }
 
@@ -55,6 +58,27 @@ QStringList generic_cosmetics::for_host(const QString &host) const {
 	for (const QString &s : selectors)
 		if (!lifted.contains(s))
 			out << s;
+	return out;
+}
+
+QJsonArray generic_cosmetics::procedural_for(const QString &host) const {
+	QJsonArray out;
+	if (host.isEmpty() || procedural.isEmpty() || hides_nothing_on(host))
+		return out;
+	QSet<QString> lifted;
+	QString h = host.toLower();
+	for (;;) {
+		const auto it = excepted.constFind(h);
+		if (it != excepted.constEnd())
+			lifted.unite(*it);
+		const int dot = h.indexOf(QLatin1Char('.'));
+		if (dot < 0)
+			break;
+		h = h.mid(dot + 1);
+	}
+	for (const procedural_cosmetic::scoped_rule &r : procedural)
+		if (!lifted.contains(r.selector) && filter_list::scope_matches(r.scope, host))
+			out.append(r.rule);
 	return out;
 }
 
@@ -147,6 +171,16 @@ QString cosmetic_filters::selectors_json() const {
 	return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
 }
 
+QString cosmetic_filters::procedural_json() const {
+	// The shield's escape hatch, as for the selectors: a site whose ads are
+	// allowed gets no list's hiding.
+	QJsonArray arr;
+	if (m_generic && !m_host.isEmpty() &&
+	    !(m_policy && m_policy->is_allowed(policy::feature::ads, m_host)))
+		arr = m_generic->procedural_for(m_host);
+	return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+}
+
 QString cosmetic_filters::script_source() {
 	// Runs in the isolated world, which shares the DOM but not the page's
 	// globals: it can add a stylesheet, and the page cannot reach in and remove
@@ -161,6 +195,177 @@ QString cosmetic_filters::script_source() {
   // Named, not `arguments.callee`: that is a syntax error under strict mode, and
   // the injected world is not guaranteed to be sloppy.
   var sheet_el = null;
+
+  // **Procedural rules** (`procedural_cosmetic.h`): each is steps -- a CSS
+  // selector, or an operator filtering or moving the set -- and an action.
+  // Run on the document as it is, then again whenever it changes, at most
+  // every 150 ms: what these select is usually rendered after load. A rule
+  // that throws is skipped and the rest still run.
+  var pattern = function (arg) {
+    var m = /^\/(.*)\/([imsu]*)$/.exec(arg);
+    if (m) { try { return new RegExp(m[1], m[2]); } catch (e) { return null; } }
+    return null;
+  };
+  var text_test = function (arg) {
+    var re = pattern(arg);
+    if (re) return function (s) { return re.test(s); };
+    return function (s) { return s.indexOf(arg) >= 0; };
+  };
+  // A CSS step after an operator is relative to each element of the set:
+  // descendants, `> child`, or `+`/`~` a sibling -- the last read from the
+  // parent, keeping a match only if its branch follows the element.
+  var relative = function (root, css) {
+    var c = css.charAt(0);
+    if (c !== '+' && c !== '~')
+      return Array.prototype.slice.call(root.querySelectorAll(':scope ' + css));
+    var parent = root.parentElement;
+    if (!parent) return [];
+    var found = parent.querySelectorAll(':scope > ' + css.slice(1));
+    var out = [];
+    for (var i = 0; i < found.length; i++) {
+      var top = found[i];
+      while (top.parentElement !== parent) top = top.parentElement;
+      if (c === '+' ? top === root.nextElementSibling
+                    : root.compareDocumentPosition(top) & 4)
+        out.push(found[i]);
+    }
+    return out;
+  };
+  var unique = function (list) {
+    var out = [], seen = new Set();
+    for (var i = 0; i < list.length; i++)
+      if (list[i] && !seen.has(list[i])) { seen.add(list[i]); out.push(list[i]); }
+    return out;
+  };
+  // `set` null means the document: the first step selects from it.
+  var run = function (steps, set) {
+    for (var s = 0; s < steps.length; s++) {
+      var st = steps[s], out = [], i;
+      if (st.css !== undefined) {
+        if (set === null)
+          out = Array.prototype.slice.call(document.querySelectorAll(st.css));
+        else
+          for (i = 0; i < set.length; i++) out = out.concat(relative(set[i], st.css));
+        set = unique(out);
+        continue;
+      }
+      if (st.op === 'path') {
+        // A gate on the page's path: the set, or the document, passes as is.
+        if (text_test(st.arg)(location.pathname + location.search) === !!st.negate)
+          return [];
+        continue;
+      }
+      if (set === null) {
+        if (st.op === 'xpath') set = [document];
+        else set = Array.prototype.slice.call(document.querySelectorAll('*'));
+      }
+      var op = st.op, arg = st.arg;
+      if (op === 'has-text') {
+        var t = text_test(arg);
+        set = set.filter(function (e) { return t(e.textContent || ''); });
+      } else if (op === 'min-text-length') {
+        var n = parseInt(arg, 10) || 0;
+        set = set.filter(function (e) { return (e.textContent || '').length >= n; });
+      } else if (op === 'upward') {
+        var k = /^\d+$/.test(arg) ? parseInt(arg, 10) : 0;
+        set = unique(set.map(function (e) {
+          if (!k) return e.parentElement && e.parentElement.closest(arg);
+          for (var j = 0; j < k && e; j++) e = e.parentElement;
+          return e;
+        }));
+      } else if (op === 'has' || op === 'not') {
+        var want = op === 'has';
+        set = set.filter(function (e) { return (run(st.steps, [e]).length > 0) === want; });
+      } else if (op === 'matches-css' || op === 'matches-css-before' ||
+                 op === 'matches-css-after') {
+        var colon = arg.indexOf(':');
+        if (colon < 0) return [];
+        var prop = arg.slice(0, colon).trim(), val = arg.slice(colon + 1).trim();
+        var vre = pattern(val);
+        var pseudo = op === 'matches-css' ? null : op === 'matches-css-before' ? '::before' : '::after';
+        set = set.filter(function (e) {
+          var v = getComputedStyle(e, pseudo).getPropertyValue(prop);
+          return vre ? vre.test(v) : v === val;
+        });
+      } else if (op === 'matches-attr') {
+        // A name may be a /pattern/ itself, and a pattern may hold '='.
+        var eq = arg.charAt(0) === '/' ? arg.indexOf('/=', 1) : arg.indexOf('=');
+        if (eq >= 0 && arg.charAt(0) === '/') eq++;
+        var an = (eq < 0 ? arg : arg.slice(0, eq)).replace(/^["']|["']$/g, '');
+        var av = eq < 0 ? null : arg.slice(eq + 1).replace(/^["']|["']$/g, '');
+        var are = pattern(an), avre = av === null ? null : pattern(av);
+        set = set.filter(function (e) {
+          for (var a = 0; a < e.attributes.length; a++) {
+            var at = e.attributes[a];
+            if (are ? !are.test(at.name) : at.name !== an) continue;
+            if (av === null || (avre ? avre.test(at.value) : at.value === av)) return true;
+          }
+          return false;
+        });
+      } else if (op === 'matches-path') {
+        var p = location.pathname + location.search;
+        if (!text_test(arg)(p)) return [];
+      } else if (op === 'xpath') {
+        for (i = 0; i < set.length; i++) {
+          var r = document.evaluate(arg, set[i], null, 7, null);   // ordered snapshot
+          for (var q = 0; q < r.snapshotLength; q++)
+            if (r.snapshotItem(q).nodeType === 1) out.push(r.snapshotItem(q));
+        }
+        set = unique(out);
+      } else {
+        return [];   // an operator the reader knows and this does not
+      }
+    }
+    return set || [];
+  };
+  var act = function (rule, e) {
+    if (rule.action === 'remove') { e.remove(); return; }
+    if (rule.action === 'remove-attr' || rule.action === 'remove-class') {
+      var re = pattern(rule.arg);
+      var names = re ? null : rule.arg.split('|');
+      var match = function (n) { return re ? re.test(n) : names.indexOf(n) >= 0; };
+      if (rule.action === 'remove-attr') {
+        var drop = [];
+        for (var a = 0; a < e.attributes.length; a++)
+          if (match(e.attributes[a].name)) drop.push(e.attributes[a].name);
+        drop.forEach(function (n) { e.removeAttribute(n); });
+      } else {
+        Array.prototype.slice.call(e.classList).forEach(function (n) {
+          if (match(n)) e.classList.remove(n);
+        });
+      }
+      return;
+    }
+    if (e.style.getPropertyValue('display') !== 'none' ||
+        e.style.getPropertyPriority('display') !== 'important')
+      e.style.setProperty('display', 'none', 'important');
+  };
+  var procedural = function (rules) {
+    var pass = function () {
+      for (var i = 0; i < rules.length; i++) {
+        try {
+          var found = run(rules[i].steps, null);
+          for (var j = 0; j < found.length; j++)
+            if (found[j] !== document) act(rules[i], found[j]);
+        } catch (e) { /* one rule failing does not stop the others */ }
+      }
+    };
+    var due = false, last = 0;
+    var schedule = function () {
+      if (due) return;
+      due = true;
+      setTimeout(function () { due = false; last = Date.now(); pass(); },
+                 Math.max(0, 150 - (Date.now() - last)));
+    };
+    var watch = function () {
+      if (!document.documentElement) return setTimeout(watch, 10);
+      new MutationObserver(schedule).observe(document.documentElement,
+                                             { childList: true, subtree: true });
+      schedule();
+    };
+    watch();
+  };
+
   var start = function () {
     if (!window.hydraChannel) return setTimeout(start, 50);
     window.hydraChannel(function (objs) {
@@ -205,6 +410,11 @@ QString cosmetic_filters::script_source() {
         }
       };
       apply();
+    });
+    if (bridge.procedural_json) bridge.procedural_json(function (json) {
+      var rules;
+      try { rules = JSON.parse(json); } catch (e) { return; }
+      if (rules && rules.length) procedural(rules);
     });
     });
   };

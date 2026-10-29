@@ -421,9 +421,45 @@ subscription_read read(const QString &text, int previous_rules,
 		return false;
 	};
 
+	// **Procedural cosmetic rules, before either reading above sees them.**
+	// `site##div:has-text(Sponsored)` passed as an ordinary scoped selector
+	// and reached the page as one, where the engine refused it and hid
+	// nothing; `#?#` was refused by name. Both separators are one feature in
+	// uBlock, so both are read here. Scoped only: an unscoped one would run
+	// its text search over every page, and is refused as unsupported.
+	auto procedural_shape = [&](const QString &raw) -> bool {
+		const QString t = raw.trimmed();
+		if (t.startsWith(QLatin1Char('!')))
+			return false;
+		int at = t.indexOf(QLatin1String("#?#"));
+		int width = 3;
+		if (at < 0) {
+			at = t.indexOf(QLatin1String("##"));
+			width = 2;
+		}
+		if (at < 0)
+			return false;
+		const QString scope = t.left(at).trimmed();
+		const QString sel = t.mid(at + width).trimmed();
+		if (scope.contains(QLatin1Char('#')) || sel.startsWith(QLatin1String("+js")) ||
+		    sel.startsWith(QLatin1Char('^')))
+			return false;
+		if (width == 2 && !procedural_cosmetic::is_procedural(sel))
+			return false;
+		++rep.lines;
+		procedural_cosmetic::rule r;
+		if (scope.isEmpty() || !procedural_cosmetic::parse(sel, &r, nullptr)) {
+			++rep.unsupported;
+			return true;
+		}
+		++rep.accepted;
+		rep.procedural.push_back({ scope.toLower(), sel, procedural_cosmetic::to_json(r) });
+		return true;
+	};
+
 	const QStringList lines = text.split(QLatin1Char('\n'));
 	for (const QString &line : lines) {
-		if (generic_shape(line))
+		if (procedural_shape(line) || generic_shape(line))
 			continue;
 		filter_rule r;
 		scriptlet_call call;

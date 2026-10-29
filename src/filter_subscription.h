@@ -2,6 +2,7 @@
 
 #include "filter_list.h"
 #include "network_rules.h"
+#include "procedural_cosmetic.h"
 #include "scriptlets.h"
 
 #include <QDateTime>
@@ -90,6 +91,10 @@ struct subscription_read {
 	QList<QPair<QString, QString>> cosmetic_exceptions;   // (host or "", selector)
 	QStringList generichide;
 	QStringList elemhide;
+	// **Procedural cosmetic rules** (`procedural_cosmetic.h`): scoped
+	// `site##div:has-text(...)` and `site#?#...`, read into steps the page
+	// script runs, because a stylesheet cannot ask what an element says.
+	QList<procedural_cosmetic::scoped_rule> procedural;
 	// The rules this list cancels with `$badfilter`, usually in another list,
 	// so whoever assembles the lists applies them (`apply_badfilters`).
 	QStringList cancelled;
