@@ -132,7 +132,7 @@ public:
 	// still existing would be a race for no benefit.
 	// The same decision with its redirect: empty to let the request through,
 	// "block" to refuse it, or the name of the resource to answer it with
-	// (`redirect_rules.h`). What Java's interceptor asks.
+	// (`network_rules.h`). What Java's interceptor asks.
 	static QString request_verdict(const QString &url, const QString &accept,
 	                               const QString &page_url);
 	static bool should_block(const QString &url, const QString &accept,

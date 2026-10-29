@@ -26,6 +26,7 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
 #include <QJsonDocument>
@@ -234,7 +235,56 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < 50 && !done; ++i)
 		spin(100);
 
-	std::printf("\n== redirect rules in force: %d ==\n", filter.redirect_count());
+	std::printf("\n== rules with options in force: %d block, %d exception, %d redirect ==\n",
+	            filter.network_rule_count(network_rule::action::block),
+	            filter.network_rule_count(network_rule::action::allow),
+	            filter.network_rule_count(network_rule::action::redirect));
+	{
+		// What a decision costs with the lists in, over addresses shaped like
+		// a page's: the price of every rule above on every request.
+		const QStringList urls = {
+			"https://www.youtube.com/youtubei/v1/player?key=x",
+			"https://i.ytimg.com/vi/abc/hqdefault.jpg",
+			"https://fonts.gstatic.com/s/roboto/v30/x.woff2",
+			"https://static.doubleclick.net/instream/ad_status.js",
+			"https://cdn.example.com/assets/app.bundle.js?v=123",
+			"https://www.google-analytics.com/analytics.js",
+			"https://images.news.example/2026/10/photo-large.jpg",
+			"https://api.example.org/v2/items?page=3&limit=50",
+		};
+		QElapsedTimer t;
+		t.start();
+		int blocked = 0;
+		for (int i = 0; i < 250; ++i)
+			for (const QString &u : urls) {
+				request_context ctx;
+				ctx.url = QUrl(u);
+				ctx.request_host = ctx.url.host();
+				ctx.site_host = "www.youtube.com";
+				ctx.type = request_type::other;
+				blocked += filter.decide(ctx).block ? 1 : 0;
+			}
+		std::printf("decide: %lld us per request over %lld (%d blocked)\n",
+		            qlonglong(t.nsecsElapsed() / 1000 / (250 * urls.size())),
+		            qlonglong(250 * urls.size()), blocked);
+		// The same with only the plain lists, so the cost above can be told
+		// apart from theirs. Taken last: the rules do not come back.
+		if (qEnvironmentVariableIsSet("HYDRA_DECIDE_BASELINE")) {
+			filter.set_network_rules({});
+			t.restart();
+			for (int i = 0; i < 250; ++i)
+				for (const QString &u : urls) {
+					request_context ctx;
+					ctx.url = QUrl(u);
+					ctx.request_host = ctx.url.host();
+					ctx.site_host = "www.youtube.com";
+					ctx.type = request_type::other;
+					filter.decide(ctx);
+				}
+			std::printf("decide, plain lists only: %lld us per request\n",
+			            qlonglong(t.nsecsElapsed() / 1000 / (250 * urls.size())));
+		}
+	}
 	{
 		request_context ctx;
 		ctx.url = QUrl("https://static.doubleclick.net/instream/ad_status.js");

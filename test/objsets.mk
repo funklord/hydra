@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build 94e28c7e, mtime 2026-10-26 13:40)
+#     /home/claude/src/fmake/fmake  (build 7506d9eb, mtime 2026-10-29 00:45)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -93,6 +93,7 @@ OBJSETS_SOURCES = \
 	test/live/try_evolve_confirm.cpp \
 	test/live/try_extract.cpp \
 	test/live/try_files.cpp \
+	test/live/try_filter_cost.cpp \
 	test/live/try_filters.cpp \
 	test/live/try_flicker.cpp \
 	test/live/try_forget.cpp \
@@ -334,7 +335,7 @@ OBJS_test_investigation = \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/filter_subscription.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/policy_engine.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
@@ -420,7 +421,7 @@ OBJS_test_probe_ui = \
 	$(BUILD_DIR)/moc/moc_subscription_updater.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/policy_engine.o \
@@ -528,7 +529,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/empty_state.o \
@@ -669,7 +670,7 @@ OBJS_test_settings = \
 	$(BUILD_DIR)/app/subscription_updater.o \
 	$(BUILD_DIR)/app/theme.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o
@@ -704,7 +705,7 @@ OBJS_test_streamtype = \
 	$(BUILD_DIR)/app/policy.o
 
 OBJS_test_subscription = \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/policy_engine.o \
 	$(BUILD_DIR)/app/request_filter.o \
@@ -775,7 +776,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -933,7 +934,7 @@ OBJS_try_adprobe = \
 	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -952,7 +953,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -1114,7 +1115,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -1270,7 +1271,7 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -1426,7 +1427,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -1583,7 +1584,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -1736,7 +1737,7 @@ OBJS_try_cdp = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -1755,7 +1756,7 @@ OBJS_try_challenge = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -1922,7 +1923,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -2068,7 +2069,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -2230,7 +2231,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -2382,7 +2383,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -2542,7 +2543,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -2701,7 +2702,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -2855,7 +2856,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/app/filter_signals.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -3018,7 +3019,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -3168,7 +3169,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -3317,6 +3318,17 @@ OBJS_try_files = \
 	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
+OBJS_try_filter_cost = \
+	$(BUILD_DIR)/app/network_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
+	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/app/request_filter.o \
+	$(BUILD_DIR)/app/filter_subscription.o \
+	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/policy.o
+
 OBJS_try_filters = \
 	$(BUILD_DIR)/app/main_window.o \
 	$(BUILD_DIR)/app/policy_engine.o \
@@ -3326,7 +3338,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -3487,7 +3499,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -3646,7 +3658,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -3799,7 +3811,7 @@ OBJS_try_fullscreen_keys = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -3954,7 +3966,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -4115,7 +4127,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -4271,7 +4283,7 @@ OBJS_try_investigate = \
 	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -4441,7 +4453,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -4609,7 +4621,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -4751,7 +4763,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -4905,7 +4917,7 @@ OBJS_try_media_lookup = \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -5072,7 +5084,7 @@ OBJS_try_media_reading = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -5230,7 +5242,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -5391,7 +5403,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -5544,7 +5556,7 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_notifications.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -5710,7 +5722,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -5857,7 +5869,7 @@ OBJS_try_pdf = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -5877,7 +5889,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -6062,7 +6074,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -6194,7 +6206,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -6349,7 +6361,7 @@ OBJS_try_scriptlet_cost = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -6504,13 +6516,13 @@ OBJS_try_scriptlets = \
 	$(BUILD_DIR)/app/request_filter.o \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/app/theme.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
-	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
@@ -6676,7 +6688,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -6857,7 +6869,7 @@ OBJS_try_settings_ui = \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o
@@ -6873,7 +6885,7 @@ OBJS_try_share = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -7028,7 +7040,7 @@ OBJS_try_store_view = \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -7186,7 +7198,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -7347,7 +7359,7 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -7505,7 +7517,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -7662,7 +7674,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -7817,7 +7829,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \
@@ -7966,22 +7978,22 @@ OBJS_try_youtube_wall = \
 	$(BUILD_DIR)/app/main_window.o \
 	$(BUILD_DIR)/app/policy_engine.o \
 	$(BUILD_DIR)/app/request_filter.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/app/theme.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
-	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/scriptlets.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
@@ -8131,7 +8143,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
-	$(BUILD_DIR)/app/redirect_rules.o \
+	$(BUILD_DIR)/app/network_rules.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
 	$(BUILD_DIR)/app/filter_list.o \

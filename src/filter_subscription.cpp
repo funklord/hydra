@@ -20,6 +20,10 @@ QString subscription_read::summary() const {
 	if (needs_trust > 0)
 		s += QString(", %1 needing trust this list has not been given")
 		         .arg(needs_trust);
+	if (option_blocks > 0)
+		s += QString(", %1 with options").arg(option_blocks);
+	if (exceptions > 0)
+		s += QString(", %1 exception(s)").arg(exceptions);
 	if (redirects > 0)
 		s += QString(", %1 answered with a stand-in").arg(redirects);
 	if (unsupported > 0)
@@ -162,7 +166,7 @@ rewrite response_rewrite(const QString &t, scriptlet_call *out, QString *why) {
 namespace filter_subscription {
 
 line_kind classify(const QString &line, filter_rule *out, QString *why,
-                    scriptlet_call *call, redirect_rule *redirect) {
+                    scriptlet_call *call, network_rule *option, QString *cancels) {
 	const auto reason = [why](const char *text) {
 		if (why)
 			*why = QString::fromLatin1(text);
@@ -246,6 +250,31 @@ line_kind classify(const QString &line, filter_rule *out, QString *why,
 		return line_kind::cosmetic;
 	}
 
+	// **Rules with options, exceptions and redirects are read first**, by
+	// `parse_network_rule`, which knows the options this build honours and
+	// refuses the rest with the option named. What follows below was written
+	// when none of them could be carried, and now sees only what that reader
+	// refuses or does not claim.
+	{
+		network_rule r;
+		QString said, target;
+		switch (parse_network_rule(t, &r, &said, &target)) {
+			case parsed::option:
+				if (option)
+					*option = r;
+				return line_kind::option;
+			case parsed::badfilter:
+				if (cancels)
+					*cancels = target;
+				return line_kind::badfilter;
+			case parsed::refused:
+				if (why)
+					*why = said;
+				return line_kind::unsupported;
+			case parsed::none:
+				break;
+		}
+	}
 	// **An exception rule has nothing to except.** `@@||host^` tells a blocker
 	// not to block something, and this engine has no unblock path: `blocks()`
 	// answers yes or no from the index and never consults a second set. Stored
@@ -284,23 +313,6 @@ line_kind classify(const QString &line, filter_rule *out, QString *why,
 	// It is the right way round -- such a rule is skipped rather than
 	// enforced too broadly -- and the alternative is a parser for the option
 	// grammar, which is the work this defers.
-	// **A redirect rule is read before the options test refuses it**: its
-	// options are the few `parse_redirect_rule` knows, and any other refuses
-	// it there, with the option named.
-	{
-		redirect_rule r;
-		QString said;
-		if (parse_redirect_rule(t, &r, &said)) {
-			if (redirect)
-				*redirect = r;
-			return line_kind::redirect;
-		}
-		if (!said.isEmpty()) {
-			if (why)
-				*why = said;
-			return line_kind::unsupported;
-		}
-	}
 	{
 		scriptlet_call rewritten;
 		QString said;
@@ -354,8 +366,9 @@ subscription_read read(const QString &text, int previous_rules,
 	for (const QString &line : lines) {
 		filter_rule r;
 		scriptlet_call call;
-		redirect_rule redirect;
-		switch (classify(line, &r, nullptr, &call, &redirect)) {
+		network_rule option;
+		QString cancels;
+		switch (classify(line, &r, nullptr, &call, &option, &cancels)) {
 			case line_kind::comment:
 				continue;   // not a candidate line; headers are not a gap
 			case line_kind::network:
@@ -394,10 +407,20 @@ subscription_read read(const QString &text, int previous_rules,
 					rep.calls.push_back(twin);
 				}
 				break;
-			case line_kind::redirect:
+			case line_kind::option:
 				++rep.lines;
-				++rep.redirects;
-				rep.redirect_list.push_back(redirect);
+				if (option.act == network_rule::action::redirect)
+					++rep.redirects;
+				else if (option.act == network_rule::action::allow)
+					++rep.exceptions;
+				else
+					++rep.option_blocks;
+				rep.option_rules.push_back(option);
+				break;
+			case line_kind::badfilter:
+				++rep.lines;
+				++rep.badfilters;
+				rep.cancelled << cancels;
 				break;
 			case line_kind::unsupported:
 				++rep.lines;
@@ -418,7 +441,7 @@ subscription_read read(const QString &text, int previous_rules,
 	// this build will run -- and `needs_trust` is deliberately not counted
 	// towards usability here, because saying "no rule this build can enforce"
 	// while the summary names the dropped ones is the honest pair.
-	if (rep.accepted == 0 && rep.scriptlets == 0) {
+	if (rep.accepted == 0 && rep.scriptlets == 0 && rep.option_rules.isEmpty()) {
 		rep.refusal = QString("no rule this build can enforce, out of %1 "
 		                       "candidate line(s).").arg(rep.lines);
 		return rep;

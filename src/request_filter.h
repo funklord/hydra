@@ -1,7 +1,7 @@
 #pragma once
 
 #include "filter_list.h"
-#include "redirect_rules.h"
+#include "network_rules.h"
 
 #include <QList>
 #include <QMutex>
@@ -22,7 +22,7 @@ struct request_decision {
 	bool block         = false;
 	bool strip_referer = false;
 	// A blocked request answered with this resource instead of refused
-	// (`redirect_rules.h`). Empty: refused, if `block`. A backend that cannot
+	// (`network_rules.h`). Empty: refused, if `block`. A backend that cannot
 	// answer a request with a body treats it as a plain block.
 	QString redirect;
 };
@@ -36,7 +36,7 @@ struct request_context {
 	QUrl          url;            // the full request URL
 	resource_kind kind = resource_kind::other;
 	// uBlock's type, where the backend can tell it; `unknown` matches any
-	// type option (`redirect_rules.h` says why).
+	// type option (`network_rules.h` says why).
 	unsigned      type = request_type::unknown;
 };
 
@@ -127,11 +127,13 @@ public:
 	// it ends when the window does.
 	void set_trial(const QString &site_host, const QList<filter_rule> &rules);
 
-	// **The subscribed lists' redirect rules**, which answer a request they
-	// would block with a harmless stand-in (`redirect_rules.h`). On the same
-	// terms as the lists: skipped for a site whose `ads` setting is allow.
-	void set_redirects(const QList<redirect_rule> &rules) { m_redirects.replace(rules); }
-	int redirect_count() const { return m_redirects.size(); }
+	// **The subscribed lists' rules with options** -- blocks narrowed by
+	// type, site or party, exceptions, and redirects (`network_rules.h`). On
+	// the same terms as the lists: skipped for a site whose `ads` setting is
+	// allow.
+	void set_network_rules(const QList<network_rule> &rules) { m_rules.replace(rules); }
+	int network_rule_count(network_rule::action a) const { return m_rules.count(a); }
+	int redirect_count() const { return m_rules.count(network_rule::action::redirect); }
 
 	request_decision decide(const request_context &ctx) const;
 
@@ -166,7 +168,7 @@ private:
 	policy_engine     *m_engine;
 	const filter_list *m_list = nullptr;
 	const filter_list *m_subscribed = nullptr;
-	redirect_set       m_redirects;
+	network_rule_set   m_rules;
 	mutable QMutex     m_trial_lock;
 	QString            m_trial_site;
 	filter_list        m_trial;

@@ -37937,6 +37937,60 @@ own privacy list's plain rule; the page plays and the wall is absent.
 `test_bundle` covers path, subdomain, a different host, a separator, a
 wildcard host, and `matches()` agreeing (136 passed).
 
+### Exceptions and rules with options are read now, and what that costs
+
+**15 thousand lines of the holder's lists carried options and were
+dropped** -- `$script`, `$third-party`, `$domain=` -- and **every `@@`
+exception with them**, about 4800, 1283 of them uBlock's Unbreak list,
+whose whole purpose is to repair what blockers break. So hydra enforced
+the blanket rules those exceptions soften and none of the softening:
+pages uBlock fixes stayed broken here. (Measured 2026-10-29.)
+
+`network_rules` (renamed from `redirect_rules`, which it grew out of) now
+carries three actions behind one reader of the options: **block** with
+options, **allow** (`@@`), and **redirect**. The reader knows types and
+`~type`, `domain=`/`from=`, first- and third-party, `important`,
+`match-case`, and `$document` on an exception (the page is exempt whole;
+as a block, which would refuse a page itself, it is refused). Anything
+else -- `$popup`, `$all`, `$removeparam`, `$csp`, `$denyallow` and the
+rest -- refuses the line, counted, since dropping an option widens a rule.
+**`$badfilter`** names a rule to cancel, usually in another list, and
+`main_window` applies the cancellations across every list before the rules
+reach the filter. `request_filter::decide` now: a `$document` exception
+exempts the page; a `redirect=` answers; and a block -- the ad-host list,
+the subscribed plain rules, a rule with options -- is lifted by an
+exception unless `$important`, and answered by a `redirect-rule=` where one
+names it. **The person's own accepted rules stay outside the exceptions**:
+a rule they chose is not one a list may overrule. A rule with no type
+spares fonts, as the plain rules always have.
+
+In force with the holder's lists: 5162 blocks with options, 2710
+exceptions, 899 redirects. YouTube plays, the wall is absent, and
+`ad_status.js` is still answered with the stand-in.
+
+**What it cost, and what was done about it.** `try_filter_cost` times
+`decide` with the person's lists and nothing else running. With the
+option rules first in it was 105 microseconds a request against 48 for the
+plain lists alone; `perf` said why, in order:
+
+- a case-insensitive `contains` for each candidate's literal pre-check --
+  now the address is lowercased once and searched case-sensitively, which
+  also halved the plain lists (48 to 22, their regex rules had the same
+  check);
+- a `QSet` deduplicating candidates, which dominated the first profile
+  and protected nothing (every question a candidate is asked answers the
+  same twice);
+- three passes over the candidates per request -- now one, `evaluate`;
+- 185 rules tried on every request for want of a token (`.com/ad/`),
+  now filed by the last three characters of their literal and looked up
+  by the address's trigrams as integers.
+
+Now 32 microseconds a request with everything, 22 without the rules with
+options. `test_subscription` covers the reader, `badfilter` across lists,
+exceptions lifting and not lifting (`important`, another site, another
+type, the person's own rule), `$document`, type, `~type`, party,
+site-filed, token-filed and trigram-filed rules (173 passed).
+
 ### On Android every page can see the bridge, and call it
 
 Looked at 2026-10-25 at the holder's word. Measured on the phone through

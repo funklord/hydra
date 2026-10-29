@@ -414,6 +414,27 @@ void filter_list::add(const filter_rule &r) {
 // pattern has to be a separator in the URL too: `*/track/*` keeps `track`.
 // A pattern that can offer nothing goes to `m_untokenised`, which is tested
 // for every request and is exactly what that list is for.
+QString filter_list::literal_of(const QString &pattern) {
+	QString p = pattern;
+	if (p.startsWith(QLatin1String("||")))
+		p = p.mid(2);
+	else if (p.startsWith(QLatin1Char('|')))
+		p = p.mid(1);
+	QString best, run;
+	for (const QChar c : p) {
+		if (c == QLatin1Char('*') || c == QLatin1Char('^') || c == QLatin1Char('|')) {
+			if (run.size() > best.size())
+				best = run;
+			run.clear();
+		} else {
+			run += c;
+		}
+	}
+	if (run.size() > best.size())
+		best = run;
+	return best.size() >= 3 ? best.toLower() : QString();
+}
+
 QString filter_list::token_of(const QString &pattern) {
 	QString best;
 	const int n = pattern.size();
@@ -482,6 +503,7 @@ void filter_list::index_one(int i) {
 	if (p.startsWith(QLatin1String("||")) && !host_only(p, host_end(p))) {
 		const int end = host_end(p);
 		c.rx = pattern_regex(p);
+		c.literal = literal_of(p);
 		const QString h = p.mid(2, end - 2).toLower();
 		// A wildcard right after a partial host -- `||animeflv.*/api/pop.php`
 		// -- has no host to index under, and is always tried.
@@ -572,6 +594,8 @@ bool filter_list::blocks(const QString &url, const QString &site_host) const {
 	// function used to get wrong: `matches()` built a `QUrl` for every
 	// host-anchored rule it tried.
 	const QString host = QUrl(url).host().toLower();
+	// For the literal checks: lowercased once, then searched case-sensitively.
+	const QString lower = url.toLower();
 
 	// Host-anchored: the URL's own host and each parent domain.
 	for (int at = 0; at >= 0 && at < host.size();
@@ -581,9 +605,13 @@ bool filter_list::blocks(const QString &url, const QString &site_host) const {
 			return true;
 		const auto paths = m_by_host_path.constFind(host.mid(at));
 		if (paths != m_by_host_path.cend())
-			for (int i : *paths)
-				if (m_compiled[i].rx.match(url).hasMatch())
+			for (int i : *paths) {
+				const compiled &c = m_compiled[i];
+				if (!c.literal.isEmpty() && !lower.contains(c.literal))
+					continue;
+				if (c.rx.match(url).hasMatch())
 					return true;
+			}
 		if (host.indexOf('.', at) < 0)
 			break;
 	}
@@ -609,9 +637,13 @@ bool filter_list::blocks(const QString &url, const QString &site_host) const {
 		return false;
 	};
 
-	for (int i : m_regex)
-		if (m_compiled[i].rx.match(url).hasMatch())
+	for (int i : m_regex) {
+		const compiled &c = m_compiled[i];
+		if (!c.literal.isEmpty() && !lower.contains(c.literal))
+			continue;
+		if (c.rx.match(url).hasMatch())
 			return true;
+	}
 	if (try_rules(m_untokenised))
 		return true;
 	for (const QString &tok : tokens_in(url)) {

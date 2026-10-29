@@ -1,7 +1,7 @@
 #pragma once
 
 #include "filter_list.h"
-#include "redirect_rules.h"
+#include "network_rules.h"
 #include "scriptlets.h"
 
 #include <QDateTime>
@@ -68,14 +68,20 @@ struct subscription_read {
 	// is the only one where turning trust on would change anything. The
 	// number is what the settings line needs in order to say so.
 	int needs_trust = 0;
-	// **Redirect rules, counted apart for the same reason**: a stand-in served
-	// for a request is neither a rule that blocks nor a patch
-	// (`redirect_rules.h`).
+	// **Rules with options, counted apart and by action** (`network_rules.h`):
+	// a stand-in served for a request, an exception that lifts a block, and a
+	// block narrowed by its options are three different facts.
 	int redirects   = 0;
+	int exceptions  = 0;
+	int option_blocks = 0;
+	int badfilters  = 0;
 	QString refusal;       // non-empty: the body was not a usable filter list
 	QList<filter_rule> rules;
 	QList<scriptlet_call> calls;
-	QList<redirect_rule> redirect_list;
+	QList<network_rule> option_rules;
+	// The rules this list cancels with `$badfilter`, usually in another list,
+	// so whoever assembles the lists applies them (`apply_badfilters`).
+	QStringList cancelled;
 
 	bool ok() const { return refusal.isEmpty(); }
 	// One line for the settings list and the log, naming all three numbers.
@@ -199,12 +205,13 @@ enum class line_kind {
 	network,       // a rule this build enforces
 	cosmetic,      // a scoped element-hiding rule with a usable selector
 	scriptlet,     // `##+js(name, ...)` naming a scriptlet in the catalog
-	redirect,      // `$redirect=` naming a resource in the catalog
+	option,        // a rule with options, an `@@` exception or a `$redirect=`
+	badfilter,     // `$badfilter`, cancelling the rule it repeats
 	unsupported,   // real syntax this build does not implement
 	unsafe,        // a cosmetic selector refused by why_selector_unsafe
 };
 line_kind classify(const QString &line, filter_rule *out = nullptr,
                     QString *why = nullptr, scriptlet_call *call = nullptr,
-                    redirect_rule *redirect = nullptr);
+                    network_rule *option = nullptr, QString *cancels = nullptr);
 
 }  // namespace filter_subscription

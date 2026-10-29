@@ -112,6 +112,19 @@ public:
 	// such a rule never matched at all.
 	static QRegularExpression pattern_regex(const QString &pattern);
 
+	// The token a pattern is filed under -- its longest run of letters and
+	// digits pinned on both sides, at least four long -- and the tokens of a
+	// URL to look up with. Shared with `network_rules`, which files the rules
+	// with options the same way.
+	static QString token_of(const QString &pattern);
+	// **The longest piece of a pattern that must appear in the URL as
+	// written**, lowercased: tested with a plain substring search before a
+	// pattern's regex is run, so most rules are dismissed without one. A
+	// decision cost 320 microseconds a request with the holder's lists
+	// before this (2026-10-29).
+	static QString literal_of(const QString &pattern);
+	static QStringList tokens_in(const QString &url);
+
 	// **Whether a cosmetic selector can be put in a stylesheet without being
 	// able to say anything else.**
 	//
@@ -174,6 +187,7 @@ private:
 		// For `host_path` (`||host/path^`, tried only when the host matches)
 		// and `regex` (`||name.*/path`, a wildcard in the host, always tried).
 		QRegularExpression rx;
+		QString            literal;   // `literal_of`, tested before `rx`
 	};
 	void reindex();
 	// **One rule, appended.** `add()` used to call `reindex()`, which rebuilt
@@ -181,8 +195,6 @@ private:
 	// produces, quadratic for a subscription. Measured: adding 25,000 rules
 	// that way took minutes; the benchmark that found it is in `test_bundle`.
 	void index_one(int i);
-	static QString token_of(const QString &pattern);
-	static QStringList tokens_in(const QString &url);
 
 	QList<compiled>            m_compiled;    // parallel to m_rules
 	QHash<QString, QList<int>> m_by_host;

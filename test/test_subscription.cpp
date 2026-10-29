@@ -13,7 +13,7 @@
 #include "filter_subscription.h"
 #include "filter_list.h"
 #include "policy_engine.h"
-#include "redirect_rules.h"
+#include "network_rules.h"
 #include "request_filter.h"
 #include "subscription_updater.h"
 #include "echo_server.h"
@@ -52,7 +52,8 @@ static QString kind_name(line_kind k) {
 		case line_kind::network:     return QStringLiteral("network");
 		case line_kind::cosmetic:    return QStringLiteral("cosmetic");
 		case line_kind::scriptlet:   return QStringLiteral("scriptlet");
-		case line_kind::redirect:    return QStringLiteral("redirect");
+		case line_kind::option:      return QStringLiteral("option");
+		case line_kind::badfilter:   return QStringLiteral("badfilter");
 		case line_kind::unsupported: return QStringLiteral("unsupported");
 		case line_kind::unsafe:      return QStringLiteral("unsafe");
 	}
@@ -80,13 +81,19 @@ int main(int argc, char **argv) {
 			   "a wildcard rule" },
 			{ "example.com##.ad-banner", line_kind::cosmetic,
 			   "a scoped element-hiding rule" },
+			// Exceptions and rules with options were unsupported until
+			// 2026-10-29; they are carried by `network_rules` now, and one
+			// with an option that reader does not know is still refused.
+			{ "@@||ads.example.com^", line_kind::option, "an exception rule" },
+			{ "||ads.example.com^$third-party", line_kind::option,
+			   "a rule carrying options" },
+			{ "||ads.example.com^$third-party,badfilter", line_kind::badfilter,
+			   "a badfilter" },
 			// A scriptlet naming the catalog is its own kind; the section
 			// below is about those. These are the ones this build reads and
 			// does not implement, each for its own reason.
-			{ "@@||ads.example.com^", line_kind::unsupported,
-			   "an exception rule" },
-			{ "||ads.example.com^$third-party", line_kind::unsupported,
-			   "a rule carrying options" },
+			{ "||ads.example.com^$popup", line_kind::unsupported,
+			   "a rule with an option this build does not read" },
 			{ "/^https?:\\/\\/ads\\./", line_kind::unsupported,
 			   "a regular-expression rule" },
 			{ "example.com##^script:has-text(ads)", line_kind::unsupported,
@@ -367,8 +374,10 @@ int main(int argc, char **argv) {
 		// claims an unimplemented name is the shape this tree calls right by
 		// coincidence, and what found it was sabotaging the gate and reading
 		// WHICH checks went red rather than that some did.
+		// The two exceptions that stood here became readable 2026-10-29;
+		// popups are not.
 		const subscription_read unread = filter_subscription::read(
-		  "@@||a.example^\n@@||b.example^\n"
+		  "||a.example^$popup\n||b.example^$popup\n"
 		  "example.com##+js(trusted-click-element, .accept)\n");
 		check(!unread.ok() && unread.refusal.contains("3 candidate"),
 		       QString("three lines, none enforceable (%1)")
@@ -419,8 +428,11 @@ int main(int argc, char **argv) {
 		check(rep.ok(), QString("the list is usable (%1)").arg(rep.summary()));
 		check(rep.accepted == 4,
 		       QString("four rules this build enforces (%1)").arg(rep.accepted));
-		check(rep.unsupported == 2,
-		       QString("two lines it cannot (%1)").arg(rep.unsupported));
+		// Two that it could not until 2026-10-29: the `$document` exception
+		// and the `$script` rule are carried as rules with options now.
+		check(rep.unsupported == 0 && rep.exceptions == 1 && rep.option_blocks == 1,
+		       QString("an exception and a rule with options, carried apart "
+		               "(%1 unsupported)").arg(rep.unsupported));
 		check(rep.scriptlets == 1,
 		       QString("and one scriptlet, which is neither (%1)")
 		           .arg(rep.scriptlets));
@@ -429,7 +441,8 @@ int main(int argc, char **argv) {
 		                "counted as a gap (%1)").arg(rep.lines));
 		check(rep.summary().contains("4 rule(s) in use") &&
 		          rep.summary().contains("1 scriptlet(s)") &&
-		          rep.summary().contains("2 line(s)"),
+		          rep.summary().contains("1 with options") &&
+		          rep.summary().contains("1 exception(s)"),
 		       QString("and the summary names all three numbers (%1)")
 		           .arg(rep.summary()));
 
@@ -1036,10 +1049,10 @@ int main(int argc, char **argv) {
 
 	section("a redirect rule is read, with its options");
 	{
-		redirect_rule r;
+		network_rule r;
 		QString why;
 		check(filter_subscription::classify(k_ad_status, nullptr, &why, nullptr, &r) ==
-		        line_kind::redirect,
+		        line_kind::option,
 		      QString("the list's line is a redirect (%1)").arg(why));
 		check(r.resource == "doubleclick_instream_ad_status.js" && r.priority == 5 &&
 		        r.host == "doubleclick.net" && !r.rule_only &&
@@ -1048,18 +1061,18 @@ int main(int argc, char **argv) {
 		          .arg(r.resource).arg(r.priority).arg(r.host).arg(r.types));
 		check(filter_subscription::classify(
 		        "||ads.example^$image,redirect-rule=1x1.gif,domain=a.example|~b.a.example",
-		        nullptr, nullptr, nullptr, &r) == line_kind::redirect &&
+		        nullptr, nullptr, nullptr, &r) == line_kind::option &&
 		        r.rule_only && r.resource == "1x1.gif" &&
 		        r.include == QStringList{ "a.example" } &&
 		        r.exclude == QStringList{ "b.a.example" },
 		      "redirect-rule= and its domains");
 		check(filter_subscription::classify("||x.example^$script,redirect=noopjs",
 		                                    nullptr, nullptr, nullptr, &r) ==
-		        line_kind::redirect && r.resource == "noop.js",
+		        line_kind::option && r.resource == "noop.js",
 		      "an alias resolves to the resource's own name");
 		check(filter_subscription::classify(
 		        "/instream/ad_status.js^$script,redirect=noopjs,domain=a.example",
-		        nullptr, nullptr, nullptr, &r) == line_kind::redirect,
+		        nullptr, nullptr, nullptr, &r) == line_kind::option,
 		      "a path pattern is a pattern, not a regex");
 		why.clear();
 		check(filter_subscription::classify("||x.example^$script,redirect=google-ima.js",
@@ -1074,7 +1087,7 @@ int main(int argc, char **argv) {
 		      QString("and so is an option this reader does not know (%1)").arg(why));
 		const subscription_read rep = filter_subscription::read(
 		  "! Title: t\n||ads.example^\n" + k_ad_status + "\n");
-		check(rep.redirects == 1 && rep.redirect_list.size() == 1 &&
+		check(rep.redirects == 1 && rep.option_rules.size() == 1 &&
 		        rep.summary().contains("1 answered with a stand-in"),
 		      QString("a list counts them apart and says so (%1)").arg(rep.summary()));
 		redirect_resources::resource res;
@@ -1096,14 +1109,14 @@ int main(int argc, char **argv) {
 		filter_list::parse_rule("||doubleclick.net^", &blanket);
 		subscribed.replace({ blanket });
 		filter.set_subscription_list(&subscribed);
-		QList<redirect_rule> rules;
-		redirect_rule r;
-		parse_redirect_rule(k_ad_status, &r, nullptr);
+		QList<network_rule> rules;
+		network_rule r;
+		parse_network_rule(k_ad_status, &r, nullptr);
 		rules << r;
-		parse_redirect_rule("||ads.example/pixel^$image,redirect-rule=1x1.gif,domain=site.example",
+		parse_network_rule("||ads.example/pixel^$image,redirect-rule=1x1.gif,domain=site.example",
 		                    &r, nullptr);
 		rules << r;
-		filter.set_redirects(rules);
+		filter.set_network_rules(rules);
 
 		const auto ask = [&](const QString &url, const QString &site, unsigned type) {
 			request_context ctx;
@@ -1143,6 +1156,129 @@ int main(int argc, char **argv) {
 		        "www.youtube.com", request_type::script);
 		check(!d.block && d.redirect.isEmpty(),
 		      "and a site whose ads are allowed gets the real file");
+	}
+
+	// --------------------------------------------- options and exceptions --
+	// **What the lists ask that only options can say.** 15 thousand lines of
+	// the holder's lists carried options and were dropped, and every `@@`
+	// exception with them -- uBlock's Unbreak list among them, whose 1283
+	// exceptions exist to repair what blockers break. Measured 2026-10-29.
+	section("rules with options and exceptions are read, and badfilter cancels");
+	{
+		network_rule r;
+		QString why, target;
+		check(parse_network_rule("@@||cdn.example^$script,domain=news.example", &r, &why) ==
+		        parsed::option && r.act == network_rule::action::allow &&
+		        r.types == request_type::script && r.include == QStringList{ "news.example" },
+		      QString("an exception with options (%1)").arg(why));
+		check(parse_network_rule("@@||example.org^", &r, &why) == parsed::option &&
+		        r.act == network_rule::action::allow,
+		      "and one with none, which nothing else carries");
+		check(parse_network_rule("@@||site.example^$document", &r, &why) == parsed::option &&
+		        r.document,
+		      "a $document exception exempts a page");
+		check(parse_network_rule("||site.example^$document", &r, &why) == parsed::refused,
+		      QString("while a $document block is refused (%1)").arg(why));
+		check(parse_network_rule("||ads.example^$script,~third-party,important", &r, &why) ==
+		        parsed::option && r.act == network_rule::action::block && r.party == 1 &&
+		        r.important,
+		      "a block with type, party and important");
+		check(parse_network_rule("||ads.example^$~xmlhttprequest", &r, &why) ==
+		        parsed::option && r.not_types == request_type::xhr,
+		      "a negated type");
+		check(parse_network_rule("||ads.example^$third-party,badfilter", &r, &why, &target) ==
+		        parsed::badfilter && target == "||ads.example^$third-party",
+		      QString("badfilter names the rule it cancels (%1)").arg(target));
+		check(parse_network_rule("||ads.example^$popup", &r, &why) == parsed::refused &&
+		        why.contains("popup"),
+		      QString("an unknown option is refused, named (%1)").arg(why));
+		check(parse_network_rule("||ads.example^", &r, &why) == parsed::none,
+		      "and a plain rule is the block list's");
+		const subscription_read rep = filter_subscription::read(
+		  "! Title: Unbreak\n@@||cdn.example^$script,domain=news.example\n"
+		  "@@||site.example^$document\n||x.example^$third-party,badfilter\n");
+		check(rep.ok() && rep.exceptions == 2 && rep.badfilters == 1 &&
+		        rep.cancelled == QStringList{ "||x.example^$third-party" },
+		      QString("a list of exceptions is usable, and counted (%1)").arg(rep.summary()));
+		QList<network_rule> list;
+		parse_network_rule("||x.example^$third-party", &r, nullptr);
+		list << r;
+		parse_network_rule("||y.example^$third-party", &r, nullptr);
+		list << r;
+		QStringList plain{ "||x.example^$third-party", "||z.example^" };
+		apply_badfilters(QSet<QString>{ "||x.example^$third-party" }, &list, &plain);
+		check(list.size() == 1 && list.first().pattern == "||y.example^" &&
+		        plain == QStringList{ "||z.example^" },
+		      "badfilter drops the rule it names, from both kinds of list");
+	}
+
+	section("an exception lifts a block, and important outranks it");
+	{
+		policy_engine policy;
+		request_filter filter(&policy);
+		filter_list subscribed, own;
+		filter_rule plain;
+		filter_list::parse_rule("||cdn.example^", &plain);
+		subscribed.replace({ plain });
+		filter.set_subscription_list(&subscribed);
+		filter_rule mine;
+		filter_list::parse_rule("||mine.example^", &mine);
+		own.add(mine);
+		filter.set_filter_list(&own);
+		QList<network_rule> rules;
+		network_rule r;
+		for (const char *line : {
+		       "@@||cdn.example^$script,domain=news.example",
+		       "@@||mine.example^",
+		       "@@||page.example^$document",
+		       "||tracker.example^$script,third-party",
+		       "||hard.example^$important",
+		       "@@||hard.example^",
+		       "||ads.example^$~image",
+		       "-advert-banner.$image,domain=shop.example",
+		       "pixel-tracker/$image",
+		       ".com/ad/$image" }) {
+			if (parse_network_rule(QString::fromLatin1(line), &r, nullptr) == parsed::option)
+				rules << r;
+		}
+		filter.set_network_rules(rules);
+		const auto ask = [&](const QString &url, const QString &site, unsigned type) {
+			request_context ctx;
+			ctx.url = QUrl(url);
+			ctx.request_host = ctx.url.host();
+			ctx.site_host = site;
+			ctx.kind = type == request_type::script ? resource_kind::script
+			         : type == request_type::image ? resource_kind::image
+			                                       : resource_kind::other;
+			ctx.type = type;
+			return filter.decide(ctx).block;
+		};
+		check(!ask("https://cdn.example/app.js", "news.example", request_type::script),
+		      "the exception lifts the list's block where it applies");
+		check(ask("https://cdn.example/app.js", "other.example", request_type::script) &&
+		        ask("https://cdn.example/a.png", "news.example", request_type::image),
+		      "and nowhere else -- not another site, not another type");
+		check(ask("https://mine.example/x", "news.example", request_type::script),
+		      "the person's own rule is not a list's to lift");
+		check(!ask("https://cdn.example/app.js", "page.example", request_type::script),
+		      "a $document exception exempts the whole page");
+		check(ask("https://tracker.example/t.js", "news.example", request_type::script) &&
+		        !ask("https://tracker.example/t.js", "tracker.example", request_type::script) &&
+		        !ask("https://tracker.example/t.png", "news.example", request_type::image),
+		      "a block with options keeps to its type and party");
+		check(ask("https://hard.example/x", "news.example", request_type::other),
+		      "an important block is not lifted");
+		check(ask("https://ads.example/x.js", "a.example", request_type::script) &&
+		        !ask("https://ads.example/x.png", "a.example", request_type::image),
+		      "a negated type spares what it names");
+		check(ask("https://img.shop.example/-advert-banner.gif", "shop.example", request_type::image) &&
+		        !ask("https://img.shop.example/-advert-banner.gif", "else.example", request_type::image),
+		      "a rule filed by its site applies only there");
+		check(ask("https://any.example/pixel-tracker/1.gif", "x.example", request_type::image),
+		      "and one with only a token still matches");
+		check(ask("https://cdn.shop.com/ad/1.gif", "x.example", request_type::image) &&
+		        !ask("https://cdn.shop.com/add/1.gif", "x.example", request_type::image),
+		      "and one with no token at all, filed by three characters");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

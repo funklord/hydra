@@ -83,60 +83,86 @@ request_decision request_filter::decide(const request_context &ctx) const {
 	if (!m_engine)
 		return d;
 
-	// **A redirect rule answers before anything refuses.** `redirect=` blocks
-	// and answers in one, so it outranks the blanket rules below -- which is
-	// what makes `ad_status.js` arrive as uBlock's stand-in rather than as a
-	// failure YouTube reads as an ad blocker (`redirect_rules.h`). A
-	// `redirect-rule=` answers only what something else blocks, so it is
-	// asked again at those points, through `refused`.
+	// **The subscribed lists, as uBlock reads them** (`network_rules.h`):
+	//
+	//  1. a `$document` exception exempts the page whole;
+	//  2. a `redirect=` rule answers before anything refuses -- which is what
+	//     makes `ad_status.js` arrive as uBlock's stand-in rather than as a
+	//     failure YouTube reads as an ad blocker;
+	//  3. a block -- the ad-host list, the subscribed plain rules, a rule with
+	//     options -- is lifted by an exception unless it is `$important`, and
+	//     answered by a `redirect-rule=` where one names it.
+	//
+	// The person's own list stays outside the exceptions: a rule they
+	// accepted on purpose is not one a list's exception may overrule.
 	const bool ads_here = m_engine->is_allowed(feature::ads, ctx.site_host);
-	QString url_text;
+	network_rule_set::request q;
+	q.host = ctx.request_host;
+	q.site = ctx.site_host;
+	q.type = ctx.type;
+	bool have_url = false;
 	const auto url = [&]() -> const QString & {
-		if (url_text.isEmpty())
-			url_text = ctx.url.toString();
-		return url_text;
-	};
-	if (!ads_here && m_redirects.size() > 0) {
-		const QString r = m_redirects.resource_for(url(), ctx.request_host,
-		                                           ctx.site_host, ctx.type, false);
-		if (!r.isEmpty()) {
-			d.block = true;
-			d.redirect = r;
-			return d;
+		if (!have_url) {
+			q.url = ctx.url.toString();
+			q.lower = q.url.toLower();
+			have_url = true;
 		}
-	}
-	// An ad request refused: answered by a `redirect-rule=` where one names it.
-	const auto refused = [&]() {
+		return q.url;
+	};
+	const bool rules = m_rules.size() > 0;
+	const bool blocking = !ads_here && !(rules && m_rules.site_allowed(ctx.site_host));
+	// What the rules with options say, asked once and only if needed.
+	network_rule_set::verdict v;
+	bool evaluated = false;
+	const auto verdict = [&]() -> const network_rule_set::verdict & {
+		if (!evaluated) {
+			url();
+			v = m_rules.evaluate(q);
+			evaluated = true;
+		}
+		return v;
+	};
+	if (blocking && rules && !verdict().redirect.isEmpty() && !verdict().allow) {
 		d.block = true;
-		if (m_redirects.size() > 0)
-			d.redirect = m_redirects.resource_for(url(), ctx.request_host,
-			                                      ctx.site_host, ctx.type, true);
+		d.redirect = verdict().redirect;
+		return d;
+	}
+	// A list's block: lifted by an exception unless `important`, and
+	// otherwise answered by a `redirect-rule=` where one names it.
+	const auto refused = [&](bool important) {
+		if (rules) {
+			if (!important && verdict().allow)
+				return d;
+			d.redirect = verdict().redirect_rule;
+		}
+		d.block = true;
 		return d;
 	};
 
 	// Ads / trackers: block known ad hosts unless this site permits ads.
-	if (is_ad_host(ctx.request_host) && !ads_here)
-		return refused();
+	if (blocking && is_ad_host(ctx.request_host))
+		return refused(false);
 
 	// The accepted filter rules, which are ads and annoyances by another name and
 	// so answer to the same per-site switch: turning ads back on for a site the
 	// shield says is broken has to turn *all* of this off, or the escape hatch
 	// only half works and the page still fails for a reason the user was told
 	// they had disabled.
-	// Fonts are spared the imported list: this engine does not read a rule's
-	// resource-type option, so a rule written for a tracker or a script applies
-	// to any font URL it matches by substring, and a blocked webfont shows a
+	// Fonts are spared the plain rules: a rule with no type option applies to
+	// any font URL it matches by substring, and a blocked webfont shows a
 	// page's icons as their ligature text. A font from a known ad host is still
-	// blocked above by is_ad_host, which is a domain decision this does not skip.
-	// **Both lists, under one gate.** The user's own and the subscribed one
-	// answer to the same per-site switch and the same font exemption, so the
-	// conditions are tested once and the url is stringified once rather than
-	// per list -- this runs on every request, and `blocks()` already takes a
-	// read lock of its own on each list it is asked.
-	if (ctx.kind != resource_kind::font && (m_list || m_subscribed) && !ads_here) {
-		if ((m_list && m_list->blocks(url(), ctx.site_host)) ||
-		    (m_subscribed && m_subscribed->blocks(url(), ctx.site_host)))
-			return refused();
+	// blocked above by is_ad_host, and a rule that names `font` still applies.
+	if (ctx.kind != resource_kind::font && m_list && !ads_here &&
+	    m_list->blocks(url(), ctx.site_host)) {
+		d.block = true;
+		return d;
+	}
+	if (blocking) {
+		if (ctx.kind != resource_kind::font && m_subscribed &&
+		    m_subscribed->blocks(url(), ctx.site_host))
+			return refused(false);
+		if (rules && verdict().block)
+			return refused(verdict().important);
 	}
 
 	// The investigation's trial rules, for its site only.

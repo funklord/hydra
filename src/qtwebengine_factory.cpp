@@ -5,7 +5,7 @@
 #include "qtwebengine_view.h"
 #include "request_filter.h"
 #include "qtwebengine_interceptor.h"
-#include "redirect_rules.h"
+#include "network_rules.h"
 
 #include <QtWebEngineCore/qtwebenginecoreglobal.h>
 #include <QVersionNumber>

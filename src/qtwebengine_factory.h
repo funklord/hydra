@@ -43,7 +43,7 @@ public:
 	static void register_url_schemes(const QStringList &schemes);
 
 	// **The scheme a refused request is answered from** when a redirect rule
-	// names a stand-in (`redirect_rules.h`): the interceptor can only send a
+	// names a stand-in (`network_rules.h`): the interceptor can only send a
 	// request somewhere else, never hand it a body, so it sends it here and
 	// this serves the resource. Registered before the engine starts, like the
 	// rest; until it is, a redirect is a plain block.

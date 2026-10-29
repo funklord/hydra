@@ -12,7 +12,7 @@
 #ifdef Q_OS_ANDROID
 
 #include "android_view.h"
-#include "redirect_rules.h"
+#include "network_rules.h"
 #include "request_filter.h"
 #include "permissions_shim.h"
 #include "scheme_rules.h"

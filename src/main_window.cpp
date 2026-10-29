@@ -6381,7 +6381,8 @@ int main_window::load_subscriptions() {
 	// half-filled list -- adding rule by rule would leave a window in which
 	// the page being loaded is matched against some of them.
 	QList<filter_rule> all;
-	QList<redirect_rule> redirects;
+	QList<network_rule> option_rules;
+	QSet<QString> cancelled;
 	m_scriptlets.clear();
 	int taken = 0;
 	for (const subscription &sub : m_sub_updater->subscriptions()) {
@@ -6419,7 +6420,9 @@ int main_window::load_subscriptions() {
 		// behind a number that says "rules".
 		for (const scriptlet_call &c : rep.calls)
 			m_scriptlets.push_back(c);
-		redirects += rep.redirect_list;
+		option_rules += rep.option_rules;
+		for (const QString &c : rep.cancelled)
+			cancelled.insert(c);
 		taken += rep.accepted;
 	}
 	// **The person's own list carries scriptlets too, and did not before.**
@@ -6458,9 +6461,17 @@ int main_window::load_subscriptions() {
 	// make the index say what this build read on this launch rather than what
 	// the last fetch produced, and the difference between those two is exactly
 	// what a reader needs when a build starts reading more of a list.
+	// **`$badfilter` across every list**, since the rule one cancels is
+	// usually in another: uBlock's own lists cancel EasyList's rules this way.
+	if (!cancelled.isEmpty()) {
+		for (int i = int(all.size()) - 1; i >= 0; --i)
+			if (cancelled.contains(all.at(i).text))
+				all.removeAt(i);
+		apply_badfilters(cancelled, &option_rules, nullptr);
+	}
 	m_subscribed->replace(all);
 	if (m_filter)
-		m_filter->set_redirects(redirects);
+		m_filter->set_network_rules(option_rules);
 	return taken;
 }
 
