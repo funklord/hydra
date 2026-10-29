@@ -26922,6 +26922,27 @@ them never was is a present-tense claim about an environment, quoted rather
 than re-derived. Recorded so the next session does not run `test_live_model`
 and conclude the suite is broken.
 
+## Every launch copied every finished download into Downloads again
+
+**`android_downloads` publishes a finished download into the shared Downloads
+folder, and it published each one again at every start.** Its record of jobs
+already handled lived for one session, while the download history brings back
+every finished job as finished -- so at each launch the whole history looked
+new, and MediaStore filed each copy beside the last as `name (1).ext`,
+`name (2).ext`. Found on the emulator 2026-10-29, after a session of runs: 17
+copies of one test file, the count growing with the file's age. A phone that
+has downloaded anything has the same pile, one more copy per launch.
+
+**A download is published only if this session saw it unfinished first.** A
+new one always is -- `enqueue` and `adopt` both report the job before it can
+finish -- and one restored from the history never is, since only finished
+jobs are restored. `tool/emulator_checks.py` counts the copies after
+restarting the app, and requires one.
+
+Copies already made on a phone are left alone: they are in the person's own
+Downloads, and which of them anybody has opened or moved is not this
+program's to guess.
+
 ## Android prints, and saves a page as a PDF
 
 **File > Print was greyed on Android**, with a comment saying the WebView

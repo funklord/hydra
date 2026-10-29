@@ -312,6 +312,14 @@ def main():
 			adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
 			    "-d", f"http://127.0.0.1:{port}/page", "-n", f"{APP}/.HydraActivity")
 			time.sleep(10)
+			# And the restart is a check of its own: a finished download comes
+			# back from the history at every start, and must not be copied into
+			# the shared folder again (it was, once per launch).
+			stem = files.name[:-len(".bin")]
+			copies = [n for n in adb("shell", "ls", "-1", "/sdcard/Download/").splitlines()
+			          if n.startswith(stem)]
+			check(len(copies) == 1,
+			      f"a restart did not publish the download again ({len(copies)} in Download)")
 			spool = "com.android.printspooler:id/"
 			ok = (tap("File") and tap("Print") and tap(spool + "destination_spinner") and
 			      tap("Save as PDF") and tap(spool + "print_button") and tap("SAVE"))

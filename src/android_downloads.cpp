@@ -39,9 +39,21 @@ android_downloads::android_downloads(download_manager *downloads, QObject *paren
 
 void android_downloads::poll() {
 	for (const download_job &j : m_downloads->jobs()) {
-		if (j.status != download_state::done || m_done.contains(j.id))
+		// **Only a download this session watched finish.** The handled set
+		// used to start empty each launch, and the download history brings
+		// back every finished job as finished -- so each one was published
+		// again at every start, and the shared Downloads folder gained a
+		// copy of everything ever downloaded per launch: 17 of one file on
+		// the emulator, 2026-10-29. A job is published only if it was seen
+		// unfinished first, which a new one always is -- enqueueing it is
+		// itself a `changed()` -- and a restored one never is.
+		if (j.status != download_state::done) {
+			if (!j.terminal())
+				m_running.insert(j.id);
 			continue;
-		m_done.insert(j.id);
+		}
+		if (!m_running.remove(j.id))
+			continue;
 		if (j.path.isEmpty() || !QFileInfo::exists(j.path))
 			continue;   // a job with no file of its own: nothing to publish
 

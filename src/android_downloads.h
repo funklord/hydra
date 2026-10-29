@@ -47,5 +47,5 @@ private:
 	void poll();
 
 	download_manager *m_downloads = nullptr;
-	QSet<int>         m_done;   // job ids already handled, success or not
+	QSet<int>         m_running;   // job ids this session has seen unfinished
 };
