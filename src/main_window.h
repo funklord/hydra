@@ -237,6 +237,9 @@ private slots:
 	void on_sort_mode_changed(int combo_index);
 	void on_search_changed(const QString &text);
 	void navigate_to_address();
+	// The address bar's suggestions for what has been typed so far, from the
+	// tree (`address_suggest.h`).
+	void refresh_suggestions(const QString &typed);
 	// Drop the caches this window keeps that no backend knows about. Called
 	// whenever browsing data is cleared, from the settings page or from
 	// kiosk mode's own forgetting.
@@ -718,6 +721,8 @@ public:
 	QStackedWidget  *m_stack = nullptr;
 
 	QLineEdit       *m_address  = nullptr;
+	class QCompleter         *m_completer   = nullptr;
+	class QStandardItemModel *m_suggestions = nullptr;
 	QComboBox       *m_sort_box = nullptr;
 	QString          m_view_path;   // view.ini, beside the tree and the policy
 	QLineEdit       *m_search   = nullptr;

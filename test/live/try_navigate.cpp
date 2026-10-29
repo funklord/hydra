@@ -24,6 +24,8 @@
 #include "web_view_backend.h"
 
 #include <QFile>
+#include <QAbstractItemView>
+#include <QCompleter>
 #include <QKeyEvent>
 #include <QSortFilterProxyModel>
 #include <QApplication>
@@ -403,6 +405,47 @@ int main(int argc, char *argv[]) {
 				       QString("at the level the page used (%1, error is 2)")
 				         .arg(worst));
 			}
+		}
+	}
+
+	// **The bar suggests from the tree while somebody types**, and choosing a
+	// suggestion goes there (`address_suggest.h`). Typed key by key, because
+	// setText is not an edit and the suggestions answer edits only.
+	section("typing offers the tree's pages, and choosing one goes there");
+	{
+		auto *completer = address->completer();
+		check(completer != nullptr, "the bar has a completer");
+		if (completer) {
+			address->setFocus();
+			address->selectAll();
+			for (const QChar c : QStringLiteral("tw")) {
+				QKeyEvent press(QEvent::KeyPress, 0, Qt::NoModifier, QString(c));
+				QApplication::sendEvent(address, &press);
+			}
+			spin(300);
+			QAbstractItemModel *m = completer->model();
+			QStringList offered;
+			for (int r = 0; m && r < m->rowCount(); ++r)
+				offered << m->index(r, 0).data(Qt::EditRole).toString();
+			check(completer->popup()->isVisible() && offered.size() == 1 &&
+			        offered.first() == QUrl::fromLocalFile(two).toString(),
+			      QString("\"tw\" offers the page titled Two (%1)").arg(offered.join(' ')));
+			if (!offered.isEmpty()) {
+				emit completer->activated(m->index(0, 0));
+				spin(1500);
+				web_view_backend *v = nullptr;
+				for (web_view_backend *x : w.findChildren<web_view_backend *>())
+					if (x->widget() && x->widget()->isVisible())
+						v = x;
+				check(v && v->url() == QUrl::fromLocalFile(two),
+				      QString("and choosing it goes there (%1)")
+				          .arg(v ? v->url().toString() : QStringLiteral("no view")));
+			}
+			address->clear();
+			QKeyEvent press(QEvent::KeyPress, 0, Qt::NoModifier, QStringLiteral("q"));
+			QApplication::sendEvent(address, &press);
+			spin(200);
+			check(!completer->popup()->isVisible(), "and nothing is offered for what matches nothing");
 		}
 	}
 

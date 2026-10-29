@@ -1,4 +1,8 @@
 #include "main_window.h"
+#include "address_suggest.h"
+#include <QAbstractItemView>
+#include <QStandardItemModel>
+#include <QCompleter>
 
 #include "auth_dialog.h"
 #include "permission_dialog.h"
@@ -988,6 +992,26 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	connect(go, &QAction::triggered, this, &main_window::navigate_to_address);
 #endif
 	connect(m_address, &QLineEdit::returnPressed, this, &main_window::navigate_to_address);
+	// **Suggestions while typing, from the tree** (`address_suggest.h`).
+	// Unfiltered, because the ranking is ours and a completer filtering by
+	// prefix would drop every title match. Shown as "title -- address";
+	// choosing one puts the address in the bar and goes there, as Return
+	// would. Only on an edit, so the bar following the page never opens it.
+	m_suggestions = new QStandardItemModel(this);
+	m_completer = new QCompleter(m_suggestions, this);
+	m_completer->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
+	m_completer->setCaseSensitivity(Qt::CaseInsensitive);
+	m_completer->setMaxVisibleItems(8);
+	m_address->setCompleter(m_completer);
+	connect(m_address, &QLineEdit::textEdited, this, &main_window::refresh_suggestions);
+	connect(m_completer, qOverload<const QModelIndex &>(&QCompleter::activated), this,
+	         [this](const QModelIndex &at) {
+		const QString url = at.data(Qt::EditRole).toString();
+		if (url.isEmpty())
+			return;
+		m_address->setText(url);
+		navigate_to_address();
+	});
 	// A floor, so that a narrow window overflows the buttons rather than
 	// crushing the field -- see `k_address_min` for the measurement.
 	m_address->setMinimumWidth(k_address_min);
@@ -6987,6 +7011,38 @@ void main_window::on_search_changed(const QString &text) {
 	// The page area's hint names the tree, so it has to be told when the tree
 	// stops showing one.
 	refresh_placeholder_text();
+}
+
+void main_window::refresh_suggestions(const QString &typed) {
+	if (!m_suggestions || !m_completer || !m_model)
+		return;
+	QList<address_suggest::page> pages;
+	std::function<void(const node *)> walk = [&](const node *n) {
+		if (!n)
+			return;
+		if (!n->is_folder() && !n->url.isEmpty())
+			pages << address_suggest::page{ n->title, n->url, n->last_seen };
+		for (const node *c : n->children)
+			walk(c);
+	};
+	walk(m_model->root());
+	const QList<address_suggest::suggestion> found = address_suggest::suggest(typed, pages);
+	m_suggestions->clear();
+	for (const address_suggest::suggestion &s : found) {
+		const QString where = address_suggest::bare(s.url);
+		auto *item = new QStandardItem(s.title.isEmpty() || s.title == where
+		                                 ? where
+		                                 : s.title + QStringLiteral(" \u2014 ") + where);
+		item->setData(s.url, Qt::EditRole);
+		item->setToolTip(s.url);
+		m_suggestions->appendRow(item);
+	}
+	if (found.isEmpty()) {
+		m_completer->popup()->hide();
+		return;
+	}
+	m_completer->setCompletionPrefix(typed);
+	m_completer->complete();
 }
 
 void main_window::navigate_to_address() {

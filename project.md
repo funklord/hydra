@@ -26873,6 +26873,32 @@ them never was is a present-tense claim about an environment, quoted rather
 than re-derived. Recorded so the next session does not run `test_live_model`
 and conclude the suite is broken.
 
+## The address bar suggests from the tree
+
+Listed as unbuilt in *What is next* since a 2026-09-18 session, with the
+note that its core could not be tested from here. The ranking can be, so it
+was built (2026-10-29), decided from the aims rather than parked:
+
+- **From the tree and nothing else.** The tree is the person's record of
+  where they go -- tabs, saved links, anything kept -- so it is what the bar
+  completes from. **No remote suggestions**: sending each keystroke to a
+  search engine is the privacy cost other browsers pay for this feature, and
+  the shield exists to not pay it.
+- **The ranking** (`address_suggest`, pure): an address that starts with what
+  was typed, scheme and `www.` aside; then a page whose title has a word
+  starting each typed word; then an address that merely contains it. Within
+  a rank, the most recently seen first; one address once; at most eight; an
+  empty tab's `about:blank` never.
+- **The bar**: a `QCompleter` in unfiltered-popup mode, refreshed on each
+  edit -- an edit only, so the bar following the page never opens it -- with
+  "title -- address" in the list; choosing one puts the address in the bar
+  and goes there, as Return would.
+
+`test_suggest` covers the ranking (11 passed); `try_navigate` types into the
+real bar key by key, sees the tree's page offered, chooses it and lands on it,
+and sees nothing offered for a non-match (50 passed). Not yet seen on the
+phone, where the completer's popup is a separate window over the WebView.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
@@ -27272,9 +27298,9 @@ carried along as amendments to a list item.
    said the details were here; they were not.
 
    - **Reader mode.** Large, and its core cannot be tested from here.
-   - **Address-bar autocomplete.** The same reason. (The `autocomplete` in
-     this file refers to the HTML attribute the form filler reads, not to
-     this feature.)
+   - ~~**Address-bar autocomplete.**~~ **Built 2026-10-29**, see
+     *The address bar suggests from the tree*. (The `autocomplete` elsewhere
+     in this file is the HTML attribute the form filler reads.)
    - **A long-press context menu on Android web pages.** It goes through the
      `android_view` JNI layer, so it should be built with a phone connected.
 

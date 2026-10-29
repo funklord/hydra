@@ -68,6 +68,7 @@ OBJSETS_SOURCES = \
 	test/test_state.cpp \
 	test/test_streamtype.cpp \
 	test/test_subscription.cpp \
+	test/test_suggest.cpp \
 	test/test_theme.cpp \
 	test/test_torrent.cpp \
 	test/test_tree.cpp \
@@ -564,6 +565,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_readings_dialog.o \
 	$(BUILD_DIR)/app/readings_dialog.o \
@@ -717,6 +719,9 @@ OBJS_test_subscription = \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/policy.o
 
+OBJS_test_suggest = \
+	$(BUILD_DIR)/app/address_suggest.o
+
 OBJS_test_theme = \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/app/theme.o \
@@ -836,6 +841,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -1012,6 +1018,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -1199,6 +1206,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -1351,6 +1359,7 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -1490,6 +1499,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -1647,6 +1657,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -1815,6 +1826,7 @@ OBJS_try_challenge = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -1999,6 +2011,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -2129,6 +2142,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -2293,6 +2307,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -2443,6 +2458,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -2603,6 +2619,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -2764,6 +2781,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -2915,6 +2933,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -3084,6 +3103,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -3228,6 +3248,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -3398,6 +3419,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -3575,6 +3597,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -3737,6 +3760,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -3869,6 +3893,7 @@ OBJS_try_fullscreen_keys = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -4026,6 +4051,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -4188,6 +4214,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -4341,6 +4368,7 @@ OBJS_try_investigate = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -4531,6 +4559,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -4698,6 +4727,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_readings_dialog.o \
 	$(BUILD_DIR)/app/readings_dialog.o \
@@ -4821,6 +4851,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -4975,6 +5006,7 @@ OBJS_try_media_lookup = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -5146,6 +5178,7 @@ OBJS_try_media_reading = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -5305,6 +5338,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -5482,6 +5516,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -5616,6 +5651,7 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -5798,6 +5834,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -5948,6 +5985,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -6152,6 +6190,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_readings_dialog.o \
 	$(BUILD_DIR)/app/readings_dialog.o \
@@ -6267,6 +6306,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -6419,6 +6459,7 @@ OBJS_try_scriptlet_cost = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -6578,6 +6619,7 @@ OBJS_try_scriptlets = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -6748,6 +6790,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -6963,6 +7006,7 @@ OBJS_try_share = \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -7104,6 +7148,7 @@ OBJS_try_store_view = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -7258,6 +7303,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -7438,6 +7484,7 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
 	$(BUILD_DIR)/app/site_extractor.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
@@ -7575,6 +7622,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -7732,6 +7780,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -7891,6 +7940,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -8043,6 +8093,7 @@ OBJS_try_youtube_wall = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
@@ -8201,6 +8252,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/address_suggest.o \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
