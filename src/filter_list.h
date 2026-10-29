@@ -151,6 +151,20 @@ public:
 	// unscoped kind this project declines to apply. The scriptlet runner
 	// applies the same test in the page, for the same rules.
 	static bool scope_matches(const QString &scope, const QString &host);
+	// One entry of a scope against a host: `example.com` matches it and its
+	// subdomains; **`example.*` is uBlock's entity**, matching the site under
+	// any public suffix -- `google.*` on google.com, google.co.uk and
+	// www.google.de. 1,381 scoped hiding and scriptlet lines and 329
+	// `domain=` options of the default lists use one, and applied nowhere
+	// while this compared them as literal hosts (2026-10-30). There is no
+	// public-suffix list here, so the suffix is the last label, or the last
+	// two where a two-letter country code follows a label of three letters
+	// or fewer (`co.uk`, `com.au`, `or.jp`). The same rule is written in the
+	// scriptlet bundle's JavaScript (`scriptlets.cpp`); change both.
+	static bool site_matches(const QString &entry, const QString &host);
+	// Every entity a host answers to, `www.google.*` and `google.*` for
+	// www.google.co.uk: the keys an index filed by scope entry looks up.
+	static QStringList entity_keys(const QString &host);
 
 private:
 	bool contains_locked(const QString &text) const;

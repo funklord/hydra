@@ -130,6 +130,51 @@ bool filter_list::matches(const QString &pattern, const QString &url) {
 	return !p.isEmpty() && url.contains(p);
 }
 
+namespace {
+
+// The host with its public suffix taken off, by the rule `site_matches`
+// states: one or two of them.
+QStringList stems_of(const QString &host) {
+	const QStringList labels = host.split(QLatin1Char('.'));
+	QStringList stems;
+	if (labels.size() >= 2)
+		stems << labels.mid(0, labels.size() - 1).join(QLatin1Char('.'));
+	if (labels.size() >= 3 && labels.last().size() == 2 &&
+	    labels.at(labels.size() - 2).size() <= 3)
+		stems << labels.mid(0, labels.size() - 2).join(QLatin1Char('.'));
+	return stems;
+}
+
+}  // namespace
+
+bool filter_list::site_matches(const QString &entry, const QString &host) {
+	if (entry.isEmpty() || host.isEmpty())
+		return false;
+	if (!entry.endsWith(QLatin1String(".*")))
+		return host == entry || host.endsWith(QLatin1Char('.') + entry);
+	const QString base = entry.chopped(2);
+	if (base.isEmpty())
+		return false;
+	for (const QString &stem : stems_of(host))
+		if (stem == base || stem.endsWith(QLatin1Char('.') + base))
+			return true;
+	return false;
+}
+
+QStringList filter_list::entity_keys(const QString &host) {
+	QStringList keys;
+	for (QString h : stems_of(host))
+		for (;;) {
+			if (!keys.contains(h + QLatin1String(".*")))
+				keys << h + QLatin1String(".*");
+			const int dot = h.indexOf(QLatin1Char('.'));
+			if (dot < 0)
+				break;
+			h = h.mid(dot + 1);
+		}
+	return keys;
+}
+
 bool filter_list::scope_matches(const QString &scope, const QString &host) {
 	if (scope.isEmpty() || host.isEmpty())
 		return false;
@@ -141,7 +186,7 @@ bool filter_list::scope_matches(const QString &scope, const QString &host) {
 			e = e.mid(1);
 		if (e.isEmpty())
 			continue;
-		const bool m = host == e || host.endsWith(QLatin1Char('.') + e);
+		const bool m = site_matches(e, host);
 		if (negated && m)
 			return false;
 		if (!negated && m)

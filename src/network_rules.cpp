@@ -85,7 +85,7 @@ quint64 gram(const QChar *p) {
 }
 
 bool site_in(const QString &host, const QString &site) {
-	return host == site || host.endsWith(QLatin1Char('.') + site);
+	return filter_list::site_matches(site, host);
 }
 
 }  // namespace
@@ -367,6 +367,13 @@ void network_rule_set::each_candidate(const request &r, F f) const {
 		return;
 	if (by_suffix(m_by_site, r.site.toLower()))
 		return;
+	// `domain=example.*` is filed under the entity, which no suffix of the
+	// site spells.
+	for (const QString &k : filter_list::entity_keys(r.site.toLower())) {
+		const auto it = m_by_site.constFind(k);
+		if (it != m_by_site.constEnd() && visit(it.value()))
+			return;
+	}
 	for (const QString &tok : filter_list::tokens_in(r.url)) {
 		const auto it = m_by_token.constFind(tok);
 		if (it != m_by_token.constEnd() && visit(it.value()))

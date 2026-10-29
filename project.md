@@ -38747,9 +38747,20 @@ each beside a twin it must leave alone; `test_subscription` holds the
 reading and `test_settings` the serving (scope, exceptions, `$elemhide`,
 the shield).
 
-**Not yet: uBlock's entity scopes**, `google.*` and `amazon.*`, which
-`filter_list::scope_matches` reads as a literal host -- so they apply
-nowhere. That gap is every scoped rule kind's, not this one's.
+**uBlock's entity scopes, `google.*` and `amazon.*`, were read as literal
+hosts and applied nowhere** -- 1,381 scoped hiding and scriptlet lines and
+329 `domain=` options of the default lists, measured 2026-10-30. Settled
+in `filter_list::site_matches`, which every scope and `domain=` test now
+goes through, with `entity_keys` for the two indexes filed by scope entry
+(the network rules' site index, the scriptlet bundle's host index) and the
+same rule in the bundle's JavaScript. **There is no public-suffix list
+here**, so the suffix is the last label, or the last two where a two-letter
+country code follows a label of three letters or fewer (`co.uk`,
+`com.au`). Its cost, chosen knowingly: `google.*` would also take
+`google.ab.xy` for any such pair, and misses a suffix like `blogspot.com`;
+a list of about 230 KB on Android was the alternative, and no rule seen
+needs one. `test_subscription` holds the matching and `domain=` through
+the index; `test_scriptlets` runs the generated script on entity hosts.
 
 ## uBlock's whole default set, and the includes its main list is made of
 

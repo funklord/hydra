@@ -1442,6 +1442,52 @@ int main(int argc, char **argv) {
 		        .arg(rep.accepted).arg(rep.unsupported));
 	}
 
+	section("an entity scope, site.*, matches the site under any suffix");
+	{
+		check(filter_list::site_matches("google.*", "google.com") &&
+		        filter_list::site_matches("google.*", "www.google.co.uk") &&
+		        filter_list::site_matches("google.*", "www.google.de") &&
+		        filter_list::site_matches("google.*", "google.com.au"),
+		      "google.* on .com, .co.uk, .de and .com.au");
+		check(!filter_list::site_matches("google.*", "google.evil.com") &&
+		        !filter_list::site_matches("google.*", "notgoogle.com") &&
+		        !filter_list::site_matches("google.*", "google"),
+		      "and not on another site that holds the word");
+		check(filter_list::site_matches("maps.google.*", "maps.google.de") &&
+		        !filter_list::site_matches("maps.google.*", "www.google.de"),
+		      "an entity with a subdomain names that subdomain only");
+		const QStringList keys = { "www.google.co.*", "google.co.*", "co.*",
+		                           "www.google.*", "google.*" };
+		check(filter_list::entity_keys("www.google.co.uk") == keys,
+		      "the keys a host answers to: " + filter_list::entity_keys("www.google.co.uk").join(" "));
+		check(filter_list::scope_matches("google.*,~maps.google.*", "www.google.de") &&
+		        !filter_list::scope_matches("google.*,~maps.google.*", "maps.google.de"),
+		      "in a scope list, with an excluded entity");
+
+		network_rule_set set;
+		network_rule r;
+		QList<network_rule> rules;
+		parse_network_rule("||ads.example^$domain=google.*", &r, nullptr);
+		rules << r;
+		parse_network_rule("/promo-tile.$domain=amazon.*|~amazon.co.jp", &r, nullptr);
+		rules << r;
+		set.replace(rules);
+		auto blocks = [&](const char *url, const char *site) {
+			network_rule_set::request q;
+			q.url = QString::fromLatin1(url);
+			q.lower = q.url.toLower();
+			q.host = QUrl(q.url).host();
+			q.site = QString::fromLatin1(site);
+			return set.blocks(q);
+		};
+		check(blocks("https://ads.example/x.js", "www.google.co.uk") &&
+		        !blocks("https://ads.example/x.js", "google.evil.com"),
+		      "domain=google.* is found through the site index, and only there");
+		check(blocks("https://cdn.example/promo-tile.png", "www.amazon.de") &&
+		        !blocks("https://cdn.example/promo-tile.png", "www.amazon.co.jp"),
+		      "and an entity rule with no host, with an excluded suffix");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

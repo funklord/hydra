@@ -3040,6 +3040,20 @@ QString source_for(const QList<scriptlet_call> &calls) {
 	                       "var keys=['*'],h=host;"
 	                       "while(h){keys.push(h);var d=h.indexOf('.');"
 	                       "if(d<0)break;h=h.slice(d+1);}"
+	                       // **And the entities it answers to**, `google.*`
+	                       // for www.google.co.uk: the suffix is the last
+	                       // label, or two where a two-letter country code
+	                       // follows a label of three or fewer -- the rule
+	                       // `filter_list::site_matches` states; change both.
+	                       "var stems=function(x){var p=x.split('.'),o=[];"
+	                       "if(p.length>=2)o.push(p.slice(0,-1).join('.'));"
+	                       "if(p.length>=3&&p[p.length-1].length===2&&"
+	                       "p[p.length-2].length<=3)o.push(p.slice(0,-2).join('.'));"
+	                       "return o;};"
+	                       "var st=stems(host);"
+	                       "for(var u=0;u<st.length;u++){h=st[u];"
+	                       "while(h){keys.push(h+'.*');var d2=h.indexOf('.');"
+	                       "if(d2<0)break;h=h.slice(d2+1);}}"
 	                       "var seen={},at=[];"
 	                       "for(var x=0;x<keys.length;x++){var ps=pick(keys[x]);"
 	                       "for(var y=0;y<ps.length;y++){if(!ps[y]||seen[ps[y]])continue;"
@@ -3069,7 +3083,11 @@ QString source_for(const QList<scriptlet_call> &calls) {
 	                       "var e=l[j].replace(/^\\s+|\\s+$/g,'');"
 	                       "var neg=e.charAt(0)==='~';if(neg)e=e.slice(1);"
 	                       "if(!e)continue;"
-	                       "var m=host===e||host.slice(-(e.length+1))==='.'+e;"
+	                       "var m=false;"
+	                       "if(e.slice(-2)==='.*'){var b=e.slice(0,-2);"
+	                       "for(var v=0;v<st.length&&!m;v++)"
+	                       "m=st[v]===b||st[v].slice(-(b.length+1))==='.'+b;}"
+	                       "else m=host===e||host.slice(-(e.length+1))==='.'+e;"
 	                       "if(neg&&m)return false;if(!neg&&m)hit=true;}"
 	                       "return hit;};"
 	                       // **What ran is reported, because a silent runner

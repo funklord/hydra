@@ -624,6 +624,16 @@ int main(int argc, char **argv) {
 		       "a ~host is excluded from a parent the list includes");
 		check(!runs_on("~x.test", "other.test"),
 		       "and a list of exclusions only runs nowhere");
+		// **An entity, `site.*`**: 1,142 scriptlet lines in the default
+		// lists are scoped so, and ran nowhere (2026-10-30).
+		check(runs_on("google.*", "www.google.co.uk") && runs_on("google.*", "google.de") &&
+		          runs_on("google.*", "google.com"),
+		       "an entity runs under any suffix");
+		check(!runs_on("google.*", "google.evil.com") && !runs_on("google.*", "notgoogle.com"),
+		       "and not on another site holding the word");
+		check(!runs_on("google.*,~maps.google.*", "maps.google.de") &&
+		          runs_on("google.*,~maps.google.*", "www.google.de"),
+		       "an excluded entity is excluded");
 	}
 
 	// **The runner says what it did**, which it did not: every outcome was
