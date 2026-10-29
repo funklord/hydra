@@ -2261,6 +2261,32 @@ There is one channel per page now, built by a bootstrap injected once beside
 Every script waits on that instead. The four live drivers report **zero** of
 those console errors afterwards, where before they appeared in nearly every run.
 
+### YouTube's consent dialog was never answered on a phone
+
+**On a fresh profile on the emulator (2026-10-29), m.youtube.com showed
+"Before you continue to YouTube" and it stayed**: the mobile site's consent
+dialog, which every first visit on a phone meets. Three faults, each found
+by taking the previous one away, and each needed:
+
+- **The box was a custom element.** The scan for pinned, consent-shaped
+  boxes looked at `div`, `section`, `aside` and `dialog`; YouTube pins
+  `ytm-consent-bump-v2-renderer`. Custom elements -- a hyphen in the tag --
+  are scanned now.
+- **The button's names were joined.** "Reject all" carries the aria-label
+  "Reject the use of cookies and other data for the purposes described", and
+  text and label together made one string over the 60-character limit that
+  no anchored pattern matched. Each name is tried on its own now.
+- **The first click landed before the button was wired**, and the fallback
+  that hides a box 400 ms after a click then made the page look answered
+  while YouTube recorded nothing -- no `SOCS` cookie, the dialog back on every
+  visit, hidden again each time. A click that leaves the box standing is
+  repeated, up to three times, before anything is hidden.
+
+Afterwards, on a cleared profile: the dialog gone, `SOCS` set, and after a
+reload no dialog served at all. `try_consent` carries the shape as a fixture
+-- a custom element with long aria-labels -- which fails with only the first
+fix and passes with all three (49 of 49).
+
 ## The element picker (§12.1, done)
 
 **Tools → Zap an Element…**  This is the half of filter-evolution signal

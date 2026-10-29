@@ -78,6 +78,21 @@ static const char *k_reject = R"HTML(
 </div>
 <script>wire('cc');</script>)HTML";
 
+// YouTube's mobile shape, measured on the emulator 2026-10-29: the pinned
+// overlay is a custom element (`ytm-consent-bump-v2-renderer`), not a div,
+// and a scan that looked only at div, section, aside and dialog never saw it,
+// so the dialog stayed up on every first visit. A custom element's tag name
+// always has a hyphen. And its buttons carry a long aria-label beside their
+// text, which joined to the text made a label no pattern matched.
+static const char *k_custom = R"HTML(
+<x-consent-bump id="cc" style="display:block;position:fixed;top:0;width:100%;height:300px;background:#eee">
+  <p>Before you continue. We use cookies and data to deliver our services.</p>
+  <button aria-label="Accept the use of cookies and other data for the purposes described">Accept all</button>
+  <button aria-label="Reject the use of cookies and other data for the purposes described">Reject all</button>
+  <a href="#">More options</a>
+</x-consent-bump>
+<script>wire('cc');</script>)HTML";
+
 // Accept is the only way out. Refusing to click it leaves the page unusable,
 // which is the thing the option exists to fix.
 static const char *k_accept_only = R"HTML(
@@ -198,6 +213,7 @@ public:
 				const char *inner = k_accept_only;
 				if (target.startsWith("/reject"))          inner = k_reject;
 				else if (target.startsWith("/decoy"))      inner = k_decoy;
+				else if (target.startsWith("/custom"))     inner = k_custom;
 				else if (target.startsWith("/scrolllock")) inner = k_scrolllock;
 				// **Before `/foreign`, because it is a prefix of this.**
 				// Placed after it first, and `/foreign-inner` was served the
@@ -370,6 +386,12 @@ int main(int argc, char *argv[]) {
 	check(clicked_on("/reject") == "Reject all",
 	      "the least permissive option is taken, not the first one in the DOM");
 	check(page_usable(), "and the banner is gone afterwards");
+
+	std::printf("\n== a banner that is a custom element ==\n");
+	load("/custom");
+	std::printf("  page clicked: %s\n", qPrintable(clicked_on("/custom")));
+	check(clicked_on("/custom") == "Reject all",
+	      "a banner that is a custom element, as YouTube's is, is answered too");
 
 	std::printf("\n== a banner whose only way out is accept ==\n");
 	load("/accept");

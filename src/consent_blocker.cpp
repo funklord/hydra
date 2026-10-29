@@ -65,6 +65,19 @@ const char *k_script = R"JS(
             (el.getAttribute('aria-label') || '') + ' ' +
             (el.value || '')).replace(/\s+/g, ' ').trim();
   };
+  // **Each of a button's names on its own**, as well as the three together.
+  // YouTube's reads "Reject all" and carries the aria-label "Reject the use
+  // of cookies and other data for the purposes described"; joined, they made
+  // a label too long to consider and one no anchored pattern matched.
+  var names_of = function (el) {
+    var out = [];
+    [el.textContent, el.getAttribute('aria-label'), el.value, label_of(el)]
+      .forEach(function (n) {
+        n = (n || '').replace(/\s+/g, ' ').trim();
+        if (n && n.length <= 60 && out.indexOf(n) < 0) out.push(n);
+      });
+    return out;
+  };
 
   // A banner is a thing pinned over the page that talks about cookies and
   // offers a way out. Deliberately shape-based rather than a list of vendor
@@ -77,9 +90,17 @@ const char *k_script = R"JS(
       var found = document.querySelectorAll(RULES.containers[i]);
       for (var j = 0; j < found.length; j++) out.push(found[j]);
     }
-    var all = document.body ? document.body.querySelectorAll('div, section, aside, dialog') : [];
+    // Custom elements too, whose tag always has a hyphen. YouTube's mobile
+    // consent dialog is pinned by `ytm-consent-bump-v2-renderer`, and a scan
+    // of div, section, aside and dialog alone never saw it -- the dialog
+    // stayed up on every first visit (measured on the emulator, 2026-10-29).
+    var all = document.body ? document.body.querySelectorAll('*') : [];
     for (var k = 0; k < all.length; k++) {
       var el = all[k];
+      var tag = el.tagName;
+      if (tag !== 'DIV' && tag !== 'SECTION' && tag !== 'ASIDE' && tag !== 'DIALOG' &&
+          tag.indexOf('-') < 0)
+        continue;
       var st = getComputedStyle(el);
       if (st.position !== 'fixed' && st.position !== 'sticky') continue;
       // Its own text, not its descendants' page content: a fixed sidebar
@@ -120,9 +141,10 @@ const char *k_script = R"JS(
       for (var t = 0; t < tiers.length; t++) {
         if (!tiers[t].re) continue;
         for (var i = 0; i < buttons.length; i++) {
-          var label = label_of(buttons[i]);
-          if (!label || label.length > 60) continue;
-          if (!tiers[t].re.test(label)) continue;
+          var names = names_of(buttons[i]), label = '';
+          for (var n = 0; n < names.length && !label; n++)
+            if (tiers[t].re.test(names[n])) label = names[n];
+          if (!label) continue;
           try { buttons[i].click(); } catch (e) { continue; }
           done = true;
           if (bridge) bridge.report_dismissed(label.slice(0, 60), tiers[t].as);
@@ -131,16 +153,28 @@ const char *k_script = R"JS(
               window.top.postMessage({ __hydra_consent_did:
                 { label: label.slice(0, 60), as: tiers[t].as } }, '*');
             } catch (e) {}
-          // Only what the click left behind. A banner that answered properly
-          // usually removes itself; what it does not always undo is the scroll
-          // lock, which is what makes the page unreadable.
-          setTimeout(function () {
+          // **A click that did not take is clicked again, before anything is
+          // hidden.** A banner is often drawn before its buttons are wired:
+          // YouTube's took the first click and did nothing, and hiding the
+          // box 400 ms later then made the page look answered while the site
+          // never recorded a choice, so the dialog came back on every visit.
+          // Up to three clicks, then the box and any scroll lock it left are
+          // put away as a last resort -- the page has to be usable either way.
+          var button = buttons[i], clicks = 1;
+          var settle = function () {
+            if (visible(box) && clicks < 3) {
+              clicks++;
+              try { button.click(); } catch (e) {}
+              setTimeout(settle, 700);
+              return;
+            }
             if (visible(box)) box.style.setProperty('display', 'none', 'important');
             [document.documentElement, document.body].forEach(function (n) {
               if (n && getComputedStyle(n).overflow === 'hidden')
                 n.style.setProperty('overflow', 'auto', 'important');
             });
-          }, 400);
+          };
+          setTimeout(settle, 700);
           return true;
         }
       }
