@@ -26974,6 +26974,43 @@ is all supposed to vanish; `test_rotation` the window's toggle -- on, off,
 and off by itself on the load after its own. The Android half is in
 `tool/emulator_checks.py`.
 
+## Open: after a menu closes, the browser's controls leave the accessibility tree
+
+**Found on the emulator 2026-10-29, by a check that could no longer find
+the address bar.** Open any menu from the menu bar and close it -- by
+choosing an item (View > Expand All) or with Escape -- and the window's own
+controls disappear from Android's accessibility tree: File, View, Go,
+Tools, the address bar, every toolbar button. While the menu is open they
+are there; after it closes `uiautomator` sees only the page. A tap on the
+page does not bring them back; sending the app to the background and back
+does.
+
+**Who is in it**: everybody using an accessibility service, TalkBack first,
+which reads that same tree. For them the browser's controls vanish after the
+first menu they open. The trigger is narrow and the people it reaches are
+the ones who most need the controls: a narrow trigger, a total barrier.
+
+What is established, so it is not re-derived:
+
+- **Not the page being moved aside.** Opening and closing the drawer hides
+  and shows the WebView exactly as a menu does, through `set_obscured`, and
+  the controls stay in the tree throughout.
+- **Not reader mode**, where it was first seen: a menu alone does it.
+- **The drawer button has no accessible name** (it reads as an empty
+  button), a smaller fault of the same kind found on the way.
+- **Releasing a closed dialog's platform window** produced the same
+  symptom, for dialogs, in the experiment recorded under *Coming back after
+  a dialog kills the app -- on the emulator only*, and handing activation
+  back did not restore the tree. So the likely place is how Qt's Android
+  accessibility bridge follows top-level windows coming and going -- a
+  hypothesis, not a finding.
+
+Not established: whether it predates this week (nothing changed tonight
+touches menus, which suggests it does), and whether the Fold3 with TalkBack
+on shows it -- that last is the phone's question, and the decisive one.
+`tool/emulator_checks.py` works around it by restarting the app before
+looking for the address bar.
+
 ## Every launch copied every finished download into Downloads again
 
 **`android_downloads` publishes a finished download into the shared Downloads
@@ -27145,8 +27182,27 @@ was built (2026-10-29), decided from the aims rather than parked:
 
 `test_suggest` covers the ranking (11 passed); `try_navigate` types into the
 real bar key by key, sees the tree's page offered, chooses it and lands on it,
-and sees nothing offered for a non-match (50 passed). Not yet seen on the
-phone, where the completer's popup is a separate window over the WebView.
+and sees nothing offered for a non-match (50 passed).
+
+**On the phone the popup killed the app on the first letter typed**, which
+the line that stood here had flagged as unseen -- the completer's popup is a
+separate window. Opening a window from inside the keyboard's input event
+needs a new surface from Android's UI thread, and that thread is blocked
+waiting on Qt's for the keyboard; Qt aborts rather than deadlock: "Failed to
+acquire deadlock protector for QAndroidPlatformOpenGLWindow::eglSurface()"
+(Fold3, 2026-10-29, reported as "hydra crashes on mobile when I try to enter
+a URL"). **So on Android the suggestions are a list inside the window**,
+under the toolbar, with the page moved aside while it shows (`set_obscured`,
+as the drawer does) -- no surface is made, and nothing waits on the UI
+thread. The list takes no focus, so a tap on a suggestion does not close it
+by taking focus from the bar first. The desktop keeps the completer.
+
+**The general rule this is an instance of**: on Android, do not open a new
+top-level window from inside a keyboard event. Confirmed fixed on the Fold3
+by the holder. `tool/emulator_checks.py` types into the bar and requires the
+list and a live app -- with the caveat that `adb shell input text` sends key
+events rather than going through the keyboard, so it shows the list works
+and may not reproduce the crash itself; the phone was the test of that.
 
 ## What is next (in order)
 

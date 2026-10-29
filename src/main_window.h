@@ -733,6 +733,11 @@ public:
 	QLineEdit       *m_address  = nullptr;
 	class QCompleter         *m_completer   = nullptr;
 	class QStandardItemModel *m_suggestions = nullptr;
+	// Android's suggestions: a list inside the window rather than the
+	// completer's popup, which is a window of its own (see
+	// `refresh_suggestions`). Null on the desktop.
+	class QListWidget        *m_suggest_list = nullptr;
+	void show_suggest_list(bool on);
 	QComboBox       *m_sort_box = nullptr;
 	QString          m_view_path;   // view.ini, beside the tree and the policy
 	QLineEdit       *m_search   = nullptr;

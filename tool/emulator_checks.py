@@ -30,7 +30,12 @@
 #      without the listener passed a check that only read the server);
 #   6. File > Print reaches the system's print dialog, Save as PDF writes a
 #      PDF, and the window hears that it finished;
-#   7. View > Reader View shows an article without the page around it.
+#   7. View > Reader View shows an article without the page around it;
+#   8. typing in the address bar offers the tree's pages in a list inside the
+#      window, and the app survives it. `input text` sends key events, not
+#      the keyboard's own input, so this may not reproduce the crash a popup
+#      window caused there (project.md, "The address bar suggests from the
+#      tree"); the phone was the test of that.
 #
 # What makes it stop: every adb call has a timeout, every wait is bounded,
 # and the emulator -- started in its own session -- is killed in `finally`,
@@ -360,6 +365,24 @@ def main():
 			      "the article in reader mode, with its reading time")
 			check("MOST READ LIST" not in adb("shell", "cat", "/sdcard/ui.xml"),
 			      "and without the page's sidebar")
+
+			print("\n== typing in the address bar offers the tree's pages ==")
+			# From a fresh process: after any menu has closed, the browser's own
+			# controls leave the accessibility tree, so the bar cannot be found
+			# by name (project.md, "Open: after a menu closes, the browser's
+			# controls leave the accessibility tree").
+			adb("shell", "am", "force-stop", APP)
+			adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
+			    "-d", f"http://127.0.0.1:{port}/article", "-n", f"{APP}/.HydraActivity")
+			time.sleep(10)
+			ok = tap("Address", limit=10)
+			adb("shell", "input", "text", "127.0.0")
+			time.sleep(3)
+			adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+			shown = adb("shell", "cat", "/sdcard/ui.xml")
+			check(ok and "127.0.0.1" in shown and "Suggestions" in shown,
+			      "the suggestions list, inside the window")
+			check(adb("shell", "pidof", APP).strip() != "", "and the app is still running")
 		finally:
 			adb("reverse", "--remove", f"tcp:{port}")
 			# The AVD keeps its data between runs, so what this run wrote

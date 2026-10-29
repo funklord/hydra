@@ -3,6 +3,7 @@
 #include <QAbstractItemView>
 #include <QStandardItemModel>
 #include <QCompleter>
+#include <QListWidget>
 
 #include "auth_dialog.h"
 #include "permission_dialog.h"
@@ -1010,7 +1011,32 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_completer->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
 	m_completer->setCaseSensitivity(Qt::CaseInsensitive);
 	m_completer->setMaxVisibleItems(8);
+#ifdef Q_OS_ANDROID
+	// **Not the completer's popup on Android: it killed the app on the first
+	// letter typed.** The popup is a window of its own, and opening one from
+	// inside the keyboard's input event needs a new surface from Android's UI
+	// thread -- which is blocked waiting on this one for the keyboard. Qt
+	// aborts rather than deadlock: "Failed to acquire deadlock protector for
+	// QAndroidPlatformOpenGLWindow::eglSurface()", on the Fold3, 2026-10-29.
+	// A list inside the window needs no surface. It takes no focus, so a tap
+	// on a suggestion does not first close it by taking focus from the bar.
+	m_suggest_list = new QListWidget(this);
+	m_suggest_list->setObjectName("address_suggestions");
+	m_suggest_list->setFocusPolicy(Qt::NoFocus);
+	m_suggest_list->setAccessibleName("Suggestions");
+	m_suggest_list->hide();
+	connect(m_suggest_list, &QListWidget::itemClicked, this, [this](QListWidgetItem *it) {
+		const QString url = it ? it->data(Qt::UserRole).toString() : QString();
+		show_suggest_list(false);
+		if (url.isEmpty())
+			return;
+		m_address->setText(url);
+		navigate_to_address();
+	});
+	connect(m_address, &QLineEdit::editingFinished, this, [this] { show_suggest_list(false); });
+#else
 	m_address->setCompleter(m_completer);
+#endif
 	connect(m_address, &QLineEdit::textEdited, this, &main_window::refresh_suggestions);
 	connect(m_completer, qOverload<const QModelIndex &>(&QCompleter::activated), this,
 	         [this](const QModelIndex &at) {
@@ -4266,7 +4292,7 @@ void main_window::set_drawer_open(bool open, bool animate) {
 	if (!open) {
 		connect(m_drawer_anim, &QPropertyAnimation::finished, this, [this] {
 			web_view_backend *v = m_drawer_open ? nullptr : current_view();
-			if (v)
+			if (v && !(m_suggest_list && m_suggest_list->isVisible()))
 				v->set_obscured(false);
 			// Guarded the same way, so a drawer reopened mid-slide is not
 			// disabled by the animation it interrupted.
@@ -5766,6 +5792,7 @@ void main_window::show_link_target(const QUrl &url) {
 void main_window::page_changed() {
 	if (!m_stack)
 		return;              // still being built; nothing to say yet
+	show_suggest_list(false);
 	set_loading(false);
 	if (m_progress) {
 		m_progress->hide();
@@ -7145,12 +7172,52 @@ void main_window::refresh_suggestions(const QString &typed) {
 		item->setToolTip(s.url);
 		m_suggestions->appendRow(item);
 	}
+	if (m_suggest_list) {
+		m_suggest_list->clear();
+		for (const address_suggest::suggestion &s : found) {
+			const QString where = address_suggest::bare(s.url);
+			auto *it = new QListWidgetItem(s.title.isEmpty() || s.title == where
+			                                 ? where
+			                                 : s.title + QStringLiteral(" \u2014 ") + where);
+			it->setData(Qt::UserRole, s.url);
+			m_suggest_list->addItem(it);
+		}
+		show_suggest_list(!found.isEmpty());
+		return;
+	}
 	if (found.isEmpty()) {
 		m_completer->popup()->hide();
 		return;
 	}
 	m_completer->setCompletionPrefix(typed);
 	m_completer->complete();
+}
+
+// Under the toolbar, the window's width, as tall as its rows. The page is
+// moved aside while it shows, since on Android the page is drawn over
+// everything Qt paints; it comes back unless the drawer still covers it.
+void main_window::show_suggest_list(bool on) {
+	if (!m_suggest_list)
+		return;
+	web_view_backend *v = current_view();
+	if (!on) {
+		if (!m_suggest_list->isVisible())
+			return;
+		m_suggest_list->hide();
+		if (v && !(m_drawer_mode && m_drawer_open))
+			v->set_obscured(false);
+		return;
+	}
+	const QPoint below = m_address->mapTo(this, QPoint(0, m_address->height()));
+	const int rows = qMin(m_suggest_list->count(), 8);
+	const int row = qMax(m_suggest_list->sizeHintForRow(0), fontMetrics().height() * 2);
+	m_suggest_list->setGeometry(0, below.y() + 2, width(),
+	                            qMin(rows * row + 2 * m_suggest_list->frameWidth(),
+	                                 height() - below.y() - 2));
+	m_suggest_list->raise();
+	m_suggest_list->show();
+	if (v)
+		v->set_obscured(true);
 }
 
 void main_window::navigate_to_address() {
