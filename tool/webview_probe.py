@@ -97,8 +97,11 @@ async def main():
 		shown = lambda p: json.loads(p.get("description") or "{}").get("visible", False)
 		tube = [p for p in pages if p.get("type") == "page" and "youtube.com" in p.get("url", "")]
 		page = next((p for p in tube if shown(p)), tube[0] if tube else None)
+		# An expression is a question about the page in front, whatever it is.
+		if EXPRESSION:
+			page = next((p for p in pages if p.get("type") == "page" and shown(p)), page)
 		if not page:
-			print("no youtube page open:", [p.get("url") for p in pages])
+			print("no page to ask:", [p.get("url") for p in pages])
 			return 1
 		async with websockets.connect(page["webSocketDebuggerUrl"], max_size=None) as ws:
 			await ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate",

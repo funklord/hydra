@@ -93,6 +93,27 @@ static const char k_index[] = R"HTML(<!doctype html>
 <form><input name="q"><button>Search</button></form>
 </body></html>)HTML";
 
+// Mobile Wikipedia's shape, as measured on the emulator: plain <section>s
+// under one container, each holding its heading and a collapsible div with
+// its paragraphs, folded away until tapped -- and a hidden promotion that is
+// not part of the article at all.
+static const char k_folded[] = R"HTML(<!doctype html>
+<html lang="en"><head><title>Sweden - Wikipedia</title>
+<meta property="og:site_name" content="Wikipedia">
+<style>.collapsible-block{display:none}.promo-panel{display:none}</style></head><body>
+<div id="content"><div class="mw-parser-output">
+<section><p>Sweden is a country in Northern Europe, on the Scandinavian Peninsula, with a long coastline.</p></section>
+<section><div class="mw-heading"><h2>History</h2></div>
+<div class="mf-collapsible-content collapsible-block"><p>FOLDED-HISTORY The area that is now Sweden was settled after the last ice age, as the ice sheet retreated northwards, and farming reached the south of the country around six thousand years ago, with settlements along the coasts and lakes.</p>
+<p>In the Viking Age, Swedes travelled east across the Baltic and down the rivers of what is now Russia and Ukraine, trading furs, silver and slaves as far as Constantinople and Baghdad, and founding settlements along the way, which later histories would remember in sagas.</p></div></section>
+<section><div class="mw-heading"><h2>Geography</h2></div>
+<div class="mf-collapsible-content collapsible-block"><p>FOLDED-GEOGRAPHY Sweden lies west of the Baltic Sea and the Gulf of Bothnia, and has a long coastline, many lakes, and large forests that cover more than half of its land, with mountains along the border with Norway in the north-west.</p></div></section>
+<section><div class="mw-heading"><h2>Economy</h2></div>
+<div class="mf-collapsible-content collapsible-block"><p>FOLDED-ECONOMY The economy is export-led, built on timber, iron ore and hydropower, and later on engineering, telecommunications and pharmaceuticals, with a large public sector and a tradition of agreements between unions and employers.</p></div></section>
+</div></div>
+<div class="promo-panel">HIDDEN-PROMO Download our app for a better reading experience, with offline articles, saved pages, dark mode, notifications and a great many other features that nobody asked for at all, ever, anywhere, and this goes on long enough to outscore a short lead paragraph if it were allowed to vote.</div>
+</body></html>)HTML";
+
 // Right to left, and named in its own language.
 static const char k_rtl[] = R"HTML(<!doctype html>
 <html lang="ar" dir="rtl"><head><title>RTL</title></head><body><main>
@@ -251,6 +272,21 @@ int main(int argc, char *argv[]) {
 		const bool ok = extract(view, k_index, QUrl("https://portal.example/"), &a, &why);
 		check(!ok && why == "No article was found on this page.",
 		      "a page of links is refused, with the reason: " + why);
+	}
+
+	section("a page that folds its sections away");
+	{
+		reader_extract::article a;
+		QString why;
+		const bool ok = extract(view, k_folded, QUrl("https://en.m.wikipedia.org/wiki/Sweden"), &a, &why);
+		check(ok, QString("an article was found (%1)").arg(ok ? "yes" : why));
+		check(a.html.contains("Northern Europe") && a.html.contains("FOLDED-HISTORY") &&
+		        a.html.contains("FOLDED-GEOGRAPHY") && a.html.contains("FOLDED-ECONOMY"),
+		      "the lead and every folded section");
+		check(!a.html.contains("HIDDEN-PROMO"), "and not the hidden promotion");
+		check(a.html.contains("<h2>History</h2>") && a.html.contains("<h2>Geography</h2>"),
+		      "with the headings that sit between the folds");
+		check(a.title == "Sweden", "titled without the site's name: " + a.title);
 	}
 
 	section("right to left");

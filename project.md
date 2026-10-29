@@ -26968,6 +26968,32 @@ to last; an index page is refused with "No article was found on this page."
 The infobox at the top of a Wikipedia article is kept, as Firefox's reader
 keeps it, and "Further reading" and "External links" with it.
 
+**And the phone taught it a third**: Reader View said "No article was found
+on this page" on Wikipedia on the Fold3 (holder, 2026-10-29), where the
+desktop had read the same article whole. The phone gets the mobile site,
+measured on the emulator: plain `<section>`s under one container, each
+holding its heading and a collapsible div of paragraphs, folded away until
+tapped. Three things were wrong, and all three are fixed:
+
+- **Hidden text voted.** A folded section could score best, the walk then
+  skipped it as hidden, and the article came out empty -- the message the
+  phone showed. Now a container whose class names a fold (collapsible,
+  accordion, expand) counts as visible, and any other hidden paragraph does
+  not score at all.
+- **Only the best section and its high-scoring siblings were kept**, so
+  Sweden came out at 3,103 words of about 16,000. An article cut into a
+  series -- the chosen block has two or more siblings of its own tag with
+  real text -- is now the whole series, with the headings between.
+- **The series was looked for at the wrong level**, because the best block
+  was the fold inside a section rather than the section. A fold now steps up
+  to its section first.
+
+Measured on the emulator afterwards: Sweden 16,405 words and 11 headings,
+Swedish "Bröd" 5,884, "Bread" unchanged at 4,454. `try_reader` carries the
+real structure as a fixture, which the extractor before the fix fails with
+the phone's exact message. `tool/webview_probe.py` gained the means to ask
+any page, not only YouTube, which is how the structure was read.
+
 **Tested in three places**: `test_reader` holds the parsing and the document
 (escaping, a "%5" in a title, the policy, light and dark, right to left);
 `try_reader` the extractor in a real engine, against fixtures whose chrome

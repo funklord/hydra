@@ -33,7 +33,13 @@ const char *k_source = R"JS(
   }
   function text(n) { return (n.textContent || '').replace(/\s+/g, ' ').trim(); }
   function label(n) { return (n.className && n.className.baseVal === undefined ? n.className : '') + ' ' + (n.id || ''); }
+  // Content a page folds away for a small screen is still the article:
+  // mobile Wikipedia hides every section after the lead until it is tapped,
+  // and a reader is exactly what should open them.
+  var FOLD = /collaps|accordion|expand|toggle-content|mf-section/i;
+  function folded(n) { return FOLD.test(label(n)); }
   function hidden(n) {
+    if (folded(n)) return false;
     if (n.hidden || n.getAttribute('aria-hidden') === 'true') return true;
     var s = window.getComputedStyle(n);
     return s.display === 'none' || s.visibility === 'hidden';
@@ -102,10 +108,16 @@ const char *k_source = R"JS(
     var p = paras[i];
     var t = text(p);
     if (t.length < 25) continue;
-    var skip = false;
-    for (var a = p; a && a !== body; a = a.parentElement)
+    // Hidden text does not vote, or a hidden block could win and leave an
+    // empty article -- which is what a folded section did, until folds
+    // counted as visible. `offsetParent` is null for anything not rendered;
+    // a fold on the way up excuses it.
+    var skip = false, in_fold = false;
+    for (var a = p; a && a !== body; a = a.parentElement) {
       if (chrome(a)) { skip = true; break; }
-    if (skip) continue;
+      if (folded(a)) in_fold = true;
+    }
+    if (skip || (p.offsetParent === null && !in_fold)) continue;
     var gain = 1 + t.split(/[,\uFF0C\u3001]/).length - 1 + Math.min(Math.floor(t.length / 100), 3);
     var up = p.parentElement, level = 0;
     while (up && up !== document.documentElement && level < 3) {
@@ -125,13 +137,33 @@ const char *k_source = R"JS(
 
   // The best container, and siblings that score or read like its paragraphs.
   var parts = [];
-  var parent = best.parentElement || body;
+  // A fold is the inside of a section, not a unit of its own: mobile
+  // Wikipedia puts each section's paragraphs in a collapsible div under the
+  // <section> that carries its heading. The series is looked for one level
+  // up from such a fold.
+  var unit = best;
+  if (folded(best) && best.parentElement && best.parentElement !== body)
+    unit = best.parentElement;
+  var parent = unit.parentElement || body;
   var floor = Math.max(10, best_score * 0.2);
+  // **An article cut into a series of sections is the whole series.** Each
+  // section scores alone, so the best one won and the shorter ones fell
+  // below the sibling floor: mobile Wikipedia's Sweden -- thirteen plain
+  // <section>s under one parent -- came out a third long. When the best
+  // block has two or more siblings of its own kind holding real text, every
+  // sibling of that kind is the article, headings between them included.
+  var series = 0;
+  for (var f2 = parent.firstElementChild; f2; f2 = f2.nextElementSibling)
+    if (f2 !== unit && f2.tagName === unit.tagName && !chrome(f2) && text(f2).length > 200)
+      series++;
+  var whole = series >= 2;
   for (var c = parent.firstElementChild; c; c = c.nextElementSibling) {
-    if (c === best) { parts.push(c); continue; }
+    if (c === unit) { parts.push(c); continue; }
     if (chrome(c)) continue;
     var ix = find(c);
     if (ix >= 0 && scores[ix] >= floor) { parts.push(c); continue; }
+    if (whole && (c.tagName === unit.tagName || /^H[1-6]$/.test(c.tagName) ||
+                  /heading/i.test(label(c)))) { parts.push(c); continue; }
     if (c.tagName === 'P') {
       var ct = text(c), ld = link_density(c);
       if ((ct.length > 80 && ld < 0.25) || (ct.length > 0 && ld === 0 && /\.( |$)/.test(ct)))
