@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QSet>
+#include <QHash>
 
 class filter_list;
 class policy_engine;
@@ -24,6 +26,37 @@ class policy_engine;
 // sets it on navigation, and `selectors_json()` answers for whatever that is.
 // Otherwise any page could ask what rules exist for any site, which is a small
 // leak of what the user has been doing.
+// **Generic hiding from the subscribed lists**, and what lifts it.
+//
+// `##sel` with no site hides `sel` everywhere. A rule a person -- or the
+// filter-evolution loop -- proposes is never allowed that reach: a rule
+// with no scope is refused at accept time and not applied here, because an
+// unbounded rule is what the review exists to stop. A subscribed list is a
+// different source. Its generic rules are its ordinary mechanism -- EasyList
+// carries 13,634 -- and they come with their own limits, which are honoured:
+// `site#@#sel` lifts one selector on a site (no site: everywhere),
+// `$generichide` turns generic hiding off on a site, and `$elemhide` turns
+// every cosmetic rule off there. Without any of this a blocked ad left its
+// reserved space standing: fourteen blank screens down Expressen's front
+// page on a phone (2026-10-29).
+//
+// Built once per load of the lists and shared by every view, since it is
+// the same for all of them; `for_host` is what one page gets.
+struct generic_cosmetics {
+	QStringList                     selectors;   // global exceptions removed
+	QHash<QString, QSet<QString>>   excepted;    // host -> selectors lifted there
+	QSet<QString>                   generichide; // hosts with generic hiding off
+	QSet<QString>                   elemhide;    // hosts with all hiding off
+
+	void add_exception(const QString &host, const QString &selector);
+	// The rule hosts apply to their subdomains, as network rules do.
+	static bool covers(const QSet<QString> &hosts, const QString &host);
+	bool hides_nothing_on(const QString &host) const { return covers(elemhide, host); }
+	// The generic selectors that apply on `host`: none where generic hiding is
+	// off, and the rest minus whatever is lifted on the host or a parent.
+	QStringList for_host(const QString &host) const;
+};
+
 class cosmetic_filters : public QObject {
 	Q_OBJECT
 public:
@@ -57,6 +90,8 @@ public:
 	// page. Same name and shape as `request_filter`'s, which had it from the
 	// start. Null means none.
 	void set_subscription_list(const filter_list *list) { m_subscribed = list; }
+	// The subscribed lists' generic rules (`generic_cosmetics`). Null: none.
+	void set_generic(const generic_cosmetics *generic) { m_generic = generic; }
 
 	// An investigation's trial rules for this tab, served after the rest
 	// until it ends. Null means none.
@@ -83,6 +118,7 @@ public slots:
 private:
 	const filter_list   *m_list   = nullptr;
 	const filter_list   *m_subscribed = nullptr;
+	const generic_cosmetics *m_generic = nullptr;
 	const filter_list   *m_trial = nullptr;
 	const policy_engine *m_policy = nullptr;
 	QString              m_host;

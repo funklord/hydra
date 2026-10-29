@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build 3b5a2d23, mtime 2026-10-29 11:01)
+#     /home/claude/src/fmake/fmake  (build cf26dda7, mtime 2026-10-29 16:52)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -222,6 +222,7 @@ OBJS_test_bundle = \
 	$(BUILD_DIR)/app/settings_bundle.o \
 	$(BUILD_DIR)/app/cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/scriptlets.o
 

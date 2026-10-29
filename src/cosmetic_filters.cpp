@@ -13,16 +13,76 @@ void cosmetic_filters::set_page_host(const QString &host) {
 		qWarning("cosmetic: page host is now \"%s\"", qPrintable(m_host));
 }
 
-QStringList cosmetic_filters::selectors() const {
-	QStringList out = selectors_for(m_list, m_host, m_policy);
-	for (const QString &s : selectors_for(m_subscribed, m_host, m_policy))
-		if (!out.contains(s))
+void generic_cosmetics::add_exception(const QString &host, const QString &selector) {
+	if (host.isEmpty())
+		selectors.removeAll(selector);
+	else
+		excepted[host].insert(selector);
+}
+
+bool generic_cosmetics::covers(const QSet<QString> &hosts, const QString &host) {
+	if (hosts.isEmpty() || host.isEmpty())
+		return false;
+	QString h = host.toLower();
+	for (;;) {
+		if (hosts.contains(h))
+			return true;
+		const int dot = h.indexOf(QLatin1Char('.'));
+		if (dot < 0)
+			return false;
+		h = h.mid(dot + 1);
+	}
+}
+
+QStringList generic_cosmetics::for_host(const QString &host) const {
+	if (host.isEmpty() || covers(generichide, host) || covers(elemhide, host))
+		return {};
+	QSet<QString> lifted;
+	QString h = host.toLower();
+	for (;;) {
+		const auto it = excepted.constFind(h);
+		if (it != excepted.constEnd())
+			lifted.unite(*it);
+		const int dot = h.indexOf(QLatin1Char('.'));
+		if (dot < 0)
+			break;
+		h = h.mid(dot + 1);
+	}
+	if (lifted.isEmpty())
+		return selectors;
+	QStringList out;
+	out.reserve(selectors.size());
+	for (const QString &s : selectors)
+		if (!lifted.contains(s))
 			out << s;
+	return out;
+}
+
+QStringList cosmetic_filters::selectors() const {
+	// `$elemhide` on this host: no cosmetic rule of any list applies.
+	if (m_generic && m_generic->hides_nothing_on(m_host))
+		return {};
+	// Deduplicated through a set: with the generic rules this is fourteen
+	// thousand entries, and a list search per entry was quadratic.
+	QStringList out;
+	QSet<QString> seen;
+	auto take = [&](const QStringList &more) {
+		for (const QString &s : more)
+			if (!seen.contains(s)) {
+				seen.insert(s);
+				out << s;
+			}
+	};
+	take(selectors_for(m_list, m_host, m_policy));
+	take(selectors_for(m_subscribed, m_host, m_policy));
+	// Generic rules answer to the shield as every list rule does: a site
+	// whose ads are allowed gets none.
+	if (m_generic && !m_host.isEmpty() &&
+	    !(m_policy && m_policy->is_allowed(policy::feature::ads, m_host)))
+		take(m_generic->for_host(m_host));
 	// Without the policy: like the network trial, an investigation applies
 	// what it is trying even where the shield allows ads.
-	for (const QString &s : selectors_for(m_trial, m_host))
-		if (!out.contains(s))
-			out << s;
+	take(selectors_for(m_trial, m_host));
 	return out;
 }
 

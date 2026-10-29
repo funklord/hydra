@@ -464,20 +464,24 @@ int main(int argc, char **argv) {
 		       "and the page's own address is untouched");
 	}
 
-	section("the cosmetic rules it keeps are scoped and safe");
+	// **The unscoped one is generic hiding, read since 2026-10-29** -- kept
+	// apart from the site rules, applied through `generic_cosmetics` with the
+	// lists' own exceptions. It was refused here while a subscribed list's
+	// generic rules were held to the bar set for a proposed one.
+	section("the cosmetic rules it keeps are safe, and the unscoped one is generic");
 	{
 		const subscription_read rep = filter_subscription::read(
 		  "a.example##.promo\n"
 		  "##.promo\n"
 		  "b.example##.x}body{display:none\n");
-		check(rep.ok() && rep.accepted == 1,
-		       QString("one of the three is kept (%1)").arg(rep.summary()));
+		check(rep.ok() && rep.accepted == 2,
+		       QString("two of the three are kept (%1)").arg(rep.summary()));
 		check(rep.unsafe == 1,
 		       QString("the selector that closes its rule is refused (%1)")
 		           .arg(rep.unsafe));
-		check(rep.unsupported == 1,
-		       QString("and the unscoped one is unread (%1)")
-		           .arg(rep.unsupported));
+		check(rep.unsupported == 0 && rep.generic == QStringList({ ".promo" }),
+		       QString("and the unscoped one is read as generic (%1)")
+		           .arg(rep.generic.join(' ')));
 		check(rep.rules.size() == 1 && rep.rules.first().cosmetic &&
 		          rep.rules.first().scope == "a.example",
 		       QString("what survives is the scoped one (%1)")
@@ -1281,6 +1285,33 @@ int main(int argc, char **argv) {
 		check(ask("https://cdn.shop.com/ad/1.gif", "x.example", request_type::image) &&
 		        !ask("https://cdn.shop.com/add/1.gif", "x.example", request_type::image),
 		      "and one with no token at all, filed by three characters");
+	}
+
+	section("generic hiding, its exceptions and the hosts that turn it off are read");
+	{
+		const subscription_read rep = filter_subscription::read(
+		  "[Adblock Plus 2.0]\n"
+		  "##.ad-slot\n"
+		  "##div[id^=\"div-gpt-ad\"]\n"
+		  "##+js(set-constant, x, 1)\n"
+		  "news.example,~shop.news.example#@#.ad-slot\n"
+		  "#@#.globally-lifted\n"
+		  "site.example#@#+js(set-constant, x, 1)\n"
+		  "@@||quiet.example^$generichide\n"
+		  "@@||bare.example^$ehide,document\n"
+		  "@@||other.example^$script\n",
+		  0, true);
+		check(rep.generic == QStringList({ ".ad-slot", "div[id^=\"div-gpt-ad\"]" }),
+		      "two generic selectors, and a generic scriptlet is not one of them: " +
+		        rep.generic.join(" | "));
+		check(rep.cosmetic_exceptions.size() == 2 &&
+		        rep.cosmetic_exceptions[0] == qMakePair(QString("news.example"), QString(".ad-slot")) &&
+		        rep.cosmetic_exceptions[1] == qMakePair(QString(), QString(".globally-lifted")),
+		      "an exception per named site, a negated site skipped, and one for everywhere");
+		check(rep.generichide == QStringList({ "quiet.example" }) &&
+		        rep.elemhide == QStringList({ "bare.example" }),
+		      "$generichide and $ehide hosts, each in its own list");
+		check(rep.unsupported >= 1, "a scriptlet exception is still unsupported");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

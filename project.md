@@ -38636,6 +38636,39 @@ target here, but its execution context is reachable from the page target's
 `Runtime.executionContextCreated` list; and a `pgrep` wait loop matched its
 own command line, as `running-code.md` warns, and waited out its full term.
 
+### Generic hiding from the subscribed lists, with their own exceptions
+
+**Blocked ads left their reserved space behind**: on Expressen's front page
+on a phone, fourteen `.ad-slot` boxes of 346 px each, a label reading
+"Annons" above a blank screen, down the whole page (emulator, 2026-10-29).
+EasyList carries `##.ad-slot` -- and 13,633 other generic rules, `##sel`
+with no site -- and `filter_subscription` refused every one: "a generic
+cosmetic rule, which is applied on no site". That refusal had been carried
+over from the rule for *proposed* rules, where an unbounded selector is what
+the review exists to stop. A subscribed list is a different source, and its
+generic rules are its ordinary mechanism.
+
+**So they are read and applied, with the lists' own limits**
+(`generic_cosmetics` in `cosmetic_filters.h`): `site#@#sel` lifts one
+selector on a site and its subdomains, and with no site lifts it
+everywhere; `@@||host^$generichide` turns generic hiding off on a host
+(Wikipedia carries one); `$elemhide` turns every cosmetic rule off there.
+Built once per load of the lists, shared by every view, and still subject
+to the shield: a site whose ads are allowed gets no generic hiding. A rule a
+person or the filter loop proposes is still refused unscoped -- that bar is
+unchanged.
+
+Measured on the emulator: all fifteen of Expressen's slots take no space;
+the generic sheet is 13,823 rules; adding it to that page and laying out
+costs about 80 ms against 4 ms for one rule, once, at load. **Nothing large
+was hidden by mistake**: every generic rule run against YouTube, the
+Guardian, Aftonbladet, SVT, DN, gnu.org and Expressen matched no element
+with more than 300 characters of text. `test_subscription` reads the shapes
+(a generic scriptlet and a scriptlet exception are still not this);
+`test_bundle` holds `for_host` and the page's selectors, the shield's
+escape hatch included.
+
+
 ## uBlock's whole default set, and the includes its main list is made of
 
 The Dailymotion ads went once the subscribed cosmetic rules were applied,

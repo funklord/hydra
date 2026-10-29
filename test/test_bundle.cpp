@@ -1128,6 +1128,46 @@ int main(int argc, char **argv) {
 		       "and the subscription index is untouched by the restore");
 	}
 
+	section("generic hiding applies everywhere it is not lifted");
+	{
+		generic_cosmetics g;
+		g.selectors = { ".ad-slot", ".banner-ad", ".globally-lifted" };
+		g.add_exception(QString(), ".globally-lifted");
+		g.add_exception("news.example", ".ad-slot");
+		g.generichide.insert("quiet.example");
+		g.elemhide.insert("bare.example");
+		check(g.for_host("any.example") == QStringList({ ".ad-slot", ".banner-ad" }),
+		      "every generic selector on an ordinary site, a globally lifted one gone");
+		check(g.for_host("www.news.example") == QStringList({ ".banner-ad" }),
+		      "a selector lifted on a site is lifted on its subdomains");
+		check(g.for_host("m.quiet.example").isEmpty() && g.for_host("bare.example").isEmpty(),
+		      "none where $generichide or $elemhide turns it off");
+		check(g.hides_nothing_on("x.bare.example") && !g.hides_nothing_on("quiet.example"),
+		      "$elemhide reaches site-specific rules too; $generichide does not");
+
+		filter_list own;
+		filter_rule r;
+		check(filter_list::parse_rule("bare.example##.own-rule", &r) && r.cosmetic, "a site rule");
+		own.add(r);
+		filter_rule r2;
+		filter_list::parse_rule("any.example##.site-rule", &r2);
+		own.add(r2);
+		policy_engine policy;
+		cosmetic_filters c(&own, &policy);
+		c.set_generic(&g);
+		c.set_page_host("any.example");
+		const QStringList on_any = c.selectors();
+		check(on_any.contains(".site-rule") && on_any.contains(".ad-slot") &&
+		        on_any.contains(".banner-ad"),
+		      "a page gets its site's rules and the generic ones: " + on_any.join(" "));
+		c.set_page_host("bare.example");
+		check(c.selectors().isEmpty(), "and nothing at all where $elemhide says so");
+		policy.set_setting("any.example", policy::feature::ads, policy::setting::allow);
+		c.set_page_host("any.example");
+		check(!c.selectors().contains(".ad-slot"),
+		      "and no generic hiding where the shield allows ads");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

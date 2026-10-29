@@ -7,6 +7,7 @@
 #include <QDateTime>
 #include <QHash>
 #include <QList>
+#include <QPair>
 #include <QString>
 #include <QStringList>
 #include <QUrl>
@@ -79,6 +80,16 @@ struct subscription_read {
 	QList<filter_rule> rules;
 	QList<scriptlet_call> calls;
 	QList<network_rule> option_rules;
+	// **Generic cosmetic rules and what lifts them** (`cosmetic_filters.h`,
+	// `generic_cosmetics`): `##sel` with no site; `site#@#sel`, a selector
+	// excepted on a site (no site: everywhere); and the hosts where
+	// `$generichide` turns generic hiding off or `$elemhide` turns all of it
+	// off. Only a subscribed list carries these -- see `cosmetic_filters`
+	// for why that is the line.
+	QStringList generic;
+	QList<QPair<QString, QString>> cosmetic_exceptions;   // (host or "", selector)
+	QStringList generichide;
+	QStringList elemhide;
 	// The rules this list cancels with `$badfilter`, usually in another list,
 	// so whoever assembles the lists applies them (`apply_badfilters`).
 	QStringList cancelled;

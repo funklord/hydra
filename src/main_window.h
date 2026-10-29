@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tree_diff.h"   // for the sec 9.4 undo snapshot
+#include "cosmetic_filters.h"
 #include "site_extractor.h"
 #include "site_rules.h"
 #include "session_mirror.h"   // for the mirror and imported_tab
@@ -860,6 +861,9 @@ public:
 	// says why the instances are kept apart; this is the one an upstream fetch
 	// replaces, and the user's own is the one it must never touch.
 	filter_list        *m_subscribed    = nullptr;
+	// The subscribed lists' generic hiding, rebuilt with them and shared by
+	// every view's cosmetic filter (`generic_cosmetics`).
+	generic_cosmetics   m_generic;
 	// Kept so the accepted rules can be handed to it once the list is loaded,
 	// which happens after construction.
 	request_filter     *m_filter        = nullptr;

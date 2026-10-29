@@ -362,8 +362,69 @@ subscription_read read(const QString &text, int previous_rules,
 		return rep;
 	}
 
+	// **Generic hiding, its exceptions, and the hosts that turn it off**,
+	// recognised before the line is classified -- `classify` answers for one
+	// rule a person might accept, where an unscoped selector is refused on
+	// purpose (see `cosmetic_filters`). A subscribed list is a different
+	// source: EasyList's 13,634 `##` lines are its ordinary mechanism, and
+	// without them a blocked ad left its reserved space behind -- fourteen
+	// blank screens down Expressen's front page (measured on the emulator,
+	// 2026-10-29).
+	static const QRegularExpression hide_option(
+	  QStringLiteral("^@@\\|\\|([a-z0-9.-]+)\\^?\\$(.*)$"),
+	  QRegularExpression::CaseInsensitiveOption);
+	auto generic_shape = [&](const QString &raw) -> bool {
+		const QString t = raw.trimmed();
+		if (t.startsWith(QLatin1String("##")) && !t.startsWith(QLatin1String("##+js")) &&
+		    !t.startsWith(QLatin1String("##^"))) {
+			const QString sel = t.mid(2).trimmed();
+			if (sel.isEmpty() || !filter_list::why_selector_unsafe(sel).isEmpty()) {
+				++rep.lines;
+				++rep.unsafe;
+				return true;
+			}
+			++rep.lines;
+			++rep.accepted;
+			rep.generic << sel;
+			return true;
+		}
+		const int at = t.indexOf(QLatin1String("#@#"));
+		if (at >= 0) {
+			const QString sel = t.mid(at + 3).trimmed();
+			if (sel.startsWith(QLatin1String("+js")) || sel.startsWith(QLatin1Char('^')) ||
+			    sel.isEmpty())
+				return false;   // a scriptlet or HTML exception: still unsupported
+			++rep.lines;
+			++rep.accepted;
+			const QStringList hosts = t.left(at).split(QLatin1Char(','), Qt::SkipEmptyParts);
+			if (hosts.isEmpty())
+				rep.cosmetic_exceptions << qMakePair(QString(), sel);
+			for (const QString &h : hosts)
+				if (!h.startsWith(QLatin1Char('~')))
+					rep.cosmetic_exceptions << qMakePair(h.trimmed().toLower(), sel);
+			return true;
+		}
+		const QRegularExpressionMatch m = hide_option.match(t);
+		if (m.hasMatch()) {
+			const QStringList opts = m.captured(2).toLower().split(QLatin1Char(','));
+			const bool elem = opts.contains(QLatin1String("elemhide")) ||
+			                  opts.contains(QLatin1String("ehide"));
+			const bool gen = opts.contains(QLatin1String("generichide")) ||
+			                 opts.contains(QLatin1String("ghide"));
+			if (!elem && !gen)
+				return false;
+			++rep.lines;
+			++rep.accepted;
+			(elem ? rep.elemhide : rep.generichide) << m.captured(1).toLower();
+			return true;
+		}
+		return false;
+	};
+
 	const QStringList lines = text.split(QLatin1Char('\n'));
 	for (const QString &line : lines) {
+		if (generic_shape(line))
+			continue;
 		filter_rule r;
 		scriptlet_call call;
 		network_rule option;

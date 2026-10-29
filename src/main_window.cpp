@@ -4593,6 +4593,7 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 		// is written at load and nothing removes it afterwards.
 		auto *cosmetic = new cosmetic_filters(m_filters, m_policy, view);
 		cosmetic->set_subscription_list(m_subscribed);
+		cosmetic->set_generic(&m_generic);
 		cosmetic->set_page_host(QUrl::fromUserInput(n->url).host());
 		view->set_script_bridge(cosmetic, cosmetic_filters::bridge_name());
 		view->inject_script("hydra-cosmetic", cosmetic_filters::script_source());
@@ -6546,6 +6547,11 @@ int main_window::load_subscriptions() {
 	QList<network_rule> option_rules;
 	QSet<QString> cancelled;
 	m_scriptlets.clear();
+	// Rebuilt in place: every view holds a pointer to it, and a stylesheet is
+	// written at load, so a list update reaches each page on its next load.
+	generic_cosmetics generic;
+	QList<QPair<QString, QString>> lifted;
+	QSet<QString> generic_seen;
 	int taken = 0;
 	for (const subscription &sub : m_sub_updater->subscriptions()) {
 		if (!sub.enabled || sub.file.isEmpty())
@@ -6585,8 +6591,23 @@ int main_window::load_subscriptions() {
 		option_rules += rep.option_rules;
 		for (const QString &c : rep.cancelled)
 			cancelled.insert(c);
+		for (const QString &g : rep.generic)
+			if (!generic_seen.contains(g)) {
+				generic_seen.insert(g);
+				generic.selectors << g;
+			}
+		lifted += rep.cosmetic_exceptions;
+		for (const QString &h : rep.generichide)
+			generic.generichide.insert(h);
+		for (const QString &h : rep.elemhide)
+			generic.elemhide.insert(h);
 		taken += rep.accepted;
 	}
+	// Exceptions after every list is in: an exception in one list lifts a
+	// selector another list brought.
+	for (const auto &e : lifted)
+		generic.add_exception(e.first, e.second);
+	m_generic = generic;
 	// **The person's own list carries scriptlets too, and did not before.**
 	// `m_scriptlets` was filled from subscriptions alone, so somebody who
 	// knew the rule their site needed could not add it: the only route was to
