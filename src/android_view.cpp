@@ -1737,11 +1737,16 @@ QString android_view::frame_scripts(qint64 id) {
 	QString out;
 	for (const QString &name : v->m_bridges.names())
 		out += QStringLiteral("  hydraRegisterBridge(%1);\n").arg(js_literal(name));
+	// **Each script in a `try` of its own.** The bundle is one script, so a
+	// part that threw stopped every part after it: in Spiegel's consent frame
+	// the consent script never ran, though a copy of it run there by hand set
+	// the wall aside at once (measured over DevTools, 2026-10-29). What one
+	// part fails at is that part's business, not the next one's.
 	for (int i = 0; i < v->m_script_sources.size(); ++i) {
 		const bool frames = v->m_script_frames.value(i, false);
-		out += frames ? QStringLiteral("\n;(function(){\n")
-		              : QStringLiteral("\nif (__h_top) (function(){\n");
-		out += bundled(v->m_script_sources[i]) + QStringLiteral("\n})();\n");
+		out += frames ? QStringLiteral("\ntry { (function(){\n")
+		              : QStringLiteral("\nif (__h_top) try { (function(){\n");
+		out += bundled(v->m_script_sources[i]) + QStringLiteral("\n})(); } catch (__h_e) {}\n");
 	}
 	out += QString::fromUtf8(k_bundle_media);
 	return QString::fromUtf8(k_bundle_open).replace(QLatin1String("/*BUNDLE*/"), out);
