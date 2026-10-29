@@ -444,6 +444,36 @@ int main(int argc, char *argv[]) {
 		spin(1500);
 	}
 
+	// **Fetch: the page as other clients**, through the real tab -- what it
+	// counts of its own text, then each client's answer from the server.
+	section("fetch: the page as other clients, beside what the tab shows");
+	{
+		srv.prompts.clear();
+		const int pages_before = srv.pages;
+		srv.script = { "{\"action\":\"fetch\",\"why\":\"is it a teaser?\"}",
+		               "{\"action\":\"done\",\"solved\":false,\"summary\":\"no\"}" };
+		annoyed->trigger();
+		annoyed_dialog *d = nullptr;
+		until([&] { return (d = open_window()) != nullptr; }, 8000);
+		if (!d)
+			return 1;
+		if (QPushButton *start = button(d, "Work On It"))
+			start->click();
+		check(until([&] { return srv.prompts.size() >= 2; }, 40000),
+		      "the model is asked again after the fetch");
+		const QString log = log_of(d);
+		check(log.contains("this tab: 0 paragraphs") && log.contains("googlebot: HTTP 200") &&
+		        log.contains("twitterbot: HTTP 200"),
+		      "the log has the tab's count and each client's answer");
+		check(srv.pages - pages_before == 6, QString("the server was asked six times (%1)")
+		                                       .arg(srv.pages - pages_before));
+		check(srv.prompts.value(1).contains("you fetched the page as other clients") &&
+		        srv.prompts.value(1).contains("from-google: HTTP 200"),
+		      "and the next prompt carries them");
+		d->close();
+		spin(1500);
+	}
+
 	// **Show Me brings the tab it is about to the front**, since the picker
 	// works on the tab in front. It said to switch back, then began picking
 	// anyway on whichever tab was there.

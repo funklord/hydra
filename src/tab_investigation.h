@@ -1,6 +1,7 @@
 #pragma once
 
 #include "filter_list.h"
+#include "agent_fetch.h"
 #include "investigation.h"
 
 #include <QObject>
@@ -41,6 +42,7 @@ public:
 	           std::function<void(const QStringList &)> done) override;
 	void ask(const QString &kind, const QString &question,
 	         std::function<void(const QString &)> done) override;
+	void fetch_as_others(std::function<void(const QStringList &)> done) override;
 
 	// Take every trial rule out, and reload when anything was in trial.
 	void end();
@@ -56,6 +58,7 @@ private:
 	QPointer<web_view_backend> m_view;
 	request_filter            *m_filter = nullptr;
 	QPointer<cosmetic_filters> m_cosmetic;
+	agent_fetcher             *m_fetcher = nullptr;
 	QString                    m_site;
 	filter_list                m_cosmetic_trial;
 	asker                      m_asker;

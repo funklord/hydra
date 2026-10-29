@@ -46,6 +46,40 @@ void tab_investigation::look(std::function<void(const QStringList &)> done) {
 	});
 }
 
+// **Set beside what the tab itself shows**, counted the way `agent_fetch`
+// counts an answer -- paragraphs of 40 characters or more -- so the lines
+// compare: a crawler sent 40 paragraphs where the tab holds 3 is the
+// finding, and neither number says it alone.
+void tab_investigation::fetch_as_others(std::function<void(const QStringList &)> done) {
+	if (!m_view) {
+		done(QStringList());
+		return;
+	}
+	if (!m_fetcher)
+		m_fetcher = new agent_fetcher(this);
+	const QUrl url = m_view->url();
+	QPointer<tab_investigation> self(this);
+	m_view->run_probe(QStringLiteral(
+	  "(function(){var n=0,c=0,ps=document.querySelectorAll('p');"
+	  "for(var i=0;i<ps.length;i++){var t=(ps[i].textContent||'')"
+	  ".replace(/\\s+/g,' ').trim();if(t.length>=40){n++;c+=t.length;}}"
+	  "return n+' '+c;})()"),
+	  [self, url, done](const QString &counted) {
+		if (!self)
+			return;
+		const QStringList nc = counted.split(QLatin1Char(' '));
+		const QString tab = nc.size() == 2
+		  ? QString("this tab: %1 paragraphs, %2 characters of text").arg(nc[0], nc[1])
+		  : QStringLiteral("this tab: could not be counted");
+		self->m_fetcher->fetch_all(url, [tab, done](const QList<agent_fetch::reading> &got) {
+			QStringList lines{ tab };
+			for (const agent_fetch::reading &r : got)
+				lines << agent_fetch::describe(r);
+			done(lines);
+		});
+	});
+}
+
 void tab_investigation::trial(const QList<filter_rule> &rules,
                               const QList<scriptlet_call> &calls,
                               std::function<void(const QStringList &)> done) {

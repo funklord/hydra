@@ -38953,6 +38953,44 @@ Removing the destructor's cleanup reds the first.
   from localhost". A frame that never answers costs at most 4 s, and the
   others' answers are kept.
 
+### `fetch`: the page as other clients, a tool the loop can reach for
+
+**Asked for by the holder on 2026-10-29** about a paywalled Dagens ETC
+story -- "check if crawlers get a different article, this should be a
+base tool for the AI that needs to fix pages, as it will be used often."
+Whether a site sends somebody else more than it sends this person decides
+whether anything in the browser can help with a teaser, and it had been
+found out by hand with curl.
+
+`agent_fetch` fetches the tab's address once per client in a closed
+catalog -- a browser with no cookies, the same arriving from a Google
+result, Googlebot, bingbot, Facebook's and X's link previews -- with a fresh
+network manager, so no cookie goes along, each bounded at 15 s, ten
+redirects and 4 MB. Each answer is read for: status, paragraphs of 40
+characters or more and their length, a bot check (the known challenge
+pages, or a small all-script answer with no paragraphs -- the one met
+answered 247), the JSON-LD's `isAccessibleForFree` and the selector of
+the part that is not free, whether that part is in the answer, and a
+redirect it refused (https to http). The model asks for it with
+`{"action": "fetch"}`; the result goes into its next turn, under a first
+line counting the tab's own text the same way, so the numbers compare.
+**The catalog is closed**: the model names nothing, it asks for the set,
+which keeps what it can cause a list somebody can read.
+
+**What it said about the story that prompted it**: the plain browser,
+from-google, Googlebot, bingbot and Facebook got the bot check; Twitterbot
+got 13 paragraphs, 2,209 characters, "declares itself not free (the rest
+under .paywalled, which is not in this answer)" -- the same teaser a
+person gets. So nothing reachable holds the rest.
+
+`test_agent_fetch` reads fixtures of those three shapes and fetches from
+a server that answers by agent and sets a cookie (a second run sends none
+back); `test_investigation` carries the action to the next prompt and a
+host without it answering why; `try_investigate` runs it through the real
+window and tab. Not yet: a rule kind that acts on what it finds -- serving
+a page as one of these clients -- which is a decision about what hydra
+pretends to be, and the holder's.
+
 ## The AI load knob
 
 Asked for again on 2026-10-10 -- "that knob to turn down AI system load as

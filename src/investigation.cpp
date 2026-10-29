@@ -33,6 +33,13 @@ const char *k_system_prompt =
   "  {\"action\": \"ask\", \"kind\": \"point\", \"question\": \"...\"}\n"
   "     ask the person to click the thing on the page; you get its selector "
   "and markup. Use when you cannot find it yourself.\n"
+  "  {\"action\": \"fetch\", \"why\": \"...\"}\n"
+  "     fetch this page's address again as other clients -- a browser with "
+  "no cookies, one arriving from a Google result, Google's and Bing's "
+  "crawlers, Facebook's and X's link previews -- and see how much article "
+  "text each is sent, whether it is a bot check, and what the page declares "
+  "about its paywall. Use it when the problem is a paywall, a teaser or "
+  "text that is missing rather than an ad.\n"
   "  {\"action\": \"done\", \"solved\": true, \"summary\": \"...\"}\n"
   "     stop. solved is true only when the last look or the person says the "
   "ad is gone.\n\n"
@@ -283,6 +290,21 @@ void investigation::act(const QJsonObject &a) {
 			record("you looked; the page shows: " +
 			       (seen.isEmpty() ? QStringLiteral("nothing ad-like")
 			                       : seen.join("; ")));
+			next_turn();
+		});
+		return;
+	}
+
+	if (action == "fetch") {
+		emit logged("model", "Fetching the page as other clients" +
+		                         (why.isEmpty() ? QString() : ": " + why));
+		emit expecting(QStringLiteral("the page fetched as six clients"), 15);
+		m_host->fetch_as_others([this](const QStringList &got) {
+			if (!m_running)
+				return;
+			for (const QString &l : got)
+				emit logged("page", l);
+			record("you fetched the page as other clients:\n    " + got.join("\n    "));
 			next_turn();
 		});
 		return;

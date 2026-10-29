@@ -22,6 +22,7 @@
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
+	test/test_agent_fetch.cpp \
 	test/test_annoyance.cpp \
 	test/test_assembler.cpp \
 	test/test_assembly.cpp \
@@ -142,6 +143,10 @@ OBJSETS_SOURCES = \
 OBJS_test_address = \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o
+
+OBJS_test_agent_fetch = \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o
 
 OBJS_test_annoyance = \
 	$(BUILD_DIR)/app/model_tally.o \
@@ -605,6 +610,8 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/app/stream_probe.o \
@@ -920,6 +927,8 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -1100,6 +1109,8 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -1274,6 +1285,8 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
@@ -1434,6 +1447,8 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
@@ -1585,6 +1600,8 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -1746,6 +1763,8 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -1923,6 +1942,8 @@ OBJS_try_challenge = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -2096,6 +2117,8 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
@@ -2245,6 +2268,8 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -2410,6 +2435,8 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -2567,6 +2594,8 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -2731,6 +2760,8 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -2891,6 +2922,8 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -3051,6 +3084,8 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -3217,6 +3252,8 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/app/tree_diff.o \
@@ -3372,6 +3409,8 @@ OBJS_try_files = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -3547,6 +3586,8 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -3715,6 +3756,8 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/app/tree_diff.o \
@@ -3878,6 +3921,8 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/app/tree_diff.o \
@@ -4030,6 +4075,8 @@ OBJS_try_fullscreen_keys = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -4191,6 +4238,8 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -4356,6 +4405,8 @@ OBJS_try_import = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -4513,6 +4564,8 @@ OBJS_try_investigate = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -4694,6 +4747,8 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
@@ -4857,6 +4912,8 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
@@ -5003,6 +5060,8 @@ OBJS_try_media = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -5164,6 +5223,8 @@ OBJS_try_media_lookup = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -5336,6 +5397,8 @@ OBJS_try_media_reading = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -5501,6 +5564,8 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -5670,6 +5735,8 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
@@ -5821,6 +5888,8 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -5994,6 +6063,8 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
@@ -6161,6 +6232,8 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -6345,6 +6418,8 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
@@ -6528,6 +6603,8 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -6685,6 +6762,8 @@ OBJS_try_scriptlet_cost = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -6848,6 +6927,8 @@ OBJS_try_scriptlets = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -7019,6 +7100,8 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -7229,6 +7312,8 @@ OBJS_try_share = \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/app/tree_diff.o \
@@ -7384,6 +7469,8 @@ OBJS_try_store_view = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -7543,6 +7630,8 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -7716,6 +7805,8 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
@@ -7865,6 +7956,8 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -8026,6 +8119,8 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -8189,6 +8284,8 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -8350,6 +8447,8 @@ OBJS_try_youtube_wall = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -8509,6 +8608,8 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/app/agent_fetch.o \
+	$(BUILD_DIR)/moc/moc_agent_fetch.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \

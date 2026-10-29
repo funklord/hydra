@@ -62,6 +62,14 @@ public:
 	QList<scriptlet_call> calls;
 	int looks = 0, trials = 0, asks = 0;
 	QString answer = QStringLiteral("yes");
+	int fetches = 0;
+	void fetch_as_others(std::function<void(const QStringList &)> done) override {
+		++fetches;
+		QTimer::singleShot(0, [done] {
+			done({ "this tab: 3 paragraphs, 400 characters of text",
+			       "googlebot: HTTP 200, 9000 bytes, 40 paragraphs, 12000 characters of text" });
+		});
+	}
 	void look(std::function<void(const QStringList &)> done) override {
 		++looks;
 		QTimer::singleShot(0, [this, done] { done(showing); });
@@ -209,6 +217,43 @@ int main(int argc, char **argv) {
 		           .arg(summary).arg(model.prompts.size()));
 		check(model.prompts.at(1).contains("no JSON action"),
 		       "having told it so once");
+	}
+
+	section("fetch: the page as other clients reaches the next turn");
+	{
+		scripted_model model;
+		model.replies = { "{\"action\":\"fetch\",\"why\":\"a teaser\"}",
+		                  "{\"action\":\"done\",\"solved\":false,\"summary\":\"server-side\"}" };
+		fake_page page;
+		investigation inv(&model, &page, evidence());
+		bool solved = true;
+		QString summary;
+		const bool ended = run(inv, &solved, &summary);
+		check(ended && page.fetches == 1 && model.prompts.size() == 2,
+		      QString("fetched once, then asked again (%1 prompts)").arg(model.prompts.size()));
+		check(model.prompts.value(1).contains("googlebot: HTTP 200") &&
+		        model.prompts.value(1).contains("this tab: 3 paragraphs"),
+		      "and what each client got is in the next prompt");
+	}
+
+	section("fetch: a host that cannot is said so, not hung on");
+	{
+		struct bare : investigation_host {
+			void look(std::function<void(const QStringList &)> d) override { d({}); }
+			void trial(const QList<filter_rule> &, const QList<scriptlet_call> &,
+			           std::function<void(const QStringList &)> d) override { d({}); }
+			void ask(const QString &, const QString &,
+			         std::function<void(const QString &)> d) override { d("no"); }
+		} host;
+		scripted_model model;
+		model.replies = { "{\"action\":\"fetch\"}",
+		                  "{\"action\":\"done\",\"solved\":false,\"summary\":\"x\"}" };
+		investigation inv(&model, &host, evidence());
+		bool solved = true;
+		QString summary;
+		const bool ended = run(inv, &solved, &summary);
+		check(ended && model.prompts.value(1).contains("not available here"),
+		      "the default answers with the reason");
 	}
 
 	section("the loop ends at its budget");

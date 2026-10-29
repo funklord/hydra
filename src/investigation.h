@@ -56,6 +56,15 @@ public:
 	// "none" when they would not or could not.
 	virtual void ask(const QString &kind, const QString &question,
 	                 std::function<void(const QString &)> done) = 0;
+	// Fetch the page's address as each client in `agent_fetch::catalog` --
+	// no cookies, crawlers, a visit from a search result -- and answer with
+	// one line per client (`agent_fetch::describe`), the first line saying
+	// what the tab itself shows. Whether a site sends somebody else more
+	// than it sends this person is what decides if anything can be done
+	// about a teaser. Default: not available on this host.
+	virtual void fetch_as_others(std::function<void(const QStringList &)> done) {
+		done({ QStringLiteral("fetching as other clients is not available here") });
+	}
 };
 
 // **The Annoyed button's model loop**: the iterative process the window is a
@@ -71,6 +80,7 @@ public:
 //     {"action": "try", "rules": ["site##.ad", "site##+js(set, x, false)"],
 //      "why": "..."}
 //     {"action": "ask", "kind": "confirm" | "point", "question": "..."}
+//     {"action": "fetch", "why": "..."}
 //     {"action": "done", "solved": true | false, "summary": "..."}
 //
 // The browser carries it out through the host and the result goes into the
