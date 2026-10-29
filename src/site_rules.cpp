@@ -20,37 +20,48 @@ site_rules site_rules::defaults() {
 		r.add(c);
 	};
 
-	// Least permissive first. "Reject" is preferred wherever a banner offers it;
-	// accept is the last resort and is still better than a page nobody can read,
-	// which is the state the option exists to end.
+	// A free refusal is the only button ever clicked; a banner without one is
+	// set aside (`consent_blocker.h`), and the accept rules only recognise it.
 	// **Not only English.** A Swedish site's refusal reads "Avvisa
 	// personanpassad reklam", a German one's "Alle ablehnen"; with English
 	// alone every Schibsted page -- Aftonbladet, SvD -- was left behind its
 	// banner (measured on the emulator, 2026-10-29). A refusal that is also a
 	// purchase never counts as one; the script checks that separately.
+	// One rule per language, because a rule is capped at 200 characters --
+	// the cap a person's own rule is held to, and the built-ins pass the same
+	// check (`test_extractor`). The kind's rules are joined with `|` where
+	// they are used, so splitting them changes nothing a page sees.
 	builtin("reject",
 	         "^(reject|decline|refuse|deny)( all)?( cookies)?$"
 	         "|^(only |use )?(strictly )?necessary( cookies)?( only)?$"
-	         "|^essential( cookies)?( only)?$|^continue without accepting"
-	         "|^(avvisa|neka)( alla)?( cookies| kakor)?$|^avvisa [^|]{1,40}$"
-	         "|^(endast|bara) (nödvändiga|nödvändig)( cookies| kakor)?$"
-	         "|^(alle )?ablehnen$|^nur (notwendige|erforderliche)( cookies)?( akzeptieren)?$"
+	         "|^essential( cookies)?( only)?$|^continue without accepting",
+	         "the wording reject buttons converge on");
+	builtin("reject",
+	         "^(avvisa|neka)( alla)?( cookies| kakor)?$|^avvisa [^|]{1,40}$"
+	         "|^(endast|bara) (nödvändiga|nödvändig)( cookies| kakor)?$",
+	         "Swedish, met on Schibsted's sites (Aftonbladet, SvD)");
+	builtin("reject",
+	         "^(alle )?ablehnen$|^nur (notwendige|erforderliche)( cookies)?( akzeptieren)?$"
 	         "|^(tout )?refuser( tout)?$|^continuer sans accepter"
 	         "|^rechazar( todo| todas)?$|^rifiuta( tutto)?$",
-	         "the wording reject buttons converge on, in the languages met so far");
+	         "German, French, Spanish and Italian");
 	// **Recognised, never clicked** (the holder's call, 2026-10-29): a banner
-	// whose only way out is acceptance is set aside, not accepted. So this
-	// list only has to say what an acceptance looks like, and it can be
+	// whose only way out is acceptance is set aside, not accepted. So these
+	// only have to say what an acceptance looks like, and they can be
 	// generous -- in any language met.
 	builtin("accept",
 	         "^(accept|allow|agree|got it|ok|okay|i agree|understood|continue)"
-	         "( all)?( cookies)?$|^yes,? i agree$|^accept and continue"
-	         "|^(okej|ok|godkänn|godkänn alla|acceptera|acceptera alla|jag godkänner"
-	         "|jag förstår|tillåt alla)$"
-	         "|^(alle )?akzeptieren$|^(alle )?zustimmen$|^einverstanden$|^akzeptieren und weiter"
+	         "( all)?( cookies)?$|^yes,? i agree$|^accept and continue",
+	         "recognises a banner that only offers acceptance, which is set aside");
+	builtin("accept",
+	         "^(okej|godkänn|godkänn alla|acceptera|acceptera alla|jag godkänner"
+	         "|jag förstår|tillåt alla)$",
+	         "the same, in Swedish (Bonnier's \"Okej\")");
+	builtin("accept",
+	         "^(alle )?akzeptieren$|^(alle )?zustimmen$|^einverstanden$|^akzeptieren und weiter"
 	         "|^(tout )?accepter$|^accepter et (continuer|fermer)|^j.accepte$"
 	         "|^aceptar( todo| todas)?$|^accetta( tutto)?$",
-	         "recognises a banner that only offers acceptance, which is set aside");
+	         "the same, in German, French, Spanish and Italian");
 
 	// A handful of vendor containers, kept short on purpose: each is a promise
 	// to maintain a selector someone else controls. The generic pass is what
