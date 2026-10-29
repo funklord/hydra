@@ -4699,6 +4699,49 @@ the desktop. No fatals, no ANR, 217 MB PSS with one page open, and the status
 bar reading `1 / 4 live`. Everything before this had been driven on an
 emulator; this is the first time it has been a phone.
 
+### Test on the emulator; the phone is for what needs one
+
+**Settled by the holder 2026-10-29, after a night that asked for the phone
+four times for checks an emulator answers as well**: the YouTube bundle's
+globals, `ad_status.js` answered with a stand-in, and the Annoyed report's
+refused requests, tells and patches. None of those depends on hardware.
+
+So a change is verified on an emulator: an AVD other than `store` (which
+`android-store-screenshots` wipes every run), started headless, built for
+`ANDROID_ABI=x86_64` -- the fragment prefers `arm64-v8a` when none is named,
+and that build will not install on an x86_64 image -- installed and driven
+with `adb`, and stopped afterwards. `tool/emulator_checks.sh` is that run for
+the checks above.
+
+**Ask for the phone only for what the emulator lacks**, and say what to look
+at: the camera, fingerprint or face unlock, NFC, the sensors, the vendor skin
+(the Fold3's cutout band and One UI were found only there), arm64 code on
+arm64 hardware, how touch feels, an install from Play, or the holder's own
+signed-in session and WebView version. And now and then without such a
+reason, after a run of changes or before a release, since some faults show
+only on the device -- a periodic check, not a step of every change.
+
+**Run the same night, every check that had been asked of the phone passed
+on `Resizable_Experimental_API_33`** (x86_64, API 33): no `hydraNative` and
+no hydra global or element on m.youtube.com, every patched function reading
+as native, `ad_status.js` answered `window.google_ad_status = 1;`, and the
+Annoyed report listing it as "(answered with
+doubleclick_instream_ad_status.js)" beside "18 ran ... 0 failed". 13 checks,
+0 failed, the emulator stopped after it.
+
+Two things the first runs taught the script, both kept in it:
+
+- **A fresh install has no stand-ins for its first minute.** The subscribed
+  lists are fetched 60 seconds after the window opens, so `ad_status.js`
+  failed to fetch until then, and a page made before they arrived keeps
+  none. Correct behaviour, not a fault -- but a check run in that minute
+  reports the fault it exists to catch. The script waits for every enabled
+  list to hold rules and reloads the page before asking.
+- **An empty tells list cannot fail.** The probe says nothing about a clean
+  page, which is the right answer and is indistinguishable from a probe
+  that never ran. The script plants `window.hydra_planted_tell` first and
+  requires the report to name it.
+
 ### Two defects the phone found, 2026-08-26
 
 Driving tabs and history on a **Galaxy Note 9 (SM-N960F, Android 10, SDK 29)**

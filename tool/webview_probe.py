@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 # What a page on the phone can see of hydra, asked from inside the page.
 #
-#     tool/webview_probe.py <adb> <device serial> <local port>
+#     tool/webview_probe.py <adb> <device serial> <local port> [expression]
+#
+# With an expression, evaluates that instead of the probe -- awaiting it if
+# it is a promise -- and prints what it returns: `tool/emulator_checks.py`
+# asks the page for `ad_status.js` this way.
 #
 # Opens nothing itself: load the page in hydra first. It forwards the
 # WebView's DevTools socket over adb -- which a debuggable build enables
@@ -16,6 +20,7 @@
 import asyncio, json, subprocess, sys, urllib.request
 
 ADB, SERIAL, PORT = sys.argv[1], sys.argv[2], int(sys.argv[3])
+EXPRESSION = sys.argv[4] if len(sys.argv) > 4 else None
 
 PROBE = r"""
 (function () {
@@ -87,19 +92,27 @@ async def main():
 	adb("forward", f"tcp:{PORT}", f"localabstract:webview_devtools_remote_{pid}")
 	try:
 		pages = json.load(urllib.request.urlopen(f"http://127.0.0.1:{PORT}/json", timeout=40))
-		page = next((p for p in pages if "youtube.com" in p.get("url", "")), None)
+		# Several WebViews can hold a youtube page (a tab left open, one in
+		# the background): the one on screen is the one being asked about.
+		shown = lambda p: json.loads(p.get("description") or "{}").get("visible", False)
+		tube = [p for p in pages if p.get("type") == "page" and "youtube.com" in p.get("url", "")]
+		page = next((p for p in tube if shown(p)), tube[0] if tube else None)
 		if not page:
 			print("no youtube page open:", [p.get("url") for p in pages])
 			return 1
 		async with websockets.connect(page["webSocketDebuggerUrl"], max_size=None) as ws:
 			await ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate",
-			                          "params": {"expression": PROBE, "returnByValue": True}}))
+			                          "params": {"expression": EXPRESSION or PROBE,
+			                                     "awaitPromise": True, "returnByValue": True}}))
 			while True:
 				m = json.loads(await asyncio.wait_for(ws.recv(), 20))
 				if m.get("id") == 1:
 					break
 		val = m.get("result", {}).get("result", {}).get("value")
-		print(json.dumps(json.loads(val), indent=2) if val else json.dumps(m)[:2000])
+		if EXPRESSION:
+			print(val if val is not None else json.dumps(m)[:2000])
+		else:
+			print(json.dumps(json.loads(val), indent=2) if val else json.dumps(m)[:2000])
 	finally:
 		adb("forward", "--remove", f"tcp:{PORT}")
 	return 0
