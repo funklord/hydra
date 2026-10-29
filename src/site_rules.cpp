@@ -38,10 +38,19 @@ site_rules site_rules::defaults() {
 	         "|^(tout )?refuser( tout)?$|^continuer sans accepter"
 	         "|^rechazar( todo| todas)?$|^rifiuta( tutto)?$",
 	         "the wording reject buttons converge on, in the languages met so far");
+	// **Recognised, never clicked** (the holder's call, 2026-10-29): a banner
+	// whose only way out is acceptance is set aside, not accepted. So this
+	// list only has to say what an acceptance looks like, and it can be
+	// generous -- in any language met.
 	builtin("accept",
 	         "^(accept|allow|agree|got it|ok|okay|i agree|understood|continue)"
-	         "( all)?( cookies)?$",
-	         "last resort, for banners whose only exit is acceptance");
+	         "( all)?( cookies)?$|^yes,? i agree$|^accept and continue"
+	         "|^(okej|ok|godkänn|godkänn alla|acceptera|acceptera alla|jag godkänner"
+	         "|jag förstår|tillåt alla)$"
+	         "|^(alle )?akzeptieren$|^(alle )?zustimmen$|^einverstanden$|^akzeptieren und weiter"
+	         "|^(tout )?accepter$|^accepter et (continuer|fermer)|^j.accepte$"
+	         "|^aceptar( todo| todas)?$|^accetta( tutto)?$",
+	         "recognises a banner that only offers acceptance, which is set aside");
 
 	// A handful of vendor containers, kept short on purpose: each is a promise
 	// to maintain a selector someone else controls. The generic pass is what
@@ -49,6 +58,7 @@ site_rules site_rules::defaults() {
 	builtin("container", "#onetrust-banner-sdk", "OneTrust");
 	builtin("container", "#CybotCookiebotDialog", "Cookiebot");
 	builtin("container", "#didomi-notice", "Didomi");
+	builtin("container", "#didomi-popup", "Didomi, as a popup (Bonnier's sites)");
 	builtin("container", "#usercentrics-root", "Usercentrics");
 	builtin("container", ".qc-cmp2-container", "Quantcast");
 

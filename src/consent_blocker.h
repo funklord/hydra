@@ -16,13 +16,16 @@ class policy_engine;
 // Blocked -- the default -- means the banner is answered and dismissed.
 // Allowed means it is left alone and you answer it yourself.
 //
-// **What it answers with, and why that is not always "reject".** The point of
-// the option is to be able to use the page, so the choice is the least
-// permissive one the banner offers that gets it out of the way: reject-all
-// where there is such a button, otherwise the necessary-only option, otherwise
-// accept. A banner with nothing but "Accept" is a banner whose only dismissal
-// is acceptance, and pretending otherwise leaves the page unusable, which is
-// the thing being fixed.
+// **What it answers with: a free refusal, or nothing.** The point of the
+// option is to be able to use the page without agreeing to anything. Where a
+// banner offers a refusal that costs nothing -- reject-all, necessary-only --
+// that is clicked. Where it offers only acceptance, or acceptance against a
+// price, nothing is clicked: the banner is set aside, hidden with its scroll
+// lock undone. Accepting was the last resort until 2026-10-29, when the
+// holder decided against it: "We want to bypass annoying website paywalls,
+// not agree to the little bait-and-switch games they play with users." A set
+// aside records no choice, so the site asks again on the next visit and is
+// set aside again.
 //
 // **And the choice has to stick, which is why this touches cookie policy.** A
 // consent choice is itself recorded in a cookie. With cookies blocked for the

@@ -2261,6 +2261,27 @@ There is one channel per page now, built by a bootstrap injected once beside
 Every script waits on that instead. The four live drivers report **zero** of
 those console errors afterwards, where before they appeared in nearly every run.
 
+### Nothing is accepted any more: acceptance-only banners are set aside too
+
+**The holder's word, 2026-10-29, asked about Expressen's and DN's "Okej" and
+the BBC's "Yes, I agree"**: "hide them too". So the accept tier is gone. A
+banner is answered only with a free refusal; a banner that offers
+acceptance and no refusal -- with a price or without -- is set aside, hidden
+with its scroll lock undone, and nothing is clicked. The accept patterns
+remain, only to recognise such a banner, and could therefore be widened to
+every language met (Swedish "Okej", "Godkänn alla"; German "Alle
+akzeptieren"; French "Tout accepter"; and so on). `consent_blocker.h`
+states the rule; the earlier "accept is the last resort" is superseded.
+
+**Bonnier's banner needed one more thing**: Didomi's popup opens with an
+inline stylesheet, so the first 1200 characters of its raw text were CSS
+and never said "cookie". The check reads the rendered text now, and
+`#didomi-popup` is listed beside `#didomi-notice`. Afterwards, on cleared
+profiles: Expressen, DN and the BBC clear; YouTube still refused for free
+with `SOCS` set; `try_consent` 61 of 61, with the accept-only fixture now
+requiring that "OK" is not clicked, and a Bonnier fixture -- stylesheet
+first -- that fails without the rendered-text check.
+
 ### Pay-or-consent walls are set aside, never accepted
 
 **The holder's decision, 2026-10-29**, asked when the Guardian's banner
@@ -2322,11 +2343,9 @@ fixture in `try_consent` that the code before it fails:
   the top frame sends its rules to every frame as it starts.
 
 After: Aftonbladet, SvD, Spiegel, Bild, Le Monde, the Guardian and YouTube
-all clear and scrolling, measured on cleared profiles. **Still standing**:
-Expressen and DN (Bonnier, Didomi), whose banner offers only "Okej" and
-"Inställningar", and the BBC's "Yes, I agree"; both are accept-or-settings
-banners with no refusal and no price, and whether such a banner is accepted
-or set aside is put to the holder rather than decided here.
+all clear and scrolling, measured on cleared profiles. Expressen, DN and
+the BBC, which offer acceptance and no refusal, were left for the holder;
+see the next section for what was decided and what else they needed.
 
 ### YouTube's consent dialog was never answered on a phone
 

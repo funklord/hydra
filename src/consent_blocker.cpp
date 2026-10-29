@@ -104,8 +104,11 @@ const char *k_script = R"JS(
       var st = getComputedStyle(el);
       if (st.position !== 'fixed' && st.position !== 'sticky') continue;
       // Its own text, not its descendants' page content: a fixed sidebar
-      // containing an article that mentions cookies is not a banner.
-      var text = (el.textContent || '').slice(0, 1200);
+      // containing an article that mentions cookies is not a banner. The
+      // text as rendered: Didomi's popup opens with an inline stylesheet,
+      // so the first 1200 characters of its raw text were CSS and never
+      // said "cookie" -- Expressen's and DN's banners went unseen.
+      var text = (el.innerText || el.textContent || '').slice(0, 1200);
       if (!CONSENTISH.test(text)) continue;
       out.push(el);
     }
@@ -206,7 +209,12 @@ const char *k_script = R"JS(
       if (paid) { set_aside(box, paid); return true; }
       // Whole banner per preference tier, so a reject anywhere beats an accept
       // that happens to come first in the DOM.
-      var tiers = [ { re: REJECT, as: 'reject' }, { re: ACCEPT, as: 'accept' } ];
+      // **Only a free refusal is ever clicked.** The holder's call,
+      // 2026-10-29: a banner that offers acceptance and no refusal -- "Okej"
+      // on Expressen and DN, "Yes, I agree" on the BBC, a bare "OK" -- is set
+      // aside like a pay wall, not accepted. ACCEPT still recognises such a
+      // banner; it no longer chooses a button.
+      var tiers = [ { re: REJECT, as: 'reject' } ];
       for (var t = 0; t < tiers.length; t++) {
         if (!tiers[t].re) continue;
         for (var i = 0; i < buttons.length; i++) {
@@ -247,6 +255,11 @@ const char *k_script = R"JS(
           setTimeout(settle, 700);
           return true;
         }
+      }
+      for (var a = 0; ACCEPT && a < buttons.length; a++) {
+        var anames = names_of(buttons[a]);
+        for (var an = 0; an < anames.length; an++)
+          if (ACCEPT.test(anames[an])) { set_aside(box, anames[an]); return true; }
       }
       // Consent-shaped, on screen, and nothing in it matched. That is the case
       // a new rule has to cover, and what it offered is most of the answer.

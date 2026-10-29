@@ -93,8 +93,9 @@ static const char *k_custom = R"HTML(
 </x-consent-bump>
 <script>wire('cc');</script>)HTML";
 
-// Accept is the only way out. Refusing to click it leaves the page unusable,
-// which is the thing the option exists to fix.
+// Accept is the only way out offered. It was clicked until 2026-10-29; the
+// holder decided such a banner is set aside instead -- nothing accepted --
+// so nothing may be clicked and the page must still end up usable.
 static const char *k_accept_only = R"HTML(
 <div id="cc" style="position:fixed;bottom:0;width:100%;height:120px;background:#eee">
   <p>This site uses cookies to function.</p>
@@ -211,6 +212,21 @@ static const char *k_framed_fade = R"HTML(
 <script>document.documentElement.style.overflow='hidden';
 document.body.style.overflow='hidden';</script>)HTML";
 
+// Expressen's and DN's banner (Bonnier, Didomi), measured on the emulator:
+// acceptance or settings, and no refusal -- and an inline stylesheet first,
+// which hid the word "cookie" from a check of the raw text.
+static const char *k_okej = R"HTML(
+<div id="cc" style="position:fixed;inset:0;background:#fff">
+  <style>/* Didomi opens its popup with a stylesheet long enough that the raw
+     text's first 1200 characters are all CSS. */
+  #cc .exterior-border { border-color: rgba(34,34,34,0.15); border-width: 1px; }
+  </style><style>#cc .x{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}{color:#222}</style>
+  <p>Vi och våra partners använder kakor (cookies) för att anpassa innehåll och annonser.</p>
+  <button>Inställningar</button>
+  <button>Okej</button>
+</div>
+<script>wire('cc');</script>)HTML";
+
 // A real banner whose buttons say nothing the built-in patterns know. This is
 // the case the discovery signal exists for, and it is the normal case outside
 // English rather than an exotic one.
@@ -302,6 +318,7 @@ public:
 				if (target.startsWith("/reject"))          inner = k_reject;
 				else if (target.startsWith("/decoy"))      inner = k_decoy;
 				else if (target.startsWith("/custom"))     inner = k_custom;
+				else if (target.startsWith("/okej"))       inner = k_okej;
 				// Longer names first, as below: `/pay-inner` starts with `/pay`.
 				else if (target.startsWith("/pay-inner"))  inner = k_pay_inner;
 				else if (target.startsWith("/pay"))        inner = k_pay;
@@ -522,8 +539,13 @@ int main(int argc, char *argv[]) {
 	std::printf("\n== a banner whose only way out is accept ==\n");
 	load("/accept");
 	std::printf("  page clicked: %s\n", qPrintable(clicked_on("/accept")));
-	check(clicked_on("/accept") == "OK",
-	      "accept is taken rather than leaving the page unusable");
+	check(clicked_on("/accept").isEmpty(), "\"OK\" is not clicked: nothing is accepted");
+	check(page_usable(), "and the banner is set aside, so the page is usable");
+
+	std::printf("\n== Bonnier's banner: \"Okej\" or settings ==\n");
+	load("/okej");
+	check(clicked_on("/okej").isEmpty(), "\"Okej\" is not clicked either");
+	check(page_usable(), "and the banner is set aside");
 
 	std::printf("\n== a fixed bar that is not a consent banner ==\n");
 	load("/decoy", 6000);
