@@ -26957,7 +26957,7 @@ ten minutes; the answer comes back as `print_finished`, and the window says
 
 Verified on the emulator in `tool/emulator_checks.py`: File, Print..., Save as
 PDF, the PDF button and SAVE, then "Printed." in the status bar and a new PDF
-in Download.
+in Download. And on the Fold3 at `755034a`, reported working by the holder.
 
 ## Coming back after a dialog kills the app -- on the emulator only
 
@@ -27067,9 +27067,8 @@ sets the clipboard.
 the page, held for 1.5 seconds with `input swipe`, shows all four entries,
 and "Open in Background Tab" puts the link in `tree.txt` -- the one place it
 can only reach through the menu's choice. `test_link_menu` holds the entries.
-The phone is not needed for this: nothing here touches hardware the emulator
-lacks, though how the hold feels under a real finger is the phone's question
-whenever it is next in hand.
+The phone was not needed for this, and confirmed it anyway: on the Fold3 at
+`755034a` the holder reports the menu works under a real finger.
 
 ## The address bar suggests from the tree
 
