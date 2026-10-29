@@ -26974,7 +26974,13 @@ is all supposed to vanish; `test_rotation` the window's toggle -- on, off,
 and off by itself on the load after its own. The Android half is in
 `tool/emulator_checks.py`.
 
-## Open: after a menu closes, the browser's controls leave the accessibility tree
+## Deferred: after a menu closes, the browser's controls leave the accessibility tree
+
+**Deferred by the holder, 2026-10-29: accessibility work waits until the
+software is finished.** Recorded so the measurement is not repeated when
+that time comes; not to be picked up before then, and not to be raised as
+a finding in the meantime.
+
 
 **Found on the emulator 2026-10-29, by a check that could no longer find
 the address bar.** Open any menu from the menu bar and close it -- by

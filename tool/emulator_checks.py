@@ -369,8 +369,8 @@ def main():
 			print("\n== typing in the address bar offers the tree's pages ==")
 			# From a fresh process: after any menu has closed, the browser's own
 			# controls leave the accessibility tree, so the bar cannot be found
-			# by name (project.md, "Open: after a menu closes, the browser's
-			# controls leave the accessibility tree").
+			# by name (project.md, "Deferred: after a menu closes, the
+			# browser's controls leave the accessibility tree").
 			adb("shell", "am", "force-stop", APP)
 			adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
 			    "-d", f"http://127.0.0.1:{port}/article", "-n", f"{APP}/.HydraActivity")
