@@ -134,6 +134,26 @@ static const char k_wrapped[] = R"HTML(<!doctype html>
 <p>None of them expected the next flight to be easier, they said, only better understood, which in this business is the most anyone can honestly hope to say before a launch.</p></div></div>
 </div></main></body></html>)HTML";
 
+// Dagens ETC's shape (2026-10-29): the lead is four paragraphs in a
+// `span.story-lead`, in a section of its own before the body; the author
+// meta is a slug and the names are in the structured data. Another story's
+// lead in a list after the article must stay out.
+static const char k_lead[] = R"HTML(<!doctype html>
+<html lang="sv"><head><title>Vitlöksvräkningen | Dagens ETC</title>
+<meta property="article:author" content="emanuel-hendal">
+<script type="application/ld+json">{"@type":"NewsArticle","author":[{"@type":"Person","name":"Emanuel Hendal"},{"@type":"Person","name":"Christoffer Röstlund Jonsson"}]}</script>
+</head><body><main><article><section class="etc-story">
+<section><h1>Vitlöksvräkningen</h1>
+<span class="story-lead text-2xl"><p>LEAD-ONE Bland vitlök och vilda hårdrockare, hur hamnade partiledarens favoritkrog här?</p>
+<p>LEAD-TWO Jag går inte ut på kvällarna, säger krögaren, det tär psykiskt.</p></span></section>
+<section class="mb-2"><address class="byline">Text Emanuel Hendal</address></section>
+<section class="prose-feature"><section class="prose teaser-section">
+<p>BODY-ONE Inne på en av stadens många syltor har partiledaren beställt in en första runda starköl till ett gäng partikamrater, och då plingar det till i telefonen.</p>
+<p>BODY-TWO Åtta man, säkerhetsagenter och allt, marscherar mot dörren den här tisdagen i september, och innehållet i meddelandet skapar en social explosion vid bordet.</p>
+</section></section></section></article>
+<aside><article><span class="story-lead"><p>OTHER-LEAD Another story's lead, in the list of stories after this one.</p></span></article></aside>
+</main></body></html>)HTML";
+
 // Right to left, and named in its own language.
 static const char k_rtl[] = R"HTML(<!doctype html>
 <html lang="ar" dir="rtl"><head><title>RTL</title></head><body><main>
@@ -319,6 +339,20 @@ int main(int argc, char *argv[]) {
 		      QString("every block, from the opening (%1)").arg(ok ? "found" : why));
 		check(!a.html.contains("Advertisement placeholder"), "and none of the ads between them");
 		check(a.html.indexOf("OPENING-PART") < a.html.indexOf("CLOSING-PART"), "in order");
+	}
+
+	section("a lead kept apart from the body, and a byline from the structured data");
+	{
+		reader_extract::article a;
+		QString why;
+		const bool ok = extract(view, k_lead, QUrl("https://www.etc.se/story/x"), &a, &why);
+		check(ok && a.html.contains("LEAD-ONE") && a.html.contains("LEAD-TWO") &&
+		        a.html.contains("BODY-ONE") && a.html.contains("BODY-TWO"),
+		      QString("the lead and the body (%1)").arg(ok ? "found" : why));
+		check(a.html.indexOf("LEAD-TWO") < a.html.indexOf("BODY-ONE"), "the lead first");
+		check(!a.html.contains("OTHER-LEAD"), "and not another story's lead");
+		check(a.byline == "Emanuel Hendal, Christoffer Röstlund Jonsson",
+		      "the names, not the slug: " + a.byline);
 	}
 
 	section("right to left");

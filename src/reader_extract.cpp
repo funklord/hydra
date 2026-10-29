@@ -180,6 +180,39 @@ const char *k_source = R"JS(
     }
   }
 
+  // **The lead, where the page keeps it apart from the body.** A news site
+  // sets its standfirst in a block of its own before the paragraphs -- on
+  // Dagens ETC (2026-10-29) four paragraphs in a `span.story-lead`, a
+  // section away from the body -- and it scores below the body's floor, so
+  // the article came out without its opening. Taken only from the same
+  // article (its <article>, or failing one three levels up from the body),
+  // only before the body, outermost, visible, and at most 2,000 characters,
+  // so a teaser list elsewhere on the page cannot be pulled in.
+  var LEAD = /(^|[\s_-])(lead|ingress|preamble|standfirst|dek|deck|excerpt|summary)($|[\s_-])/i;
+  var scope = parts[0].closest ? parts[0].closest('article') : null;
+  if (!scope) {
+    scope = parts[0];
+    for (var lv = 0; lv < 3 && scope.parentElement && scope.parentElement !== body; lv++)
+      scope = scope.parentElement;
+  }
+  var leads = [], lead_size = 0;
+  var cands = scope.querySelectorAll('*');
+  for (var li = 0; li < cands.length; li++) {
+    var ln = cands[li];
+    if (!LEAD.test(label(ln)) || chrome(ln) || ln.offsetParent === null) continue;
+    if (!(ln.compareDocumentPosition(parts[0]) & 4)) continue;   // not before the body
+    var inside = false;
+    for (var pi = 0; pi < parts.length && !inside; pi++)
+      inside = ln.contains(parts[pi]) || parts[pi].contains(ln);
+    for (var lj = 0; lj < leads.length && !inside; lj++)
+      inside = leads[lj].contains(ln);
+    var lt = text(ln).length;
+    if (inside || lt < 40 || lead_size + lt > 2000) continue;
+    leads.push(ln);
+    lead_size += lt;
+  }
+  parts = leads.concat(parts);
+
   // Rebuilt, never copied: tags from the allow-list, a few attributes, text
   // escaped. Hidden things, chrome and link lists are left out.
   var title = meta('meta[property="og:title"]') || meta('meta[name="twitter:title"]');
@@ -246,8 +279,28 @@ const char *k_source = R"JS(
   }
   for (var q = 0; q < parts.length; q++) walk(parts[q]);
 
+  // A meta author that is an address or a slug -- `emanuel-hendal` on
+  // Dagens ETC -- names a page, not a person: the structured data's names
+  // come next, then the page's own byline.
   var byline = meta('meta[name="author"]') || meta('meta[property="article:author"]');
-  if (!byline || /^https?:/i.test(byline)) {
+  if (/^https?:/i.test(byline) || /^[a-z0-9]+(-[a-z0-9]+)+$/.test(byline)) byline = '';
+  if (!byline) {
+    var lds = document.querySelectorAll('script[type="application/ld+json"]');
+    for (var si = 0; si < lds.length && !byline; si++) {
+      try {
+        var ldj = JSON.parse(lds[si].textContent);
+        var arts = [].concat(ldj && ldj['@graph'] ? ldj['@graph'] : ldj);
+        for (var ai = 0; ai < arts.length && !byline; ai++) {
+          var au = arts[ai] && arts[ai].author;
+          if (!au) continue;
+          byline = [].concat(au).map(function (x) {
+            return typeof x === 'string' ? x : (x && x.name) || '';
+          }).filter(function (x) { return x; }).join(', ');
+        }
+      } catch (e) { /* not JSON this extractor can read */ }
+    }
+  }
+  if (!byline) {
     var b = body.querySelector('[rel="author"], [itemprop="author"], .byline, .author');
     byline = b ? text(b) : '';
   }

@@ -27119,6 +27119,24 @@ real structure as a fixture, which the extractor before the fix fails with
 the phone's exact message. `tool/webview_probe.py` gained the means to ask
 any page, not only YouTube, which is how the structure was read.
 
+**A fifth, from a paywalled Dagens ETC story the holder sent (2026-10-29)**:
+the reader showed 65 words and the byline `emanuel-hendal`. The server
+sends only a teaser -- the lead, two paragraphs, the subscribe box -- and
+says so in its JSON-LD (`isAccessibleForFree: False`, the rest under
+`.paywalled`, which is not in the page at all). Of that, the lead was lost:
+four paragraphs in a `span.story-lead`, in a section of its own before the
+body, scoring under the floor. So a block whose class names a lead
+(`lead`, `ingress`, `preamble`, `standfirst`, `dek`, `excerpt`, `summary`)
+is put first when it is in the same `<article>` (or three levels up from
+the body), before the body, visible, outermost, and 2,000 characters at
+most -- the limits are what keep another story's lead in a list out. And
+an author meta that is an address or a slug gives way to the JSON-LD's
+names. Afterwards: 146 words, the whole free text, and both authors.
+**What hydra cannot do here is show the rest**: no crawler is sent more
+(Googlebot, bingbot and Facebook's agent get the site's bot challenge,
+status 247; Twitterbot gets the same teaser), so there is nothing in reach
+to extract.
+
 **Tested in three places**: `test_reader` holds the parsing and the document
 (escaping, a "%5" in a title, the policy, light and dark, right to left);
 `try_reader` the extractor in a real engine, against fixtures whose chrome
