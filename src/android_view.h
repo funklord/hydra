@@ -370,6 +370,10 @@ public:
 	static void report_probe(qint64 id, int token, const QString &json);
 	// The page patches' report, from the WebView's console (`onConsole`).
 	static void report_console(qint64 id, const QString &text);
+	// What was chosen from the long-press menu (`link_menu.h`): `action` is
+	// the word `link_menu::encode` wrote, `value` the address or the text.
+	static void report_link_menu(qint64 id, const QString &action,
+	                             const QString &value);
 
 protected:
 	// The native view lives outside Qt's widget tree, so it has to be told

@@ -21107,7 +21107,9 @@ sweep does not re-derive them:
 - **Neither web view installs a page context menu**, so a long press on a
   page gets whatever the backend does. That is Qt WebEngine's own menu on
   the desktop and the system WebView's behaviour on Android -- a platform
-  default in both, not a gap this tree left.
+  default in both, not a gap this tree left. **Half wrong, corrected
+  2026-10-29:** Android's default is a text selection and nothing else, which
+  is a gap; see *A held finger on a link has a menu on Android*.
 
 ## The grip I added took the scrollbar's presses
 
@@ -26916,6 +26918,48 @@ them never was is a present-tense claim about an environment, quoted rather
 than re-derived. Recorded so the next session does not run `test_live_model`
 and conclude the suite is broken.
 
+## A held finger on a link has a menu on Android
+
+**The system WebView offers nothing on a long press but a text selection**,
+so on a phone there was no way to open a link beside the page, copy where it
+goes, or save a picture -- everything the desktop gets from Qt WebEngine's
+own context menu. (An earlier sweep filed "neither web view installs a page
+context menu" as a platform default rather than a gap; on the desktop it is,
+and on Android the platform's default is the gap.)
+
+**What it offers is decided in C++ and shown by Android.** `link_menu` is
+pure: a web link earns Open in New Tab, Open in Background Tab, Copy Link
+Address and Save Link; a web image Open Image in New Tab, Copy Image Address
+and Save Image; a linked image both; `mailto:` and `tel:` only a copy of the
+address without the scheme, since a tap already hands them to their app. A
+`javascript:` link, and a `data:` or `blob:` image, earn nothing -- none of
+them is an address anybody can open, copy or fetch again -- and a press that
+earns nothing is left to the page, so selecting text works as before.
+
+**The menu is the platform's, not a `QMenu`, and that is decided by
+`android_view` rather than by taste.** The WebView is drawn over everything
+Qt renders, so `android_view` moves it out of the way while any Qt popup is
+up; a Qt menu would have opened over a page that had vanished. Java asks
+`linkMenu(link, image)` -- answered on Android's UI thread, which is safe
+because the module is pure -- and shows the entries with
+`showContextMenu(x, y)` at the finger. For a picture inside a link the hit
+test names only the picture; the link comes from `requestFocusNodeHref` on a
+message, so that one case takes the press before knowing it will have a menu.
+
+**Each choice goes the way the desktop's would.** The opens are
+`new_window_requested` as a request the person made, so the tab lands under
+the page, in the background when asked; Save is a new seam signal,
+`download_requested`, which the window answers with `start_download`; Copy
+sets the clipboard.
+
+**Verified on the emulator**, in `tool/emulator_checks.py`: a link placed on
+the page, held for 1.5 seconds with `input swipe`, shows all four entries,
+and "Open in Background Tab" puts the link in `tree.txt` -- the one place it
+can only reach through the menu's choice. `test_link_menu` holds the entries.
+The phone is not needed for this: nothing here touches hardware the emulator
+lacks, though how the hold feels under a real finger is the phone's question
+whenever it is next in hand.
+
 ## The address bar suggests from the tree
 
 Listed as unbuilt in *What is next* since a 2026-09-18 session, with the
@@ -27344,8 +27388,9 @@ carried along as amendments to a list item.
    - ~~**Address-bar autocomplete.**~~ **Built 2026-10-29**, see
      *The address bar suggests from the tree*. (The `autocomplete` elsewhere
      in this file is the HTML attribute the form filler reads.)
-   - **A long-press context menu on Android web pages.** It goes through the
-     `android_view` JNI layer, so it should be built with a phone connected.
+   - ~~**A long-press context menu on Android web pages.**~~ **Built
+     2026-10-29, and verified on the emulator rather than a phone**, see
+     *A held finger on a link has a menu on Android*.
 
    The proxy cookie supplier and DASH muxing were on the same list. Both
    have their own sections here and are waiting on the holder's decision.

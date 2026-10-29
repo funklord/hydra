@@ -514,6 +514,12 @@ signals:
 	void new_window_requested(const QUrl &url, bool user_initiated,
 	                           bool background, web_view_backend **adopt);
 
+	// The person asked to save something the page links to -- "Save Link" or
+	// "Save Image" from Android's long-press menu (`link_menu.h`). The desktop
+	// engine's own menu downloads through the profile instead, so only a
+	// backend that builds its own menu emits this.
+	void download_requested(const QUrl &url);
+
 	// Where the link under the pointer would take you. An empty url means the
 	// pointer left one. **This is the browser's oldest security affordance**:
 	// the only way to see where a link goes before committing to it, and the

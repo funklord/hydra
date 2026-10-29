@@ -12,6 +12,7 @@
 #ifdef Q_OS_ANDROID
 
 #include "android_view.h"
+#include "link_menu.h"
 #include "network_rules.h"
 #include "request_filter.h"
 #include "permissions_shim.h"
@@ -21,6 +22,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QApplication>
+#include <QClipboard>
 #include <QDialog>
 #include <QFileDialog>
 #include <QLabel>
@@ -177,6 +179,16 @@ QString bundled(const QString &source) {
 	return s;
 }
 
+// A Java string as a QString, a null one as empty.
+QString java_string(JNIEnv *env, jstring j) {
+	if (!j)
+		return QString();
+	const char *utf = env->GetStringUTFChars(j, nullptr);
+	const QString s = QString::fromUtf8(utf);
+	env->ReleaseStringUTFChars(j, utf);
+	return s;
+}
+
 // One id per view, so the Java side can keep more than one WebView and the C++
 // side never holds a Java reference across threads.
 qint64 next_id() {
@@ -232,6 +244,24 @@ Java_se_vibes_hydra_HydraWebView_onConsole(JNIEnv *env, jclass, jlong id, jstrin
 	if (utf)
 		env->ReleaseStringUTFChars(text, utf);
 	android_view::report_console(id, s);
+}
+
+// What a long press on this link or image offers, as `link_menu::encode`
+// writes it. Pure, so it is answered here on Android's UI thread: Java has
+// to know before returning from the press whether to take it from the page.
+extern "C" JNIEXPORT jstring JNICALL
+Java_se_vibes_hydra_HydraWebView_linkMenu(JNIEnv *env, jclass, jstring link,
+                                          jstring image) {
+	const QString spec = link_menu::encode(
+	  link_menu::entries(QUrl(java_string(env, link)), QUrl(java_string(env, image))));
+	return env->NewStringUTF(spec.toUtf8().constData());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onLinkMenu(JNIEnv *env, jclass, jlong id,
+                                            jstring action, jstring value) {
+	android_view::report_link_menu(id, java_string(env, action),
+	                               java_string(env, value));
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -1192,6 +1222,32 @@ void android_view::report_console(qint64 id, const QString &text) {
 	QMetaObject::invokeMethod(qApp, [id, text] {
 		if (android_view *v = s_views.value(id))
 			emit v->console_message(0, text, 0, QString());
+	}, Qt::QueuedConnection);
+}
+
+void android_view::report_link_menu(qint64 id, const QString &word,
+                                    const QString &value) {
+	QMetaObject::invokeMethod(qApp, [id, word, value] {
+		android_view *v = s_views.value(id);
+		link_menu::action a;
+		if (!v || !link_menu::parse_action(word, &a))
+			return;
+		// The two opens go the way a page's own request for a window goes, as
+		// one the person made: a tab under this one, foreground or not.
+		switch (a) {
+			case link_menu::action::open:
+				emit v->new_window_requested(QUrl(value), true, false, nullptr);
+				break;
+			case link_menu::action::open_background:
+				emit v->new_window_requested(QUrl(value), true, true, nullptr);
+				break;
+			case link_menu::action::copy:
+				QGuiApplication::clipboard()->setText(value);
+				break;
+			case link_menu::action::save:
+				emit v->download_requested(QUrl(value));
+				break;
+		}
 	}, Qt::QueuedConnection);
 }
 

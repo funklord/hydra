@@ -18,7 +18,9 @@
 #      refused one is what raised YouTube's "Ad blockers" wall;
 #   3. an Annoyed report filed from the Tools menu records what was refused,
 #      the page's tells -- one planted, so an empty list cannot pass -- and
-#      the patches that ran.
+#      the patches that ran;
+#   4. a held finger on a link opens the long-press menu (`link_menu.h`),
+#      and "Open in Background Tab" puts the link in the tree.
 #
 # What makes it stop: every adb call has a timeout, every wait is bounded,
 # and the emulator -- started in its own session -- is killed in `finally`,
@@ -187,6 +189,39 @@ def main():
 		check("ad_status.js" not in report.get("refused", "") or
 		      "answered with" in report.get("refused", ""),
 		      "ad_status.js shown as answered, if listed")
+
+		print("\n== a held finger on a link offers the long-press menu ==")
+		# A link of our own, large and on top, so where to press is known
+		# rather than read off somebody's layout.
+		target = "https://example.org/held-" + str(int(time.time()))
+		where = json.loads(probe(
+		  "(function () { var a = document.createElement('a'); a.href = '" + target + "';"
+		  " a.textContent = 'HOLD'; a.style.cssText = 'position:fixed;top:40%;left:10%;"
+		  "width:80%;height:120px;z-index:2147483647;background:#fc0;font-size:40px;"
+		  "display:block'; document.body.appendChild(a); var r = a.getBoundingClientRect();"
+		  " return JSON.stringify({x: r.left + r.width / 2, y: r.top + r.height / 2,"
+		  " dpr: window.devicePixelRatio}); })()").strip() or "{}")
+		adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+		tree = et.fromstring(adb("shell", "cat", "/sdcard/ui.xml") or "<x/>")
+		view = next((n for n in tree.iter("node")
+		             if n.get("class") == "android.webkit.WebView"), None)
+		if view is None or "x" not in where:
+			check(False, "found the page and the link on screen")
+		else:
+			left, top = map(int, re.findall(r"\d+", view.get("bounds"))[:2])
+			x = int(left + where["x"] * where["dpr"])
+			y = int(top + where["y"] * where["dpr"])
+			adb("shell", "input", "swipe", str(x), str(y), str(x), str(y), "1500")
+			adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+			shown = adb("shell", "cat", "/sdcard/ui.xml")
+			for label in ("Open in New Tab", "Open in Background Tab",
+			              "Copy Link Address", "Save Link"):
+				check(label in shown, f"the menu offers {label}")
+			tap("Open in Background Tab", limit=10)
+			def in_tree():
+				return target in adb("shell", "run-as", APP, "cat", "files/tree.txt")
+			check(wait_for("the link in the tree", in_tree, 20),
+			      "Open in Background Tab put the link in the tree")
 	finally:
 		try:
 			adb("emu", "kill", timeout=20)

@@ -240,6 +240,64 @@ public class HydraWebView {
     public static native void onConsole(long id, String text);
 
     /**
+     * What a long press on this link or image offers: a line per entry,
+     * {@code action TAB label TAB value}, or empty for nothing. Answered by
+     * {@code link_menu} in C++, which is pure, so it is safe on this thread.
+     */
+    public static native String linkMenu(String link, String image);
+    /** One entry of that menu was chosen. */
+    public static native void onLinkMenu(long id, String action, String value);
+
+    /**
+     * **A held finger on a link or an image**, which the system WebView
+     * answers with nothing but a text selection -- so on a phone there was no
+     * way to open a link beside the page, copy where it goes, or save a
+     * picture. The entries come from C++ and the menu is the platform's own,
+     * because the WebView is drawn over everything Qt renders and a Qt menu
+     * would have the page moved out from under it.
+     *
+     * Returns whether the press was taken. Anything that is not a link or an
+     * image is left to the page, so selecting text works as it did.
+     */
+    static boolean offerLinkMenu(final long id, final Player w) {
+        final WebView.HitTestResult hit = w.getHitTestResult();
+        if (hit == null)
+            return false;
+        final String extra = hit.getExtra();
+        switch (hit.getType()) {
+            case WebView.HitTestResult.SRC_ANCHOR_TYPE:
+                return showLinkMenu(w, extra, null);
+            case WebView.HitTestResult.IMAGE_TYPE:
+                return showLinkMenu(w, null, extra);
+            case WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE: {
+                // The hit test names the picture; the link around it is asked
+                // for separately and arrives on a message. Taken now, since
+                // the answer has to be given before it arrives -- a picture
+                // nobody can use inside a link that does nothing is the one
+                // case that then shows no menu.
+                final android.os.Handler h =
+                  new android.os.Handler(android.os.Looper.getMainLooper()) {
+                    @Override public void handleMessage(android.os.Message m) {
+                        showLinkMenu(w, m.getData().getString("url"), extra);
+                    }
+                };
+                w.requestFocusNodeHref(h.obtainMessage());
+                return true;
+            }
+            default:
+                return false;
+        }
+    }
+
+    static boolean showLinkMenu(Player w, String link, String image) {
+        final String spec = linkMenu(link == null ? "" : link, image == null ? "" : image);
+        if (spec == null || spec.isEmpty())
+            return false;
+        w.menu = spec.split("\n");
+        return w.showContextMenu(w.touchX, w.touchY);
+    }
+
+    /**
      * One question asked of the page now, in its own world -- the only one an
      * Android page has -- answered through `onProbeResult`. No view, no
      * answer: the shell is told so with an empty one rather than left
@@ -813,6 +871,7 @@ public class HydraWebView {
                 if (VIEWS.containsKey(id))
                     return;
                 Player w = new Player(a);
+                w.id = id;
                 w.getSettings().setJavaScriptEnabled(true);
                 w.getSettings().setDomStorageEnabled(true);
                 // **What this browser says it is.** The WebView's own default
@@ -891,6 +950,11 @@ public class HydraWebView {
                 // this repeatedly while it is still counting, with a partial
                 // total, so forwarding every call made the bar's number climb
                 // and then fall back. `isDoneCounting` is the one that is true.
+                w.setOnLongClickListener(new View.OnLongClickListener() {
+                    @Override public boolean onLongClick(View v) {
+                        return offerLinkMenu(id, (Player) v);
+                    }
+                });
                 w.setFindListener(new WebView.FindListener() {
                     @Override public void onFindResultReceived(int active,
                                                                 int matches,
@@ -1446,6 +1510,45 @@ public class HydraWebView {
         private int pending = -1;
 
         Player(android.content.Context c) { super(c); }
+
+        long id;
+        /** Where the last touch went down, which is where a menu opens. */
+        float touchX, touchY;
+        /** The long-press menu being opened, as {@link #linkMenu} wrote it. */
+        String[] menu;
+
+        @Override
+        public boolean dispatchTouchEvent(android.view.MotionEvent e) {
+            if (e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) {
+                touchX = e.getX();
+                touchY = e.getY();
+            }
+            return super.dispatchTouchEvent(e);
+        }
+
+        @Override
+        protected void onCreateContextMenu(android.view.ContextMenu m) {
+            super.onCreateContextMenu(m);
+            final String[] lines = menu;
+            menu = null;
+            if (lines == null)
+                return;
+            for (int i = 0; i < lines.length; ++i) {
+                final String[] f = lines[i].split("\t", 3);
+                if (f.length < 3)
+                    continue;
+                if (i == 0)
+                    m.setHeaderTitle(f[2].length() > 120 ? f[2].substring(0, 120) + "\u2026"
+                                                         : f[2]);
+                m.add(android.view.Menu.NONE, i, i, f[1]).setOnMenuItemClickListener(
+                  new android.view.MenuItem.OnMenuItemClickListener() {
+                    @Override public boolean onMenuItemClick(android.view.MenuItem item) {
+                        onLinkMenu(id, f[0], f[2]);
+                        return true;
+                    }
+                });
+            }
+        }
 
         @Override
         protected void onWindowVisibilityChanged(int visibility) {

@@ -4723,6 +4723,11 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 			                                       : source),
 			          line, qPrintable(text));
 		});
+		connect(view, &web_view_backend::download_requested, this,
+		         [this, view](const QUrl &u) {
+			if (view == current_view())
+				start_download(u);
+		});
 		connect(view, &web_view_backend::link_hovered, this,
 		         [this, view](const QUrl &u) {
 			if (view == current_view())

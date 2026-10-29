@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build 7506d9eb, mtime 2026-10-29 00:45)
+#     /home/claude/src/fmake/fmake  (build 3b5a2d23, mtime 2026-10-29 02:45)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -46,6 +46,7 @@ OBJSETS_SOURCES = \
 	test/test_invariants.cpp \
 	test/test_investigation.cpp \
 	test/test_kiosk.cpp \
+	test/test_link_menu.cpp \
 	test/test_live_model.cpp \
 	test/test_media.cpp \
 	test/test_model.cpp \
@@ -346,6 +347,9 @@ OBJS_test_kiosk = \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o
+
+OBJS_test_link_menu = \
+	$(BUILD_DIR)/app/link_menu.o
 
 OBJS_test_live_model = \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
