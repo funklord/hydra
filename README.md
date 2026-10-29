@@ -1,23 +1,93 @@
 # Hydra — a tree-shaped browser
 
+Anyone who does real work on the web keeps far more pages than a browser was
+designed to hold. A browser offers two places to keep them, and both fail at
+scale. Tabs become a strip of unreadable slivers, and they are lost with a
+crash, a closed window or a "close other tabs" pressed by accident. Bookmarks
+are a separate store that nobody tends, because putting a page there takes it
+out of the place you are working. Meanwhile every page carries ads, trackers,
+consent banners and scripts that check whether you block them. The defences
+are extensions, each with its own rules and its own permissions, and none of
+them knows what the others decided. On a phone most of those defences are not
+available at all.
+
+Hydra keeps every page in **one tree**, and the tree is a **plain-text
+outline** on disk: you can open it in an editor, diff it, and commit it to git.
+A page in the tree that has never been loaded costs nothing, so the tree is also
+where bookmarks live; there is no second store to keep in step. A tab put to
+sleep keeps its back and forward history, and a popup lands as a child of the
+page that opened it. The jobs other browsers leave to extensions are built in
+and answer to **one per-site policy engine** with twenty capabilities: blocking
+with uBlock Origin's own filter lists, answering cookie banners, finding the
+stream a page is really playing, downloading torrents beside ordinary files,
+reading view, and passwords from KeePassXC. It runs on Linux on Qt 6 Widgets
+over Chromium, and on Android over the system WebView, with the same filter and
+the same policy on both.
+
+A model can help, and never acts alone. A local model (Ollama, by default) can
+propose a reorganisation of the tree; the browser checks the proposal against
+the tree's rules and shows it as a diff, and nothing moves until you accept.
+The same goes for filter rules it learns from pages you visit.
+
+## How it compares
+
+- **Tree Style Tab and Sidebery** (Firefox) show tabs as a tree. That tree lives
+  in browser storage you cannot read or version, bookmarks stay a separate
+  store, and a closed tab is gone. In Hydra the tree is the file. An unopened
+  node replaces the bookmark, a sleeping tab wakes where you left it, and a tree
+  of thousands of pages costs nothing until you open them.
+- **Vivaldi's tab stacks** group tabs two levels deep in the browser's own
+  database. Hydra's tree nests as deep as you need (up to 64 levels, checked),
+  and nodes move between folders like files: Ctrl-drag copies, and folders
+  spring open on hover.
+- **uBlock Origin, and Brave's built-in blocker**, block by filter lists. Hydra
+  reads uBlock Origin's own lists, including what makes them work on hard sites:
+  rules with options, exceptions, `$badfilter`, stand-in responses for refused
+  scripts (`redirect=`), cosmetic filters, and the scriptlets with uBlock's JSON
+  query language. It does this on Android's system WebView too, which no
+  extension reaches. It adds what uBlock does not have:
+  - a **"Something got through here"** report, recording what was refused, what
+    the page can see of the browser and which patches ran;
+  - a **filter-evolution loop** that proposes rules from what pages did, tests
+    them against real requests, and shows them as a diff;
+  - a warning when a page is **checking whether you block ads**.
+- **Consent-O-Matic** answers cookie banners. Hydra does too, with the least
+  permissive choice the site offers. Its rules are files with a record of where
+  they came from, and they can be exported and handed to someone else.
+- **Video download helpers** guess the stream from the page's addresses. Hydra
+  watches what the page feeds the video decoder (a Media Source tap), so it
+  reports what is actually playing. It also hands pages to **yt-dlp** with the
+  headers the stream needs, and checks that your player can open a stream
+  before sending it there.
+- **A torrent client beside the browser** (qBittorrent, Transmission) means a
+  second application and a handoff. In Hydra, magnet links and torrents
+  download in the same queue as HTTP files, and you can watch one while it is
+  still arriving.
+- **The KeePassXC-Browser extension** needs a native-messaging host beside the
+  browser. Hydra speaks the protocol itself, with libsodium for the crypto, and
+  fills passwords only behind a strict origin match and the site's policy.
+  (This is written and tested against the protocol, but not yet against a
+  running KeePassXC; see *What is not done*.)
+- **Firefox's Reader View** shows an article alone. So does Hydra's
+  (View ▸ Reader View), on the desktop and on Android alike. It runs its own
+  extractor, and the reader page refuses every script.
+- **Chrome and Firefox's address bars** send what you type to a search engine
+  as you type it, by default. Hydra's suggests only from your own tree, and
+  sends nothing anywhere.
+- **Chrome's and Firefox's site settings** decide what a page may use. Hydra's
+  also decide what a page is sent and shown: the referer, autofill, cookie
+  notices, ads, and whether it gets the desktop site. Each request a page made,
+  and how it was answered (including what the operating system then said), is
+  kept per site where you can see it.
+
 Working name (rename freely — it's `TARGET` in `hydra.pro` and `@target` in
-`src/main.cpp`). A Linux/X11 desktop browser on **Qt 6 Widgets** (no QML) over
-its own embedded Chromium, with **Android as a first-class target** running on
-the system WebView behind the same seam.
-
-The shape of it: your tabs are a **tree in a plain text file**, one request
-filter and one policy engine serve both engines, and the parts that would
-normally be extensions — ad filtering, consent banners, media capture, a
-password manager, a torrent client — are in the browser and answer to the same
-per-site rules.
-
-`project.md` is the working record: what *is*, what was measured, and what is
-merely assumed. `doc/architecture.md` is the design. `test/README.md` before
-running anything.
+`src/main.cpp`). `project.md` is the working record: what *is*, what was
+measured, and what is merely assumed. `doc/architecture.md` is the design.
+Read `test/README.md` before running anything.
 
 ---
 
-## What it does that other browsers don't
+## What it does that other browsers don't, in detail
 
 The list the rest of this file exists to support. Some of these are large and
 some are a single line of code; they are here because a mainstream browser does
@@ -239,7 +309,10 @@ Kept here rather than left for you to discover.
 - **Media detection and the extractor loop are measured, not finished.** The loop
   returns a usable extractor roughly three times in five on a clean media host
   and once in five on a noisy one. `project.md` has the numbers and the failures.
-- **The platform's own autofill service on Android** is unimplemented.
+- **The KeePassXC bridge has never met a real KeePassXC.** The protocol is
+  implemented and its socket path settled, but framing, key exchange and
+  association have only been tested against the protocol, not a running
+  KeePassXC.
 - **Android's Back button was answered only recently**, and the drawer only
   learned to close on an outside tap at the same time. Both are on the phone and
   neither has had long enough to be trusted.
