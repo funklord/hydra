@@ -37913,8 +37913,9 @@ with a stand-in was listed as refused, and is now recorded with the
 resource that answered it; and no console line reached the shell on
 Android, so `patches` was always empty -- the WebView's console now
 forwards the scriptlet runner's own report line, and nothing else a page
-logs. That last one is built and not yet seen on the phone, which locked
-before it could be.
+logs. Seen on the phone the same night: a report filed on `m.youtube.com`
+lists 18 patches run and none failed, `ad_status.js` and `pagead/id` as
+answered with their stand-ins, and no tells.
 
 The phone's report also showed the stand-in working there: `fetch` of
 `static.doubleclick.net/instream/ad_status.js` on `m.youtube.com` returned
