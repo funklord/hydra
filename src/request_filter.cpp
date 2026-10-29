@@ -78,6 +78,21 @@ bool request_filter::is_ad_host(const QString &host) const {
 	return false;
 }
 
+bool request_filter::blocks_popup(const QUrl &url, const QString &opener_host) const {
+	if (!m_engine || m_rules.size() == 0 || !url.isValid())
+		return false;
+	if (m_engine->is_allowed(feature::ads, opener_host) || m_rules.site_allowed(opener_host))
+		return false;
+	network_rule_set::request q;
+	q.host = url.host();
+	q.site = opener_host;
+	q.type = request_type::popup;
+	q.url = url.toString();
+	q.lower = q.url.toLower();
+	const network_rule_set::verdict v = m_rules.evaluate(q);
+	return v.block && (!v.allow || v.important);
+}
+
 request_decision request_filter::decide(const request_context &ctx) const {
 	request_decision d;
 	if (!m_engine)

@@ -38636,6 +38636,32 @@ target here, but its execution context is reachable from the page target's
 `Runtime.executionContextCreated` list; and a `pgrep` wait loop matched its
 own command line, as `running-code.md` warns, and waited out its full term.
 
+### `$popup`: a window the lists name is refused, clicked or not
+
+**What the lists still could not say, counted 2026-10-29** over the holder's
+six subscriptions, by the syntax this build refused: `$popup` 3,049;
+procedural cosmetic operators (`:has-text`, `:upward`, ...) 1,250;
+`##^` HTML filters 403; `#?#` 295; `$removeparam` 269; `$denyallow` 260;
+`$urlskip` 222; `$csp` 94; the rest in tens. `$popup` led by far.
+
+**And it fills a hole the popup policy leaves on purpose.** That policy
+stops a window a script opens by itself and lets one a click opens through
+-- which is exactly how a popunder arrives: a click anywhere opens the ad.
+`$popup` rules name those windows' addresses. So `open_new_window` now asks
+`request_filter::blocks_popup` before a window becomes a tab, whoever opened
+it, and refuses one a rule names, saying so in the status bar.
+
+**Kept apart in both directions** (`request_type::popup`): a popup is
+decided by `$popup` rules alone, and a `$popup` rule decides no request --
+Android describes many requests as `unknown`, which a type-less match would
+otherwise have let a popup rule reach. A rule naming `$popup,script` decides
+both, and nothing else. Exceptions and `$important` work as for requests,
+and ads allowed in the shield let every window through.
+`test_subscription` holds the matching, the three older tests that used
+`$popup` as their unsupported example now use `$removeparam`, and
+`test_rotation` drives a click to a named address: no tab, the message,
+and any other window still opening.
+
 ### Generic hiding from the subscribed lists, with their own exceptions
 
 **Blocked ads left their reserved space behind**: on Expressen's front page

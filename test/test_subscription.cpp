@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
 			// A scriptlet naming the catalog is its own kind; the section
 			// below is about those. These are the ones this build reads and
 			// does not implement, each for its own reason.
-			{ "||ads.example.com^$popup", line_kind::unsupported,
+			{ "||ads.example.com^$removeparam=utm_source", line_kind::unsupported,
 			   "a rule with an option this build does not read" },
 			{ "/^https?:\\/\\/ads\\./", line_kind::unsupported,
 			   "a regular-expression rule" },
@@ -374,10 +374,10 @@ int main(int argc, char **argv) {
 		// claims an unimplemented name is the shape this tree calls right by
 		// coincidence, and what found it was sabotaging the gate and reading
 		// WHICH checks went red rather than that some did.
-		// The two exceptions that stood here became readable 2026-10-29;
-		// popups are not.
+		// The two exceptions that stood here became readable 2026-10-29, and
+		// so did the popup rules after them; `$removeparam` is not.
 		const subscription_read unread = filter_subscription::read(
-		  "||a.example^$popup\n||b.example^$popup\n"
+		  "||a.example^$removeparam=x\n||b.example^$removeparam=y\n"
 		  "example.com##+js(trusted-click-element, .accept)\n");
 		check(!unread.ok() && unread.refusal.contains("3 candidate"),
 		       QString("three lines, none enforceable (%1)")
@@ -1193,8 +1193,8 @@ int main(int argc, char **argv) {
 		check(parse_network_rule("||ads.example^$third-party,badfilter", &r, &why, &target) ==
 		        parsed::badfilter && target == "||ads.example^$third-party",
 		      QString("badfilter names the rule it cancels (%1)").arg(target));
-		check(parse_network_rule("||ads.example^$popup", &r, &why) == parsed::refused &&
-		        why.contains("popup"),
+		check(parse_network_rule("||ads.example^$removeparam=x", &r, &why) == parsed::refused &&
+		        why.contains("removeparam"),
 		      QString("an unknown option is refused, named (%1)").arg(why));
 		check(parse_network_rule("||ads.example^", &r, &why) == parsed::none,
 		      "and a plain rule is the block list's");
@@ -1285,6 +1285,54 @@ int main(int argc, char **argv) {
 		check(ask("https://cdn.shop.com/ad/1.gif", "x.example", request_type::image) &&
 		        !ask("https://cdn.shop.com/add/1.gif", "x.example", request_type::image),
 		      "and one with no token at all, filed by three characters");
+	}
+
+	section("a $popup rule refuses a window, and nothing else");
+	{
+		policy_engine policy;
+		request_filter filter(&policy);
+		QList<network_rule> rules;
+		network_rule r;
+		const char *const lines[] = {
+			"||popads.example^$popup",
+			"||mixed.example^$popup,script",
+			"||pop.example^$popup",
+			"@@||pop.example^$popup,domain=friend.example",
+			"||lists-only.example^$script",
+		};
+		int read = 0;
+		for (const char *line : lines)
+			if (parse_network_rule(QString::fromLatin1(line), &r, nullptr) == parsed::option) {
+				rules << r;
+				++read;
+			}
+		check(read == 5, QString("all five are read, $popup understood (%1)").arg(read));
+		filter.set_network_rules(rules);
+		const auto ask = [&](const QString &url, unsigned type) {
+			request_context ctx;
+			ctx.url = QUrl(url);
+			ctx.request_host = ctx.url.host();
+			ctx.site_host = "news.example";
+			ctx.type = type;
+			return filter.decide(ctx).block;
+		};
+		check(filter.blocks_popup(QUrl("https://popads.example/x"), "news.example"),
+		      "a window to an address a $popup rule names is refused");
+		check(!ask("https://popads.example/x.js", request_type::script) &&
+		        !ask("https://popads.example/x", request_type::unknown),
+		      "and a request to it is not -- an untyped one included, as Android's often are");
+		check(filter.blocks_popup(QUrl("https://mixed.example/"), "news.example") &&
+		        ask("https://mixed.example/a.js", request_type::script) &&
+		        !ask("https://mixed.example/a.png", request_type::image),
+		      "a rule naming a popup and a type decides both, and only those");
+		check(!filter.blocks_popup(QUrl("https://lists-only.example/"), "news.example"),
+		      "a rule without $popup decides no window");
+		check(!filter.blocks_popup(QUrl("https://pop.example/"), "friend.example") &&
+		        filter.blocks_popup(QUrl("https://pop.example/"), "news.example"),
+		      "an exception lifts it where it says, and only there");
+		policy.set_setting("news.example", policy::feature::ads, policy::setting::allow);
+		check(!filter.blocks_popup(QUrl("https://popads.example/x"), "news.example"),
+		      "and ads allowed in the shield let every window through");
 	}
 
 	section("generic hiding, its exceptions and the hosts that turn it off are read");

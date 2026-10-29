@@ -137,6 +137,13 @@ public:
 
 	request_decision decide(const request_context &ctx) const;
 
+	// **Whether a list forbids this window**: `$popup` rules alone, under the
+	// same shield (ads allowed on the opener's site, or a `$document`
+	// exception there, lets everything through) and the same exceptions,
+	// `$important` outranking them. Asked before a window becomes a tab,
+	// whoever opened it -- a popunder arrives on a click.
+	bool blocks_popup(const QUrl &url, const QString &opener_host) const;
+
 	// Cookie decisions are the same shape: policy plus the first-party host.
 	bool allow_cookie(const QString &site_host, bool third_party) const;
 

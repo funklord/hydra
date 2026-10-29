@@ -64,6 +64,7 @@
 #include <QTemporaryDir>
 #include <QStandardItemModel>
 #include "consent_blocker.h"
+#include "network_rules.h"
 #include "consent_dialog.h"
 #include "annoyance_log.h"
 #include "autofill_controller.h"
@@ -1040,6 +1041,41 @@ int main(int argc, char **argv) {
 			v->navigated_to(QUrl("about:blank"));
 			spin(50);
 			check(!reader->isEnabled(), "and there is nothing to read on a page that is not the web");
+		}
+	}
+
+	section("a window the lists name is refused, even from a click");
+	{
+		policy_engine pol;
+		request_filter popfilter(&pol);
+		network_rule r;
+		QList<network_rule> rules;
+		if (parse_network_rule("||popads.example^$popup", &r, nullptr) == parsed::option)
+			rules << r;
+		popfilter.set_network_rules(rules);
+		main_window m(&factory, &pol, &popfilter);
+		m.show();
+		spin(200);
+		node *page = m.m_model->add_tab(nullptr, "a page", "https://news.example/");
+		fake_view *v = nullptr;
+		if (page) {
+			const QModelIndex idx = m.m_proxy->mapFromSource(m.m_model->index_for_node(page));
+			emit m.m_tree->activated(idx);
+			spin(200);
+			v = static_cast<fake_view *>(m.m_views_by_id.value(page->id, nullptr));
+		}
+		check(v != nullptr && rules.size() == 1, "a page, and a $popup rule");
+		if (v) {
+			const int before = page->children.size();
+			v->asked_new_window(QUrl("https://popads.example/land"), /*user_initiated=*/true);
+			spin(100);
+			check(page->children.size() == before,
+			      "a click that opens the named address makes no tab");
+			check(m.m_status->currentMessage().contains("popads.example"),
+			      "and the status bar says what was refused: " + m.m_status->currentMessage());
+			v->asked_new_window(QUrl("https://elsewhere.example/"), /*user_initiated=*/true);
+			spin(100);
+			check(page->children.size() == before + 1, "while any other window still opens");
 		}
 	}
 

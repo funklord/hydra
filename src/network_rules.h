@@ -61,6 +61,11 @@ enum : unsigned {
 	font        = 1u << 6,
 	ping        = 1u << 7,
 	other       = 1u << 8,
+	// A new window the page opens. Only a rule that names `$popup` decides
+	// one, and such a rule decides nothing else: a plain block is about
+	// requests, and Android describes many requests as `unknown`, which a
+	// popup rule must not reach.
+	popup       = 1u << 9,
 };
 }
 

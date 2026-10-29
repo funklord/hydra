@@ -5612,6 +5612,17 @@ node *main_window::open_new_window(const QUrl &url, bool user_initiated,
 
 	web_view_backend *from = current_view();
 	const QString asker = from ? from->url().host() : QString();
+	// **A window the lists name is refused, clicked or not.** The popup
+	// policy below stops a window a script opens by itself, and lets one a
+	// click opens through -- which is exactly how a popunder arrives: a click
+	// anywhere on the page opens the ad. uBlock's `$popup` rules (3,049 in
+	// the holder's lists, read since 2026-10-29) name those windows.
+	if (m_filter && m_filter->blocks_popup(url, asker)) {
+		m_status->showMessage(
+		  QString("Blocked a popup to %1 -- the filter lists name it.")
+		      .arg(url.host().isEmpty() ? url.toString() : url.host()), 8000);
+		return nullptr;
+	}
 	if (!user_initiated &&
 	     !m_policy->is_allowed(policy::feature::popups, asker)) {
 		m_status->showMessage(

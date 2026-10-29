@@ -74,6 +74,7 @@ unsigned type_bit(const QString &word) {
 	if (word == QLatin1String("font")) return font;
 	if (word == QLatin1String("ping") || word == QLatin1String("beacon")) return ping;
 	if (word == QLatin1String("other")) return other;
+	if (word == QLatin1String("popup")) return popup;
 	return 0;
 }
 
@@ -385,8 +386,19 @@ void network_rule_set::each_candidate(const request &r, F f) const {
 
 bool network_rule_set::applies(const network_rule &rule, const request &r,
                                bool same_party) const {
-	if (rule.types && r.type != request_type::unknown && !(rule.types & r.type))
+	// **Popups apart, both ways** (`request_type::popup`): a popup is
+	// decided by `$popup` rules alone, and a `$popup` rule's other types, if
+	// it has any, are what it says about everything else.
+	if (r.type == request_type::popup) {
+		if (!(rule.types & request_type::popup))
+			return false;
+	} else if (rule.types & request_type::popup) {
+		const unsigned rest = rule.types & ~unsigned(request_type::popup);
+		if (!rest || (r.type != request_type::unknown && !(rest & r.type)))
+			return false;
+	} else if (rule.types && r.type != request_type::unknown && !(rule.types & r.type)) {
 		return false;
+	}
 	// A block naming no type spares fonts, as the plain rules do: a blocked
 	// webfont shows a page's icons as their ligature text.
 	if (!rule.types && rule.act == network_rule::action::block &&
