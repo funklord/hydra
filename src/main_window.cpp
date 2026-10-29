@@ -795,6 +795,12 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_blob_timer->setSingleShot(true);
 	m_blob_timer->setInterval(5000);
 	connect(m_blob_timer, &QTimer::timeout, this, &main_window::flush_blobs);
+	// **And the hint, like the other two.** This one was missing, and it is
+	// the longest of the three: the tree's write refreshed the hint while
+	// the history was still pending, nothing refreshed it after, and
+	// "Saving..." stayed on screen with everything already on disk.
+	connect(m_blob_timer, &QTimer::timeout, this,
+	         &main_window::refresh_save_hint);
 
 	// A logout, a shutdown or a Ctrl-C ends the process without ever closing
 	// the window, so `closeEvent` -- the only thing that writes the view state

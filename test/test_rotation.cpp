@@ -185,6 +185,8 @@ public:
 	// Announce a navigation the way a real backend does. A signal cannot be
 	// emitted from outside its class, so the fake offers the door.
 	void navigated_to(const QUrl &u) { m_url = u; emit url_changed(u); }
+	// And the end of that load, which is what queues the tab's history.
+	void finished_loading(bool ok = true) { emit load_finished(ok); }
 	// The same door for a window request. Returns whatever the shell offered
 	// to adopt, which is null when it declined to make one.
 	web_view_backend *asked_new_window(const QUrl &u, bool user_initiated,
@@ -1308,6 +1310,37 @@ int main(int argc, char **argv) {
 		                            ? QString("still showing \"%1\"")
 		                                .arg(ok_hint->text())
 		                            : QString("hidden")));
+
+		// **Three writers raise the hint, and all three have to lower it.**
+		// A finished load queues the tab's history on the longest debounce,
+		// 5000 ms, behind the tree's 1500. The tree's write refreshed the
+		// hint while the history was still pending, so it showed; the history
+		// write never refreshed it, so it went on showing "Saving..." after
+		// everything was on disk -- seen in a phone screenshot minutes after
+		// the last page load, and true of the desktop alike.
+		node *page = saved.m_model->node_by_id("h1");
+		if (page) {
+			const QModelIndex idx =
+			  saved.m_proxy->mapFromSource(saved.m_model->index_for_node(page));
+			emit saved.m_tree->activated(idx);
+			spin(200);
+		}
+		auto *v = page ? static_cast<fake_view *>(saved.m_views_by_id.value(page->id, nullptr))
+		               : nullptr;
+		check(v != nullptr, "the tab has a view to load in");
+		if (v) {
+			v->navigated_to(QUrl("https://example.com/moved"));
+			v->finished_loading();
+			spin(2000);   // the tree's write has run; the history's has not
+			check(ok_hint && ok_hint->isVisible(),
+			       "while the history write is pending, it says so");
+			spin(4500);   // past the history's 5000 ms as well
+			check(ok_hint && !ok_hint->isVisible(),
+			       QString("and goes out once the history is written too (%1)")
+			         .arg(ok_hint && ok_hint->isVisible()
+			                ? QString("still showing \"%1\"").arg(ok_hint->text())
+			                : QString("hidden")));
+		}
 	}
 
 	section("tapping the address bar selects what is in it");
