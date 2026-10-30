@@ -334,6 +334,62 @@ int main(int argc, char *argv[]) {
 		filter.set_network_rules({});
 	}
 
+	// **A page a list says not to visit**: not requested, a warning in its
+	// place, and the warning's own way through opens it.
+	section("a $doc rule refuses the page, warns, and lets the person through");
+	{
+		QList<network_rule> rules;
+		network_rule r;
+		parse_network_rule("||127.0.0.1^*/badpage$doc", &r, nullptr);
+		rules << r;
+		filter.set_network_rules(rules);
+		server.asked.clear();
+		const QString target = QString("http://127.0.0.1:%1/badpage?x=1").arg(server.port);
+		bar->setText(target);
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		spin(2500);
+		bool asked = false;
+		for (const QString &a : std::as_const(server.asked))
+			asked = asked || a.startsWith("/badpage");
+		QWebEngineView *shown = nullptr;
+		for (QWebEngineView *v : w.findChildren<QWebEngineView *>())
+			if (v->isVisible())
+				shown = v;
+		check(!asked, QString("the page was never requested (%1)").arg(server.asked.join(" ")));
+		check(shown && shown->title().startsWith("Blocked:"),
+		      "the warning is shown in its place: " + (shown ? shown->title() : QString("no view")));
+		QString through;
+		bool got = false;
+		if (shown)
+			shown->page()->runJavaScript(
+			  "document.querySelector('a.through').href",
+			  [&](const QVariant &v) { through = v.toString(); got = true; });
+		for (int i = 0; i < 100 && !got; ++i)
+			spin(50);
+		check(through.contains("hydra-proceed="), "with a way through: " + through);
+		// A forged token is not one.
+		server.asked.clear();
+		bar->setText(target + "&hydra-proceed=forged");
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		spin(2000);
+		asked = false;
+		for (const QString &a : std::as_const(server.asked))
+			asked = asked || a.startsWith("/badpage");
+		check(!asked, "a token the warning did not make opens nothing");
+		server.asked.clear();
+		bar->setText(through);
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		spin(2500);
+		bool opened = false, leaked = false;
+		for (const QString &a : std::as_const(server.asked)) {
+			opened = opened || a == "/badpage?x=1";
+			leaked = leaked || a.contains("hydra-proceed");
+		}
+		check(opened && !leaked, QString("the way through opens the page, token left off (%1)")
+		                           .arg(server.asked.join(" ")));
+		filter.set_network_rules({});
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

@@ -119,7 +119,16 @@ struct network_rule {
 	int         priority = 0;
 	bool        rule_only = false;   // `redirect-rule=`: only where blocked anyway
 	bool        important = false;   // a block no exception reaches
-	bool        document = false;    // an allow for the whole page (`$document`)
+	// `$document`: as an allow, the whole page exempt; as a block, **the
+	// page itself refused** -- uBlock's strict blocking, shown as a warning
+	// with a way through (`request_filter::page_block`). The Badware risks
+	// list is 2,786 of these, fake download sites mostly, and every one was
+	// refused until 2026-10-30, so the list hydra ships for protection
+	// protected almost nothing.
+	bool        document = false;
+	// `$all`: every type a request can have, popups included, and the page
+	// itself. 1,357 more lines of that list.
+	bool        all = false;
 	unsigned    types = 0;           // 0: any
 	unsigned    not_types = 0;       // `~type`
 	QStringList include;             // domain= sites, empty: any
@@ -195,6 +204,9 @@ public:
 	QString skip(const request &r) const;
 	// Whether a `$document` exception exempts this page whole.
 	bool site_allowed(const QString &site) const;
+	// The text of a `$document` or `$all` block that refuses this page, or
+	// empty. Says nothing about exceptions: the caller asks `site_allowed`.
+	QString page_blocked(const QString &url, const QString &host) const;
 
 private:
 	template <typename F> void each_candidate(const request &r, F f) const;
@@ -204,6 +216,8 @@ private:
 	QHash<QString, QList<int>> m_by_host;    // `||host` patterns
 	QHash<QString, QList<int>> m_by_site;    // no host, but domain= sites
 	QList<int>                 m_params;     // removeparam rules, asked apart
+	QList<int>                 m_pages;      // page blocks with no host
+	QHash<QString, QList<int>> m_pages_by_host;
 	QHash<QString, QList<int>> m_by_token;   // neither: by a token of the pattern
 	// **No token either, filed by three characters of its literal.** Patterns
 	// like `.com/ad/` have no run of four to file by, and as one list tried

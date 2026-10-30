@@ -11,6 +11,7 @@
 // failure that would otherwise promote an empty list over a working one and
 // turn ad blocking off without saying so.
 #include "filter_subscription.h"
+#include "blocked_page.h"
 #include "filter_list.h"
 #include "policy_engine.h"
 #include "network_rules.h"
@@ -1182,8 +1183,9 @@ int main(int argc, char **argv) {
 		check(parse_network_rule("@@||site.example^$document", &r, &why) == parsed::option &&
 		        r.document,
 		      "a $document exception exempts a page");
-		check(parse_network_rule("||site.example^$document", &r, &why) == parsed::refused,
-		      QString("while a $document block is refused (%1)").arg(why));
+		check(parse_network_rule("||site.example^$document", &r, &why) == parsed::option &&
+		        r.document && r.act == network_rule::action::block,
+		      QString("and a $document block is a page block (%1)").arg(why));
 		check(parse_network_rule("||ads.example^$script,~third-party,important", &r, &why) ==
 		        parsed::option && r.act == network_rule::action::block && r.party == 1 &&
 		        r.important,
@@ -1654,6 +1656,73 @@ int main(int argc, char **argv) {
 		        QUrl("https://dest.example/?id=3"),
 		      "the filter skips, then removes on the destination: " +
 		        f.clean_navigation(QUrl("https://out.example/st?url=https%3A%2F%2Fdest.example%2F%3Futm_source%3Dx%26id%3D3")).toString());
+	}
+
+	section("$doc and $all: a page a list says not to visit is refused");
+	{
+		network_rule r;
+		QString why;
+		check(parse_network_rule("||vlc.de^$doc", &r, &why) == parsed::option && r.document &&
+		        !r.all && r.act == network_rule::action::block,
+		      QString("$doc is a page block (%1)").arg(why));
+		check(parse_network_rule("||fake-square.com^$all", &r, &why) == parsed::option &&
+		        r.document && r.all && (r.types & request_type::popup),
+		      QString("$all is a page block and every type, popups too (%1)").arg(why));
+		QList<network_rule> rules;
+		for (const char *line : { "||vlc.de^$doc", "||fake-square.com^$all",
+		                          "||files.example/download/$doc",
+		                          "||trusted.example^$doc", "@@||trusted.example^$document" }) {
+			if (parse_network_rule(QString::fromLatin1(line), &r, nullptr) == parsed::option)
+				rules << r;
+		}
+		policy_engine pol;
+		request_filter f(&pol);
+		f.set_network_rules(rules);
+		check(f.page_block(QUrl("https://www.vlc.de/download")) == "||vlc.de^$doc" &&
+		        f.page_block(QUrl("https://fake-square.com/")) == "||fake-square.com^$all",
+		      "the page is refused, and the rule named: " + f.page_block(QUrl("https://www.vlc.de/")));
+		check(f.page_block(QUrl("https://files.example/download/x.exe")) ==
+		        "||files.example/download/$doc" &&
+		        f.page_block(QUrl("https://files.example/about")).isEmpty(),
+		      "a path rule refuses its path only");
+		check(f.page_block(QUrl("https://videolan.org/vlc/")).isEmpty() &&
+		        f.page_block(QUrl("https://trusted.example/")).isEmpty(),
+		      "nor another site, nor one a page exception exempts");
+		network_rule_set::request q;
+		q.url = "https://cdn.vlc.de/app.js";
+		q.lower = q.url;
+		q.host = "cdn.vlc.de";
+		q.site = "other.example";
+		q.type = request_type::script;
+		request_context ctx;
+		ctx.url = QUrl("https://fake-square.com/pixel.gif");
+		ctx.request_host = "fake-square.com";
+		ctx.site_host = "other.example";
+		ctx.kind = resource_kind::image;
+		ctx.type = request_type::image;
+		check(f.decide(ctx).block, "$all blocks the host's requests as well");
+		ctx.url = QUrl("https://www.vlc.de/app.js");
+		ctx.request_host = "www.vlc.de";
+		ctx.type = request_type::script;
+		check(!f.decide(ctx).block, "while $doc says nothing about requests");
+		pol.set_setting("vlc.de", policy::feature::ads, policy::setting::allow);
+		check(f.page_block(QUrl("https://vlc.de/")).isEmpty(),
+		      "the shield's allow lets it through, as for every list rule");
+		f.proceed("fake-square.com");
+		check(f.page_block(QUrl("https://fake-square.com/")).isEmpty() &&
+		        f.page_block(QUrl("https://www.fake-square.com/")).isEmpty() &&
+		        f.proceeded("FAKE-square.com"),
+		      "and so does going on past the warning, for that site and its redirects");
+		check(!f.page_block(QUrl("https://files.example/download/x")).isEmpty(),
+		      "and for no other");
+
+		const QString page = blocked_page::build(QUrl("https://www.vlc.de/dl?a=1"),
+		                                         "||vlc.de^$doc<script>", "tok123", false);
+		check(page.contains("default-src 'none'") && !page.contains("<script>") &&
+		        page.contains("&lt;script&gt;"),
+		      "the warning forbids scripts, and the rule is shown escaped");
+		check(page.contains("href=\"https://www.vlc.de/dl?a=1&amp;hydra-proceed=tok123\""),
+		      "and its way through carries the token");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

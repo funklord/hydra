@@ -251,10 +251,16 @@ parsed parse_network_rule(const QString &line, network_rule *out, QString *why,
 			    options.contains(QLatin1String("queryprune")) ||
 			    options.contains(QLatin1String("urlskip=")))
 				continue;
-			if (!allow)
-				return refuse(QStringLiteral("blocks a page itself ($document), "
-				                             "which this engine does not do"));
 			r.document = true;
+			continue;
+		}
+		if (o == QLatin1String("all")) {
+			r.all = true;
+			r.document = true;
+			r.types |= request_type::script | request_type::image | request_type::stylesheet |
+			           request_type::xhr | request_type::subdocument | request_type::media |
+			           request_type::font | request_type::ping | request_type::other |
+			           request_type::popup;
 			continue;
 		}
 		if (o.startsWith(QLatin1Char('~'))) {
@@ -282,6 +288,9 @@ parsed parse_network_rule(const QString &line, network_rule *out, QString *why,
 		}
 		return parsed::badfilter;
 	}
+	if (r.document && !allow && !removes && !skips &&
+	    r.act == network_rule::action::redirect)
+		return refuse(QStringLiteral("a page block with a redirect"));
 	if (skips) {
 		if (removes || r.act == network_rule::action::redirect)
 			return refuse(QStringLiteral("urlskip with another action"));
@@ -354,6 +363,8 @@ void network_rule_set::replace(const QList<network_rule> &rules) {
 	m_rest.clear();
 	m_documents.clear();
 	m_documents_by_host.clear();
+	m_pages.clear();
+	m_pages_by_host.clear();
 	for (int i = 0; i < m_rules.size(); ++i) {
 		const network_rule &r = m_rules[i];
 		if (r.act == network_rule::action::removeparam ||
@@ -361,7 +372,17 @@ void network_rule_set::replace(const QList<network_rule> &rules) {
 			m_params << i;
 			continue;
 		}
-		if (r.document) {
+		// A page block apart from the page exceptions: `site_allowed` is
+		// asked on every request, and has no business reading thousands.
+		if (r.document && r.act != network_rule::action::allow) {
+			if (!r.host.isEmpty())
+				m_pages_by_host[r.host] << i;
+			else
+				m_pages << i;
+			// `$all` is a block for every request as well as the page.
+			if (!r.all)
+				continue;
+		} else if (r.document) {
 			if (!r.host.isEmpty())
 				m_documents_by_host[r.host] << i;
 			else
@@ -760,6 +781,41 @@ QString network_rule_set::skip(const request &r) const {
 		const QString to = run_steps(rule->steps, r.url);
 		if (!to.isEmpty() && to != r.url)
 			return to;
+	}
+	return QString();
+}
+
+QString network_rule_set::page_blocked(const QString &url, const QString &host) const {
+	QReadLocker guard(&m_lock);
+	if ((m_pages.isEmpty() && m_pages_by_host.isEmpty()) || host.isEmpty())
+		return QString();
+	const QString h0 = host.toLower();
+	QList<int> candidates = m_pages;
+	for (QString h = h0; !h.isEmpty();) {
+		const auto it = m_pages_by_host.constFind(h);
+		if (it != m_pages_by_host.constEnd())
+			candidates += it.value();
+		const int dot = h.indexOf(QLatin1Char('.'));
+		if (dot < 0)
+			break;
+		h = h.mid(dot + 1);
+	}
+	for (int i : candidates) {
+		const network_rule &rule = m_rules[i];
+		if (!rule.include.isEmpty()) {
+			bool in = false;
+			for (const QString &d : rule.include)
+				in = in || site_in(h0, d);
+			if (!in)
+				continue;
+		}
+		bool out = false;
+		for (const QString &d : rule.exclude)
+			out = out || site_in(h0, d);
+		if (out)
+			continue;
+		if (rule.pattern.isEmpty() || rule.match.match(url).hasMatch())
+			return rule.text;
 	}
 	return QString();
 }

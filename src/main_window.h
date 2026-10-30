@@ -867,6 +867,10 @@ public:
 	// Kept so the accepted rules can be handed to it once the list is loaded,
 	// which happens after construction.
 	request_filter     *m_filter        = nullptr;
+	// **The way through each page-block warning**: a token per warning shown,
+	// to the address it was shown for (`blocked_page`). Made here so a page
+	// cannot forge one; used once.
+	QHash<QString, QUrl> m_page_block_tokens;
 	keepass_bridge     *m_keepass       = nullptr;
 	// One autofill controller per view now, parented to the view and found
 	// through it -- see `current_autofill` and the per-view creation in

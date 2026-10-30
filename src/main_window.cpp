@@ -1,9 +1,12 @@
 #include "main_window.h"
 #include "address_suggest.h"
+#include "blocked_page.h"
 #include <QAbstractItemView>
 #include <QStandardItemModel>
 #include <QCompleter>
 #include <QListWidget>
+#include <QRandomGenerator>
+#include <QUrlQuery>
 
 #include "auth_dialog.h"
 #include "permission_dialog.h"
@@ -5444,6 +5447,44 @@ bool main_window::allow_navigation(web_view_backend *view, const QUrl &url,
                                     bool in_main_frame, bool user_initiated) {
 	if (!view || !in_main_frame || !url.isValid())
 		return true;
+
+	// **A page a list says not to visit** is not opened: a warning is shown in
+	// its place, naming the rule, with a way through (`blocked_page`). The
+	// way through comes back here as the same address carrying this warning's
+	// token -- the person chose, so the host is let through for the session
+	// and the address loaded without the token.
+	if (m_filter) {
+		const QUrlQuery query(url);
+		const QString token = query.queryItemValue(blocked_page::token_key());
+		if (!token.isEmpty() && m_page_block_tokens.contains(token)) {
+			const QUrl target = m_page_block_tokens.take(token);
+			m_filter->proceed(target.host());
+			QPointer<web_view_backend> v(view);
+			QMetaObject::invokeMethod(this, [v, target] {
+				if (v)
+					v->load(target);
+			}, Qt::QueuedConnection);
+			return false;
+		}
+		const QString rule = m_filter->page_block(url);
+		if (!rule.isEmpty()) {
+			const QString made = QString::number(QRandomGenerator::global()->generate64(), 36);
+			m_page_block_tokens.insert(made, url);
+			const bool dark = palette().color(QPalette::Window).lightness() < 128;
+			const QString html = blocked_page::build(url, rule, made, dark);
+			QPointer<web_view_backend> v(view);
+			// Not from inside the engine's own decision, as with the locked
+			// tab's sub-tab below.
+			QMetaObject::invokeMethod(this, [v, html, url] {
+				if (v)
+					v->show_html(html, url);
+			}, Qt::QueuedConnection);
+			if (m_status)
+				m_status->showMessage(QString("Did not open %1: a filter list names it as a "
+				                              "page not to visit.").arg(url.host()), 8000);
+			return false;
+		}
+	}
 
 	const QString id = m_views_by_id.key(view);
 	node *n = id.isEmpty() ? nullptr : m_model->node_by_id(id);

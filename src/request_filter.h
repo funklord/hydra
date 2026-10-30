@@ -140,6 +140,19 @@ public:
 	// instead. Answers to the shield as `decide` does -- a site whose ads are
 	// allowed, or that a `$document` exception exempts, keeps its address.
 	QUrl clean_navigation(const QUrl &url) const;
+
+	// **A page a list says not to visit** (`network_rule::document`): the
+	// text of the `$document` or `$all` rule that refuses it, or empty. Not
+	// for a site whose ads are allowed, one a page exception exempts, or one
+	// the person has chosen to go on to this session (`proceed`). Asked by
+	// the shell before a page navigation, on both backends.
+	QString page_block(const QUrl &url) const;
+	// The person read the warning and went on: no page block on this site
+	// (its registrable domain, so its own redirects follow) until the
+	// browser closes. Kept in memory only, on purpose -- a choice
+	// made past a warning is not one to remember silently for ever.
+	void proceed(const QString &host);
+	bool proceeded(const QString &host) const;
 	int network_rule_count(network_rule::action a) const { return m_rules.count(a); }
 	int redirect_count() const { return m_rules.count(network_rule::action::redirect); }
 
@@ -184,6 +197,8 @@ private:
 	const filter_list *m_list = nullptr;
 	const filter_list *m_subscribed = nullptr;
 	network_rule_set   m_rules;
+	mutable QMutex     m_proceed_lock;
+	QSet<QString>      m_proceeded;
 	mutable QMutex     m_trial_lock;
 	QString            m_trial_site;
 	filter_list        m_trial;

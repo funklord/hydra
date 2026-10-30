@@ -41,7 +41,14 @@ void qtwebengine_interceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
 		default:                            ctx.type = request_type::other; break;
 	}
 
-	const request_decision d = m_filter->decide(ctx);
+	request_decision d = m_filter->decide(ctx);
+	// **A page the person chose to open past a list's warning** is not then
+	// refused as a request: a `$all` rule blocks the page's own document as
+	// well as everything else it names, and the warning's way through
+	// (`request_filter::proceed`) is for the page.
+	if (d.block && info.resourceType() == RT::ResourceTypeMainFrame &&
+	    m_filter->proceeded(ctx.request_host))
+		d = request_decision();
 	// Every request reaches the observers, blocked or not: the media detector
 	// wants what loaded, and filter-evolution wants what slipped through.
 	m_filter->notify(ctx, d);

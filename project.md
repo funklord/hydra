@@ -38654,6 +38654,45 @@ target here, but its execution context is reachable from the page target's
 `Runtime.executionContextCreated` list; and a `pgrep` wait loop matched its
 own command line, as `running-code.md` warns, and waited out its full term.
 
+### Pages a list says not to visit: refused, with a warning and a way through
+
+**The Badware risks list hydra ships and enables protected almost
+nothing.** It is 2,786 `$doc` lines and 1,357 `$all` lines -- fake download
+pages for VLC, Audacity and 7-Zip, scam and malware hosts -- and the reader
+refused every one ("blocks a page itself, which this engine does not do").
+Measured 2026-10-30, along with 568 more `$doc` lines in EasyList and 197
+in Privacy.
+
+Now a `$document` block is a **page block**, and `$all` is a page block
+that also blocks every request to the host, popups included. They sit in
+their own index (`m_pages`), since `site_allowed` -- the page exceptions --
+is asked on every request and has no business reading thousands.
+`request_filter::page_block` answers for a page, after the shield, the
+page exceptions and the person's own choice to go on.
+
+**The shell decides, on both backends, before anything is requested**:
+`main_window::allow_navigation` is the navigation decider both engines
+already ask, and on Android `android_view::load` now asks it too, as the
+desktop engine asks about a typed address. A refused page is replaced by
+`blocked_page`: what was not opened, the rule, the address, and a way
+through -- uBlock's strict blocking, the same three things. The way
+through is the same address carrying a token made for that one warning,
+so no other page can link past it; following it lets the **site**
+through for the session (its registrable domain, since `vlc.de` answers
+with a redirect to `www.vlc.de`, which was refused again until it did).
+In memory only, on purpose: a choice made past a warning is not one to
+remember silently. The desktop interceptor lets that page's own document
+through a `$all` block once the person has gone on.
+
+`test_subscription` holds the rules, the shield, the exceptions and the
+warning page; `try_filters` refuses a page through the real window, finds
+it never requested, refuses a forged token, and goes through with the
+token left off the request. **On the emulator with the real lists**:
+`vlc.de` opened from outside and `7zip.es` navigated to from a page were
+both refused with the warning, and the way through opened 7zip.es.
+(`vlc.de`'s own certificate is refused by that emulator, `net_error -202`,
+so its way through ends at the site's TLS, not at hydra.)
+
 ### `$removeparam`: a tracker's parameters leave the page's address
 
 **269 lines of the default lists, refused as an unknown option until

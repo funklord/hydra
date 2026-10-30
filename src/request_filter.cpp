@@ -121,6 +121,31 @@ QUrl request_filter::clean_navigation(const QUrl &url) const {
 	return QUrl(clean, QUrl::StrictMode);
 }
 
+QString request_filter::page_block(const QUrl &url) const {
+	const QString host = url.host().toLower();
+	if (!m_engine || host.isEmpty() || m_rules.size() == 0 ||
+	    (url.scheme() != QLatin1String("http") && url.scheme() != QLatin1String("https")))
+		return QString();
+	if (m_engine->is_allowed(feature::ads, host) || proceeded(host) ||
+	    m_rules.site_allowed(host))
+		return QString();
+	return m_rules.page_blocked(url.toString(QUrl::FullyEncoded), host);
+}
+
+// The site, not the host name: `vlc.de` answers with a redirect to
+// `www.vlc.de`, which was refused again after the person had chosen to go on
+// (measured on the emulator, 2026-10-30).
+void request_filter::proceed(const QString &host) {
+	QMutexLocker guard(&m_proceed_lock);
+	m_proceeded.insert(policy_engine::etld_plus_one(host.toLower()));
+}
+
+bool request_filter::proceeded(const QString &host) const {
+	QMutexLocker guard(&m_proceed_lock);
+	return !m_proceeded.isEmpty() &&
+	       m_proceeded.contains(policy_engine::etld_plus_one(host.toLower()));
+}
+
 request_decision request_filter::decide(const request_context &ctx) const {
 	request_decision d;
 	if (!m_engine)

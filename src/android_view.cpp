@@ -1579,6 +1579,12 @@ void android_view::load(const QUrl &address) {
 	// sees only what the page itself navigates to.
 	const QUrl clean = s_filter ? s_filter->clean_navigation(address) : QUrl();
 	const QUrl url = clean.isValid() ? clean : address;
+	// **And it is put to the shell's navigation decider**, as the desktop's
+	// engine puts a typed address: a page a list says not to visit is
+	// refused there, and a locked tab keeps its page. A refusal leaves the
+	// view as it is; the decider shows whatever it shows instead.
+	if (m_navigation_decider && !m_navigation_decider(url, true, true))
+		return;
 	m_url = url;
 	if (!m_native) {
 		// No WebView: say so, and say what was asked for.
