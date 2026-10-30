@@ -836,8 +836,10 @@ int main(int argc, char **argv) {
 
 		// The count lives here, once. It moves when the catalog does, which
 		// is the point: a name added without a test is an entry nothing ran.
-		check(scriptlets::names().size() == 52,
-		       QString("fifty-two scriptlets in the catalog (%1)")
+		// 54 since `xml-prune` and `m3u-prune`, which need an XML parser
+		// and a network and so are run by `try_prune` in a real engine.
+		check(scriptlets::names().size() == 54,
+		       QString("fifty-four scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 		// The trusted four, named here rather than counted: the question a
 		// reader has is which scriptlets can act on a page's behalf, and a

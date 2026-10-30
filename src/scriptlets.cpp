@@ -2477,6 +2477,156 @@ C['trusted-prevent-dom-bypass'] = function (path, property) {
 	});
 };
 
+// xml-prune: remove from an XML response what a selector names -- the ad
+// periods in a DASH manifest, the ads in a VAST or VMAP document. uBlock's
+// lists use it on Hulu, Peacock, Max, Paramount+, CNN, discovery+ and Pluto,
+// 22 lines, and it was not in this catalog until 2026-10-30.
+//
+// The selector is CSS, or `xpath(...)` for what CSS cannot say -- a manifest's
+// default namespace, an attribute such as `mediaPresentationDuration`, which
+// an XPath can select and a selector cannot. A selected attribute is taken
+// off its element; a selected element out of its parent. `check`, when given,
+// must match something first, and a body that is not well-formed XML is left
+// as it came.
+var xml_pruner = function (selector, check) {
+	var sel = String(selector == null ? '' : selector);
+	if (!sel) return null;
+	var chk = String(check == null ? '' : check);
+	var xp = /^xpath\(.*\)$/.test(sel) ? sel.slice(6, -1) : '';
+	return function (text) {
+		var s = String(text);
+		// A document starts with `<` and ends with `>`, as uBlock's `xmlPrune`
+		// requires before it parses anything.
+		if (!/^\s*</.test(s) || !/>\s*$/.test(s)) return s;
+		if (typeof window.DOMParser !== 'function') return s;
+		var doc = new window.DOMParser().parseFromString(s, 'text/xml');
+		if (!doc || doc.getElementsByTagName('parsererror').length) return s;
+		if (chk && !doc.querySelector(chk)) return s;
+		var hits = [];
+		if (xp) {
+			var r = doc.evaluate(xp, doc, null, 7, null);   // ordered snapshot
+			for (var i = 0; i < r.snapshotLength; i++) hits.push(r.snapshotItem(i));
+		} else {
+			hits = Array.prototype.slice.call(doc.querySelectorAll(sel));
+		}
+		if (!hits.length) return s;
+		for (var j = 0; j < hits.length; j++) {
+			var n = hits[j];
+			if (n.nodeType === 2) {
+				if (n.ownerElement) n.ownerElement.removeAttribute(n.name);
+			} else if (n.parentNode) {
+				n.parentNode.removeChild(n);
+			}
+		}
+		return new window.XMLSerializer().serializeToString(doc);
+	};
+};
+
+C['xml-prune'] = function (selector, check, match) {
+	var prune = xml_pruner(selector, check);
+	if (!prune) return;
+	var wanted = matcher(match);
+	filter_fetch(wanted, prune);
+	// A `document` response is handed over as it is: replacing what this
+	// cannot read would give the page something it did not ask for.
+	filter_xhr(wanted, prune, function (real) { return real; });
+};
+
+// m3u-prune: remove an HLS playlist's ad segments. Used on Fox, SBS, A&E and
+// Lifetime, 10play and others; 7 lines. Read out of uBlock's `m3uPrune`
+// (src/js/resources/scriptlets.js), not recalled -- the first version here
+// was recalled, and differed in each of the three points below.
+//
+//  * A plain pattern is literal text with `*` as a wildcard; `/re/` takes the
+//    flags g, m and s, and `m` brings `s` with it.
+//  * Line by line, an `#EXTINF` goes when the line AFTER it matches -- the
+//    segment's address -- taking that line and a `#EXT-X-DISCONTINUITY`
+//    after it; and a `#EXT-X-CUE:TYPE="SpliceOut"` block goes whatever the
+//    pattern, with the cue lines that close it.
+//  * A multi-line pattern cuts what it matches widened to whole lines, and
+//    joins what is left around the cut.
+//
+// A body that is not a playlist is left alone.
+var m3u_regex = function (arg) {
+	if (arg === '') return /^/;
+	var m = /^\/(.+)\/([gms]*)$/.exec(arg);
+	if (m) {
+		var flags = m[2] || '';
+		if (flags.indexOf('m') >= 0) flags += 's';
+		try { return new RegExp(m[1], flags); } catch (e) { return null; }
+	}
+	return new RegExp(arg.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*+/g, '.*?'));
+};
+
+var m3u_pruner = function (pattern) {
+	var p = String(pattern == null ? '' : pattern);
+	if (p === '') return null;
+	var re = m3u_regex(p);
+	if (!re) return null;
+	var starts = function (l, t) { return typeof l === 'string' && l.indexOf(t) === 0; };
+	var splice_out = function (lines, i) {
+		if (!starts(lines[i], '#EXT-X-CUE:TYPE="SpliceOut"')) return false;
+		lines[i] = undefined; i++;
+		var then = ['#EXT-X-ASSET:CAID', '#EXT-X-SCTE35:', '#EXT-X-CUE-IN', '#EXT-X-SCTE35:'];
+		for (var k = 0; k < then.length; k++)
+			if (starts(lines[i], then[k])) { lines[i] = undefined; i++; }
+		return true;
+	};
+	var inf_block = function (lines, i) {
+		if (!starts(lines[i], '#EXTINF')) return false;
+		if (typeof lines[i + 1] !== 'string') return false;
+		re.lastIndex = 0;
+		if (!re.test(lines[i + 1])) return false;
+		lines[i] = lines[i + 1] = undefined;
+		if (starts(lines[i + 2], '#EXT-X-DISCONTINUITY')) lines[i + 2] = undefined;
+		return true;
+	};
+	return function (text) {
+		var s = String(text);
+		if (!/^\s*#EXTM3U/.test(s)) return s;
+		if (re.multiline) {
+			re.lastIndex = 0;
+			for (;;) {
+				var m = re.exec(s);
+				if (m === null) break;
+				var cut = m[0], before = s.slice(0, m.index);
+				if (!/^[\n\r]+/.test(cut) && !/[\n\r]+$/.test(before)) {
+					var sol = /[^\n\r]+$/.exec(before);
+					if (sol) { before = before.slice(0, sol.index); cut = sol[0] + cut; }
+				}
+				// uBlock widens the end of the cut to the end of its line as
+				// well, and then slices `after` at that match's index, which
+				// is 0 -- so the rest of the line stays. Kept as uBlock does
+				// it, since the lists' rules are written against what uBlock
+				// does rather than what it seems meant to.
+				var after = s.slice(m.index + m[0].length);
+				s = before.trim() + '\n' + after.trim();
+				re.lastIndex = before.length + 1;
+				if (!re.global) break;
+			}
+			return s;
+		}
+		var lines = s.split(/\n\r|\n|\r/);
+		for (var i = 0; i < lines.length; i++) {
+			if (lines[i] === undefined) continue;
+			if (splice_out(lines, i)) continue;
+			inf_block(lines, i);
+		}
+		return lines.filter(function (l) { return l !== undefined; }).join('\n');
+	};
+};
+
+C['m3u-prune'] = function (pattern, match) {
+	var prune = m3u_pruner(pattern);
+	if (!prune) return;
+	// The url as uBlock reads it here: empty for every one, `*` a wildcard.
+	var url_re = m3u_regex(String(match == null ? '' : match));
+	if (!url_re) return;
+	var wanted = function (u) { url_re.lastIndex = 0; return url_re.test(String(u)); };
+	filter_fetch(wanted, prune);
+	filter_xhr(wanted, prune, function (real) { return real; });
+};
+
 )JS";
 
 // **The catalog, with the names rules actually use.** A list rule calls a
@@ -2535,6 +2685,11 @@ const catalog_entry k_entries[] = {
 	{ "trusted-replace-node-text",
 	                              (1 << 0) | (1 << 1), 0,      true  },
 	{ "json-prune-fetch-response",       1 << 2, 0,      false },
+	// (selector, check, url): the url is a pattern; the selector may be
+	// `xpath(...)`, which is not CSS, so it is not checked as a selector.
+	{ "xml-prune",                       1 << 2, 0,      false },
+	// (pattern, url): both matched against something.
+	{ "m3u-prune",                       (1 << 0) | (1 << 1), 0, false },
 	{ "json-prune-xhr-response",         1 << 2, 0,      false },
 	// (names, selector, behaviour): the selector is the second argument, and
 	// a rule may leave it out, in which case the names become it.

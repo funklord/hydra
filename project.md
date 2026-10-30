@@ -35513,6 +35513,40 @@ assertion failed rather than passed:
 caught all three was asserting the positive -- that the thing happens -- so
 that a fixture which cannot reach the code fails instead of agreeing.
 
+### `xml-prune` and `m3u-prune`: the ads inside a stream's manifest (2026-10-30)
+
+The two refused names that matter most for video. A streaming site's ads
+are not a request to block but periods in its DASH manifest and segments
+in its HLS playlist, and these scriptlets take them out of the document
+before the player reads it -- for Hulu, Peacock, Max, Paramount+, CBS,
+CNN, discovery+, Pluto, Dailymotion and ITV (`xml-prune`, 22 lines) and
+Fox, SBS, A&E, Lifetime and 10play (`m3u-prune`, 7). Both ride the fetch
+and XMLHttpRequest wrappers the response-rewriting scriptlets already
+share (`filter_fetch`, `filter_xhr`). `xml-prune` takes a CSS selector or
+`xpath(...)`, which can name an attribute (`mediaPresentationDuration`)
+and see past a manifest's default namespace, and an optional check that
+must match first.
+
+**`m3u-prune` was written from memory first and was wrong**, against the
+rule in "The rest of the refusals" that every signature is read out of
+uBlock's source. Read afterwards, it differed in three ways: a plain
+pattern is literal with `*` as a wildcard; line by line it is an
+`#EXTINF` whose NEXT line matches that goes, with a trailing
+discontinuity, and a `SpliceOut` cue block goes whatever the pattern; and
+a multi-line pattern is widened to whole lines. Rewritten from the source,
+including one place where uBlock's code appears meant to drop the rest of
+a line and keeps it -- kept as it is, since rules are
+written against what uBlock does. Not carried: `xml-prune` on an XHR
+already parsed as a `document`, which is handed over unchanged.
+
+`try_prune` runs both in Qt WebEngine against a local server: a manifest
+and a playlist fetched by fetch and by XMLHttpRequest come back without
+their ads and with their content, an xpath rule quoted with an escaped
+comma removes an attribute and a period, a multi-line pattern cuts a
+discontinuity-framed break, a SpliceOut cue goes, and a manifest from an
+address the rule does not name is left alone.
+
+
 ## The defaults are trusted, and why that is not the same claim
 
 Instructed by the copyright holder 2026-10-08, reversing what this document

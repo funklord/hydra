@@ -122,6 +122,7 @@ OBJSETS_SOURCES = \
 	test/live/try_permissions.cpp \
 	test/live/try_phone.cpp \
 	test/live/try_procedural.cpp \
+	test/live/try_prune.cpp \
 	test/live/try_reader.cpp \
 	test/live/try_rename.cpp \
 	test/live/try_scriptlet_cost.cpp \
@@ -6488,6 +6489,24 @@ OBJS_try_procedural = \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/app/policy.o
+
+OBJS_try_prune = \
+	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/app/request_filter.o \
+	$(BUILD_DIR)/moc/moc_web_view_backend.o \
+	$(BUILD_DIR)/app/qtwebengine_factory.o \
+	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/app/qtwebengine_view.o \
+	$(BUILD_DIR)/app/network_rules.o \
+	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
+	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/filter_list.o \
+	$(BUILD_DIR)/app/webauth_dialog.o \
+	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
+	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
+	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o
 
 OBJS_try_reader = \
 	$(BUILD_DIR)/app/reader_page.o \
