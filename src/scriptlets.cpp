@@ -2987,7 +2987,11 @@ bool parse_call(const QString &inside, scriptlet_call *out, QString *why) {
 	// nothing, so a timing probe sees zero while the page's own engine takes
 	// minutes.
 	const int patterned = pattern_args(name);
-	for (int i = 0; i < parts.size(); ++i) {
+	// Argument positions past 30 are never flagged, and `1 << i` beyond the
+	// width of an int is undefined -- a rule with 33 arguments made it so,
+	// found by fuzzing the list reader under UBSan.
+	const int flagged = qMin(int(parts.size()), 31);
+	for (int i = 0; i < flagged; ++i) {
 		if (!(patterned & (1 << i)))
 			continue;
 		// **A leading `!` inverts the match and does not stop it being a
@@ -3038,7 +3042,7 @@ bool parse_call(const QString &inside, scriptlet_call *out, QString *why) {
 	// where the cost is pressing every button rather than stripping every
 	// element. One list, in the one place it is written down.
 	const int selected = selector_args(name);
-	for (int i = 0; i < parts.size(); ++i) {
+	for (int i = 0; i < flagged; ++i) {
 		if (!(selected & (1 << i)) || parts.at(i).isEmpty())
 			continue;
 		const QString broad =

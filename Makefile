@@ -313,9 +313,14 @@ TEST_ENV = HYDRA_MAX_LIVE_VIEWS=$(HYDRA_TEST_LIVE_VIEWS) $(HEADLESS) HYDRA_SECRE
 # outside froze TMPDIR at the plain build's directory, which is how a sanitized
 # run would have shared its scratch with an ordinary one -- two suites in one
 # temp tree being a fault this project has already paid for once today.
+# **UBSan halts.** By default it prints a report and carries on, and a suite
+# that passes has its output thrown away -- so an undefined shift in
+# `scriptlets.cpp` was reported on every sanitized run and seen by nobody
+# until a fuzzer printed its own output (2026-10-30). A report that cannot
+# fail the suite is not a check.
 ifdef SANITIZE
 TEST_ENV += ASAN_OPTIONS=detect_leaks=0:abort_on_error=0:print_stacktrace=1 \
-            UBSAN_OPTIONS=print_stacktrace=1
+            UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
 endif
 
 # Where a failing suite's whole output is kept. This target used to print the
