@@ -38933,6 +38933,23 @@ each beside a twin it must leave alone; `test_subscription` holds the
 reading and `test_settings` the serving (scope, exceptions, `$elemhide`,
 the shield).
 
+**Checked against uBlock's source afterwards (2026-10-30)**, since these
+operators were written from memory against the rule that says not to
+(`xml-prune` and `m3u-prune`, the same day, are why). The operators held
+up; how the rules were run did not, in two ways uBlock's
+`contentscript-extra.js` makes plain. **A budget**: each rule spends from
+200 ms, gets 50 back per two idle seconds, and is switched off for the
+page at 500 ms of debt -- without one, a `:has-text()` over a busy
+document reran on every change with no limit, on a phone. **And undoing a
+hide**: a node is hidden by a random marker attribute and one stylesheet
+rule rather than an inline style, so one that stops matching is shown
+again. Also taken from it: `matches-css(before, prop: value)`, the
+pseudo-element named first, and `remove-attr`/`remove-class` reading
+their argument as one exact name or a `/regex/`, not a `|` list.
+`try_procedural` holds the new two behaviours (an element hidden, then
+shown once its text changes; the pseudo-element form); the budget is not
+exercised by a test.
+
 **uBlock's entity scopes, `google.*` and `amazon.*`, were read as literal
 hosts and applied nowhere** -- 1,381 scoped hiding and scriptlet lines and
 329 `domain=` options of the default lists, measured 2026-10-30. Settled

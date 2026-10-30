@@ -282,11 +282,16 @@ QString cosmetic_filters::script_source() {
         set = set.filter(function (e) { return (run(st.steps, [e]).length > 0) === want; });
       } else if (op === 'matches-css' || op === 'matches-css-before' ||
                  op === 'matches-css-after') {
-        var colon = arg.indexOf(':');
+        // `matches-css(before, prop: value)` names its pseudo-element first,
+        // as uBlock's parser reads it.
+        var decl = arg, named = null;
+        var lead = /^([a-z-]+),/.exec(decl);
+        if (lead) { named = '::' + lead[1]; decl = decl.slice(lead[0].length).trim(); }
+        var colon = decl.indexOf(':');
         if (colon < 0) return [];
-        var prop = arg.slice(0, colon).trim(), val = arg.slice(colon + 1).trim();
+        var prop = decl.slice(0, colon).trim(), val = decl.slice(colon + 1).trim();
         var vre = pattern(val);
-        var pseudo = op === 'matches-css' ? null : op === 'matches-css-before' ? '::before' : '::after';
+        var pseudo = op === 'matches-css' ? named : op === 'matches-css-before' ? '::before' : '::after';
         set = set.filter(function (e) {
           var v = getComputedStyle(e, pseudo).getPropertyValue(prop);
           return vre ? vre.test(v) : v === val;
@@ -322,12 +327,31 @@ QString cosmetic_filters::script_source() {
     }
     return set || [];
   };
-  var act = function (rule, e) {
-    if (rule.action === 'remove') { e.remove(); return; }
+  // **Hidden by a marker, not an inline style**, as uBlock does it: one
+  // stylesheet rule hides whatever carries a random attribute, so a node that
+  // stops matching -- its text changed, it moved -- is shown again by taking
+  // the attribute off. An inline `display: none` could not be undone without
+  // knowing what was there before. Random per document, so nothing names
+  // this browser in the page's DOM.
+  var marker = 'x' + Math.random().toString(36).slice(2, 10);
+  var marker_sheet = null;
+  var ensure_sheet = function () {
+    if (marker_sheet && marker_sheet.isConnected) return;
+    marker_sheet = document.createElement('style');
+    (document.head || document.documentElement).appendChild(marker_sheet);
+    try {
+      marker_sheet.sheet.insertRule('[' + marker + ']{display:none !important}', 0);
+    } catch (e) {}
+  };
+  // An exact name or a /regex/, as uBlock reads both actions' argument.
+  var name_test = function (arg) {
+    var re = pattern(arg);
+    return re ? function (n) { return re.test(n); } : function (n) { return n === arg; };
+  };
+  var act = function (rule, e, hidden) {
+    if (rule.action === 'remove') { e.remove(); e.textContent = ''; return; }
     if (rule.action === 'remove-attr' || rule.action === 'remove-class') {
-      var re = pattern(rule.arg);
-      var names = re ? null : rule.arg.split('|');
-      var match = function (n) { return re ? re.test(n) : names.indexOf(n) >= 0; };
+      var match = name_test(rule.arg);
       if (rule.action === 'remove-attr') {
         var drop = [];
         for (var a = 0; a < e.attributes.length; a++)
@@ -340,19 +364,38 @@ QString cosmetic_filters::script_source() {
       }
       return;
     }
-    if (e.style.getPropertyValue('display') !== 'none' ||
-        e.style.getPropertyPriority('display') !== 'important')
-      e.style.setProperty('display', 'none', 'important');
+    ensure_sheet();
+    if (!e.hasAttribute(marker)) e.setAttribute(marker, '');
+    hidden.add(e);
   };
   var procedural = function (rules) {
+    // **Each rule spends from a budget**, uBlock's: 200 ms at most, 50 more
+    // for every two seconds it has been idle, and a rule that runs it 500 ms
+    // into debt is switched off for the page. A `:has-text()` over a busy
+    // document, rerun on every change, is otherwise what a phone pays for.
+    var budget = rules.map(function () { return { left: 200, at: Date.now() }; });
+    var shown = new Set();
     var pass = function () {
+      var hidden = new Set();
+      var t0 = Date.now();
       for (var i = 0; i < rules.length; i++) {
+        var b = budget[i];
+        var allowance = Math.floor((t0 - b.at) / 2000);
+        if (allowance >= 1) { b.left = Math.min(200, b.left + allowance * 50); b.at = t0; }
+        if (b.left <= 0) continue;
         try {
           var found = run(rules[i].steps, null);
           for (var j = 0; j < found.length; j++)
-            if (found[j] !== document) act(rules[i], found[j]);
+            if (found[j] !== document) act(rules[i], found[j], hidden);
         } catch (e) { /* one rule failing does not stop the others */ }
+        var t1 = Date.now();
+        b.left += t0 - t1;
+        if (b.left < -500) b.left = -0x7fffffff;
+        t0 = t1;
       }
+      // What a previous pass hid and this one did not find is shown again.
+      shown.forEach(function (e) { if (!hidden.has(e)) e.removeAttribute(marker); });
+      shown = hidden;
     };
     var due = false, last = 0;
     var schedule = function () {

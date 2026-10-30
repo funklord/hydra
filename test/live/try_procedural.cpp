@@ -39,7 +39,9 @@ static void spin(int ms) {
 }
 
 static const char k_page[] = R"HTML(<!doctype html>
-<html><body class="no-scroll keep">
+<html><head><style>#pb1::before{content:"AD"}</style></head><body class="no-scroll keep">
+<div class="post" id="flip">Sponsored, for now</div>
+<div class="pb" id="pb1">pseudo</div><div class="pb" id="pb2">pseudo</div>
 <div class="post" id="p1">Sponsored content</div>
 <div class="post" id="p2">Real news</div>
 <div id="w"><div><span class="lbl">Annons</span></div></div>
@@ -61,6 +63,11 @@ static const char k_page[] = R"HTML(<!doctype html>
 <h3 class="s">Story</h3><div id="after2">after story</div>
 <script>
 setTimeout(function () {
+  var f = document.getElementById('flip');
+  document.body.setAttribute('data-flip-before', getComputedStyle(f).display);
+  f.textContent = 'News after all';
+}, 900);
+setTimeout(function () {
   var d = document.createElement('div');
   d.className = 'post'; d.id = 'late'; d.textContent = 'Sponsored, late';
   document.body.appendChild(d);
@@ -80,6 +87,7 @@ static const char *const k_rules[] = {
 	"div.ma:matches-attr(data-kind=\"promo\")",
 	"img.r:remove-attr(srcset)",
 	"h3.s:has-text(Promoted) + div",
+	"div.pb:matches-css(before, content: /AD/)",
 	":matches-path(/story) div#pg1",
 	":matches-path(/other) div#pg2",
 	":not(:matches-path(/story)) div#pg3",
@@ -137,13 +145,14 @@ int main(int argc, char *argv[]) {
 	view->run_probe(QStringLiteral(R"JS(
 (function () {
   var ids = ['p1','p2','late','w','w2','a1','a2','wall','fx','st','n1','n2','xp','xq',
-             'ma1','ma2','after1','after2','pg1','pg2','pg3'];
+             'ma1','ma2','after1','after2','pg1','pg2','pg3','flip','pb1','pb2'];
   var r = {};
   ids.forEach(function (id) {
     var e = document.getElementById(id);
     r[id] = !e ? 'gone' : getComputedStyle(e).display === 'none' ? 'hidden' : 'shown';
   });
   r.body = document.body.className;
+  r.flip_before = document.body.getAttribute('data-flip-before');
   r.srcset = document.getElementById('img').hasAttribute('srcset') ? 'kept' : 'removed';
   return JSON.stringify(r);
 })()
@@ -168,6 +177,10 @@ int main(int argc, char *argv[]) {
 	check(is("after1", "hidden") && is("after2", "shown"), "a sibling selector after an operator");
 	check(is("pg1", "hidden") && is("pg2", "shown") && is("pg3", "shown"),
 	      "a path gate runs the rule on its path only, and its negation the reverse");
+	check(out.contains("\"flip_before\":\"none\"") && is("flip", "shown"),
+	      "an element hidden while it matched is shown again once it does not");
+	check(is("pb1", "hidden") && is("pb2", "shown"),
+	      "matches-css with its pseudo-element named first, as uBlock writes it");
 	check(out.contains("\"body\":\"keep\""), "remove-class takes one class and leaves the other");
 	check(is("srcset", "removed"), "remove-attr");
 
