@@ -1082,11 +1082,28 @@ int main(int argc, char **argv) {
 		        nullptr, nullptr, nullptr, &r) == line_kind::option,
 		      "a path pattern is a pattern, not a regex");
 		why.clear();
-		check(filter_subscription::classify("||x.example^$script,redirect=google-ima.js",
+		check(filter_subscription::classify("||x.example^$script,redirect=google-ima-dai.js",
 		                                    nullptr, &why) == line_kind::unsupported &&
-		        why.contains("google-ima.js"),
+		        why.contains("google-ima-dai.js"),
 		      QString("a resource this build does not carry is refused, named (%1)")
 		          .arg(why));
+		// **The video-ad SDK's stand-in is carried**, taken whole from
+		// uBlock and compiled in from `third_party/ublock/`: by its name and
+		// by AdGuard's, and served as the file it is, licence notice and all.
+		check(filter_subscription::classify(
+		        "||imasdk.googleapis.com/js/sdkloader/ima3.js$script,redirect=google-ima3",
+		        nullptr, nullptr, nullptr, &r) == line_kind::option &&
+		        r.resource == "google-ima.js",
+		      "google-ima.js is carried, and google-ima3 is its other name");
+		{
+			redirect_resources::resource ima;
+			check(redirect_resources::find("google-ima.js", &ima) &&
+			        ima.mime == "application/javascript" && ima.body.size() > 10000 &&
+			        ima.body.contains("Mozilla Public") &&
+			        ima.body.contains("AdsLoader"),
+			      QString("and served whole, its MPL notice in it (%1 bytes)")
+			          .arg(ima.body.size()));
+		}
 		why.clear();
 		check(filter_subscription::classify(
 		        "||x.example^$script,redirect=noopjs,csp=default-src",

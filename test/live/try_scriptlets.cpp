@@ -92,6 +92,40 @@ public:
 				// the flag to something the stand-in never would.
 				type = "application/javascript";
 				body = "window.google_ad_status = 'real';";
+			} else if (target.startsWith("/js/sdkloader/ima3.js")) {
+				// The real SDK, as far as this test is concerned: it would
+				// leave the player waiting on an ad that never comes.
+				type = "application/javascript";
+				body = "window.__real_ima = 1;";
+			} else if (target.startsWith("/ima")) {
+				// **A news site's player, the way it drives Google's
+				// video-ad SDK**: ask for ads, start them when the manager
+				// arrives, and play the video when told the ads are done.
+				// With the SDK refused it would wait for ever on a black box.
+				body = "<!doctype html><html><body>ima<div id=ad></div><video id=v></video>"
+				        "<script src=\"/js/sdkloader/ima3.js\" onerror=\"window.__err=1\"></script>"
+				        "<script>"
+				        "var seen = [];"
+				        "var report = function () {"
+				        "  new Image().src = '/report?ima=' + seen.join('.') + '&real='"
+				        "    + (window.__real_ima ? 1 : 0) + '&error=' + (window.__err ? 1 : 0); };"
+				        "try {"
+				        "  var ima = google.ima, v = document.getElementById('v');"
+				        "  var box = new ima.AdDisplayContainer(document.getElementById('ad'), v);"
+				        "  box.initialize();"
+				        "  var loader = new ima.AdsLoader(box);"
+				        "  loader.addEventListener(ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,"
+				        "    function (e) { seen.push('manager');"
+				        "      var m = e.getAdsManager(v);"
+				        "      m.addEventListener(ima.AdEvent.Type.CONTENT_RESUME_REQUESTED,"
+				        "        function () { seen.push('play'); });"
+				        "      m.init(640, 360, ima.ViewMode.NORMAL); m.start(); });"
+				        "  var req = new ima.AdsRequest();"
+				        "  req.adTagUrl = 'https://pubads.g.doubleclick.net/gampad/ads';"
+				        "  loader.requestAds(req);"
+				        "} catch (e) { seen.push('threw'); }"
+				        "setTimeout(report, 2000);"
+				        "</script></body></html>";
 			} else if (target.startsWith("/adstatus")) {
 				// **YouTube's check, under a strict script policy.** The
 				// stand-in arrives by redirect, and the page's
@@ -239,6 +273,8 @@ int main(int argc, char *argv[]) {
 			// nothing there.
 			body.write("/instream/ad_status.js^$script,xhr,"
 			           "redirect=doubleclick_instream_ad_status.js:5,domain=127.0.0.1\n");
+			// And the video-ad SDK's, by AdGuard's name for the stand-in.
+			body.write("/js/sdkloader/ima3.js^$script,redirect=google-ima3,domain=127.0.0.1\n");
 		}
 	}
 	{
@@ -364,8 +400,8 @@ int main(int argc, char *argv[]) {
 
 	section("a redirect rule answers with the stand-in, past the page's policy");
 	{
-		check(filter.redirect_count() == 1,
-		      QString("the trusted list's redirect rule reached the filter (%1)")
+		check(filter.redirect_count() == 2,
+		      QString("the trusted list's redirect rules reached the filter (%1)")
 		          .arg(filter.redirect_count()));
 		server.asked.clear();
 		bar->setText(QString("http://127.0.0.1:%1/adstatus").arg(server.port));
@@ -378,6 +414,22 @@ int main(int argc, char *argv[]) {
 		              "real one (%1)").arg(said));
 		check(!server.asked.contains("/instream/ad_status.js"),
 		      "and the real file was never fetched");
+	}
+
+	section("a player waiting on Google's video-ad SDK is told the ads are done");
+	{
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/ima").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		const bool answered = server.wait_for_report();
+		const QString said = server.report();
+		check(answered, QString("the page reported back (%1)").arg(said));
+		check(said.contains("ima=manager.play") && said.contains("real=0") &&
+		        said.contains("error=0"),
+		      QString("google-ima.js stood in: the ads manager arrived, and the "
+		              "player was told to play (%1)").arg(said));
+		check(!server.asked.contains("/js/sdkloader/ima3.js"),
+		      "and the real SDK was never fetched");
 	}
 
 	section("a marked request goes out rewritten, in a real engine");

@@ -1,0 +1,8 @@
+<!-- uBlock Origin's redirect resources that hydra serves as they are rather
+     than writing its own, from third_party/ublock/, whose README names
+     where each came from. Each keeps its own licence header. -->
+<RCC>
+	<qresource prefix="/ublock">
+		<file alias="google-ima.js">third_party/ublock/google-ima.js</file>
+	</qresource>
+</RCC>

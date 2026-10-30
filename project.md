@@ -38553,6 +38553,28 @@ stand-ins, the analytics and ad-library shims) and are counted.
 `/instream/ad_status.js` through a trusted list's rule: the stand-in ran
 (`google_ad_status` is 1), and the server never saw the request.
 
+**`google-ima.js` is carried since 2026-10-30, taken whole from uBlock.**
+It stands in for Google's video-ad SDK, `ima3.js`: with the SDK refused, a
+news site's player waits for an ad that never answers and shows a black
+box; the stand-in says the ads loaded, played and finished, and the video
+starts. It is 672 lines of the SDK's surface, which a stand-in written here
+could not be trusted to match, unlike the one-line bodies above -- so this
+is the catalog's one exception to "the bodies are this project's". The file
+is Mozilla's Firefox webcompat shim as uBlock corrected it, under the MPL
+2.0. That licence governs the file alone and asks only that it keep its
+notice and stay available as source, which a script served as it is does;
+it asks nothing of hydra's own terms, which stay the holder's to settle.
+The holder handed the question over ("I don't know what the deal is"), and
+this answered it. Kept byte-identical in `third_party/ublock/`, whose
+README names the upstream commit and hash, and compiled in by
+`ublock.qrc` at the root, in the app and in every test binary. A
+binary without the resource refuses the name rather than serving an empty
+stand-in. `google-ima-dai.js`, the live-stream variant, is uBlock's
+`requiresTrust` and not carried. Proved by `try_scriptlets`: a page drives
+the SDK as a player does, through a trusted list's `redirect=google-ima3`
+rule, and reports `ima=manager.play&real=0` -- the ads manager arrived,
+the player was told to play, and the real file was never fetched.
+
 **A finding in the block list, recorded and then closed (2026-10-29):**
 `filter_list` indexed a `||host/path^` rule under the key `host/path`,
 which no request host can equal, and `filter_list::matches` compared that

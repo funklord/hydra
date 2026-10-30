@@ -1,0 +1,11 @@
+Files taken unchanged from uBlock Origin, https://github.com/gorhill/uBlock
+
+google-ima.js
+	src/web_accessible_resources/google-ima.js at commit
+	9e5299e7f4a422891509a7bb5efbd689b7871ba3 (2026-05-18), sha256
+	4bf8e398a46c982cd72ec1723e03f58784624da2f41caeeefb78e1fad1d47535.
+	uBlock's modification of Mozilla's Firefox webcompat shim for Google's
+	Interactive Media Ads SDK (ima3.js). Under the Mozilla Public License,
+	v. 2.0, as its own header says: the notice stays in the file, and the
+	file stays as it is here. Served by src/network_rules.cpp as the
+	redirect resource of that name.

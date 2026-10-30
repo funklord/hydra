@@ -18,4 +18,7 @@ License: UNDECIDED
  .
  Third-party components keep their own terms and are not affected by the
  above: yt-dlp, vendored at third_party/yt-dlp, is public domain (Unlicense);
- Qt is used under its LGPL-3.0-only option, linked dynamically.
+ Qt is used under its LGPL-3.0-only option, linked dynamically;
+ third_party/ublock/google-ima.js, uBlock Origin's revision of Mozilla's
+ Firefox shim for Google's IMA SDK, is under the Mozilla Public License 2.0,
+ as its own header says, and is compiled in unchanged.

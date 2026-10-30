@@ -3,6 +3,7 @@
 #include "filter_list.h"
 #include "policy_engine.h"
 
+#include <QFile>
 #include <QRegularExpression>
 #include <QUrl>
 #include <QUrlQuery>
@@ -15,6 +16,7 @@ struct entry {
 	const char *mime;
 	const char *body;
 	int         size;    // for the binary ones; -1 for text
+	const char *file;    // read from here instead, a resource compiled in
 };
 
 // **Every resource, and nothing else.** uBlock's names and aliases, read from
@@ -35,6 +37,18 @@ const entry k_entries[] = {
 	{ "doubleclick_instream_ad_status.js",
 	  { "doubleclick.net/instream/ad_status.js", nullptr, nullptr },
 	  "application/javascript", "window.google_ad_status = 1;\n", -1 },
+	// **The one taken whole from uBlock**: a stand-in for Google's video-ad
+	// SDK, `ima3.js`. With the SDK refused, a news site's player waits for an
+	// ad that never answers and shows a black box; this one answers that
+	// the ads loaded, played and finished, and the video starts. It is 672
+	// lines of the SDK's surface -- far more than a stand-in written here
+	// could be trusted to match -- and is Mozilla's Firefox shim as uBlock
+	// fixed it, under the MPL 2.0, a licence of the file alone. So it is
+	// kept as it came, header and all, in `third_party/ublock/`, and read
+	// from the resource that compiles it in. 215 lines of the holder's lists
+	// named it and were refused for want of it (2026-10-29).
+	{ "google-ima.js", { "google-ima3", nullptr, nullptr }, "application/javascript",
+	  nullptr, -1, ":/ublock/google-ima.js" },
 	{ "1x1.gif", { "1x1-transparent.gif", nullptr, nullptr }, "image/gif",
 	  "\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\x00\x00"
 	  "\x00\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00"
@@ -248,11 +262,21 @@ namespace redirect_resources {
 
 bool find(const QString &name, resource *out) {
 	const entry *e = lookup(name);
-	if (!e)
+	// A resource read from a file is carried only where the file was
+	// compiled in: a binary that was not given it refuses the name, as for
+	// one not in the catalog, rather than serving an empty stand-in.
+	if (!e || (e->file && !QFile::exists(QString::fromLatin1(e->file))))
 		return false;
 	if (out) {
 		out->mime = QByteArray(e->mime);
-		out->body = e->size < 0 ? QByteArray(e->body) : QByteArray(e->body, e->size);
+		if (e->file) {
+			QFile f(QString::fromLatin1(e->file));
+			if (!f.open(QIODevice::ReadOnly))
+				return false;
+			out->body = f.readAll();
+		} else {
+			out->body = e->size < 0 ? QByteArray(e->body) : QByteArray(e->body, e->size);
+		}
 	}
 	return true;
 }

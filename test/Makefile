@@ -397,8 +397,19 @@ $(BUILD_DIR)/%.o: live/%.cpp $(TMOC_INC) | $(BUILD_DIR)
 # **Every test binary carries its own deadline** (`watchdog.cpp`), so one run
 # directly rather than through a target is bounded too.
 WATCHDOG_OBJ = $(BUILD_DIR)/watchdog.o
-$(BUILD_DIR)/%: $(BUILD_DIR)/%.o $$(OBJS_$$*) $(WATCHDOG_OBJ)
-	$(CXX) $(LDFLAGS) $< $(OBJS_$*) $(EXTRA_OBJS) $(WATCHDOG_OBJ) $(LDLIBS) -o $@
+# **And uBlock's served-as-is resources**, `ublock.qrc`:
+# the redirect catalog reads them from it, so a binary without it would find
+# `google-ima.js` named and empty. Every binary, because which ones reach the
+# catalog through the archive is the linker's business, not this file's.
+UBLOCK_QRC_SRC := $(BUILD_DIR)/qrc_ublock.cpp
+UBLOCK_QRC_OBJ := $(BUILD_DIR)/qrc_ublock.o
+$(UBLOCK_QRC_SRC): ../ublock.qrc ../third_party/ublock/google-ima.js | $(BUILD_DIR)
+	@test -n "$(RCC)" || { echo "no rcc: install Qt6Core's dev files" >&2; exit 1; }
+	$(RCC) --name ublock $< -o $@
+$(UBLOCK_QRC_OBJ): $(UBLOCK_QRC_SRC)
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
+$(BUILD_DIR)/%: $(BUILD_DIR)/%.o $$(OBJS_$$*) $(WATCHDOG_OBJ) $(UBLOCK_QRC_OBJ)
+	$(CXX) $(LDFLAGS) $< $(OBJS_$*) $(EXTRA_OBJS) $(WATCHDOG_OBJ) $(UBLOCK_QRC_OBJ) $(LDLIBS) -o $@
 
 $(BUILD_DIR) $(BUILD_DIR)/app $(BUILD_DIR)/moc $(BUILD_DIR)/tmoc:
 	@mkdir -p $@
@@ -422,7 +433,7 @@ $(BUILD_DIR) $(BUILD_DIR)/app $(BUILD_DIR)/moc $(BUILD_DIR)/tmoc:
 # Named targets only: no wildcard sweep, no `rm -rf` of a directory. A clean
 # target is the one thing everybody runs without reading.
 clean:
-	@rm -f $(QRC_SRC) $(QRC_OBJ) \
+	@rm -f $(QRC_SRC) $(QRC_OBJ) $(UBLOCK_QRC_SRC) $(UBLOCK_QRC_OBJ) \
 	       $(APP_OBJS) $(MOC_OBJS) $(MOC_SRCS) $(MOC_CPP_SRCS) \
 	       $(TMOC_INC) $(TMOC_SRCS) $(TMOC_OBJS) \
 	       $(OFFLINE) $(LIVE) $(LIVE_PATHS_OBJ) \
