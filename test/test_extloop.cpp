@@ -362,6 +362,52 @@ int main(int argc, char **argv) {
 		      "producing a wrong one");
 	}
 
+	// **The evidence is the page's, not the site's**: the dialog's own
+	// words are "the list of addresses this page requested", and the helper
+	// allowlist is built from it, so a second page on one site must not be
+	// handed the first page's requests.
+	section("each page on a site is shown its own requests");
+	{
+		extractor_signals two;
+		auto feed_on = [&](const char *pg, const char *u) {
+			request_context c;
+			c.url = QUrl(QString::fromUtf8(u));
+			c.site_host = "site.example";
+			c.request_host = c.url.host();
+			c.page = QUrl(QString::fromUtf8(pg));
+			two.on_request(c, request_decision{});
+		};
+		feed_on("https://site.example/watch/1", "https://cdn.example/one/master.m3u8");
+		feed_on("https://site.example/watch/2#t=30", "https://cdn.example/two/master.m3u8");
+		feed_on("https://site.example/watch/2", "https://cdn.example/two/seg-1.ts");
+		const auto first  = two.evidence_for("site.example", QUrl("https://site.example/watch/1"));
+		const auto second = two.evidence_for("site.example", QUrl("https://site.example/watch/2"));
+		check(first.size() == 1 && first[0].url.path() == "/one/master.m3u8",
+		      QString("the first page has its own manifest only (%1)").arg(first.size()));
+		check(second.size() == 2 && second[0].url.path() == "/two/master.m3u8",
+		      QString("the second has its two requests, a fragment not being another "
+		              "page (%1)").arg(second.size()));
+		check(two.evidence_for("site.example").size() == 3,
+		      "and the site as a whole still has all three");
+
+		helper_allowlist allow;
+		allow.observe(second);
+		check(!allow.allows(QUrl("https://cdn.example/one/master.m3u8")) &&
+		        allow.allows(QUrl("https://cdn.example/two/master.m3u8")),
+		      "a script learned on the second page may not fetch what only the first asked for");
+
+		extractor_store store;
+		stub_provider prov;
+		extractor_dialog dlg(&two, &store, &prov, "site.example",
+		                     QUrl("https://site.example/watch/1"));
+		dlg.show();
+		wait_for([&] { return send_ready(&dlg); });
+		QPlainTextEdit *payload = dlg.findChild<QPlainTextEdit *>("payload");
+		const QString shown = payload ? payload->toPlainText() : QString();
+		check(shown.contains("/one/master.m3u8") && !shown.contains("/two/"),
+		      "and the dialog on the first page shows the first page's requests");
+	}
+
 	section("the transcript is what the user is shown");
 	{
 		// Driven through the real dialog, because this project's defects have

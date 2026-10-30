@@ -13,6 +13,7 @@ void extractor_signals::on_request(const request_context &ctx,
 
 	evidence_request r;
 	r.url   = ctx.url;
+	r.page  = ctx.page.adjusted(QUrl::RemoveFragment);
 	r.order = m_next_order[ctx.site_host]++;
 	switch (ctx.kind) {
 		case resource_kind::script: r.kind = "script"; break;
@@ -28,9 +29,21 @@ void extractor_signals::on_request(const request_context &ctx,
 		list.removeFirst();
 }
 
-QList<evidence_request> extractor_signals::evidence_for(const QString &site_host) const {
+QList<evidence_request> extractor_signals::evidence_for(const QString &site_host,
+                                                        const QUrl &page) const {
 	QMutexLocker lock(&m_lock);
-	return m_by_site.value(site_host);
+	const QList<evidence_request> all = m_by_site.value(site_host);
+	if (!page.isValid())
+		return all;
+	const QUrl want = page.adjusted(QUrl::RemoveFragment);
+	QList<evidence_request> out;
+	for (const evidence_request &r : all)
+		// A request that reported no page -- one racing a tab's first
+		// navigation on Android -- cannot be put on any page, so it is
+		// kept for every page of its site rather than lost.
+		if (r.page == want || r.page.isEmpty())
+			out << r;
+	return out;
 }
 
 int extractor_signals::count_for(const QString &site_host) const {

@@ -1073,6 +1073,7 @@ QString android_view::request_verdict(const QString &url, const QString &accept,
 	// leaving site_host empty is right: no per-site rule matches, so only the
 	// rules that key off the request host apply, which is the safe subset.
 	ctx.site_host    = QUrl(page_url).host();
+	ctx.page         = QUrl(page_url);
 	ctx.kind         = kind_from_hints(accept, ctx.url);
 	// Only what the hints can say: a script, an image or a font is told apart
 	// and anything else is `unknown`, which any type option accepts.

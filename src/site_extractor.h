@@ -17,6 +17,7 @@ struct evidence_request {
 	QUrl    url;
 	QString kind;    // "script", "image", "other", as the interceptor saw it
 	int     order = 0;
+	QUrl    page;    // the top-level page that made it, fragment dropped
 };
 
 // What running an extractor produced.

@@ -354,7 +354,7 @@ extractor_dialog::extractor_dialog(extractor_signals *signals_source,
 	resize(860, 620);
 	build_ui();
 
-	m_evidence = m_signals->evidence_for(m_site);
+	m_evidence = m_signals->evidence_for(m_site, m_page);
 	rebuild_payload();
 
 	connect(m_provider, &ai_provider::finished, this, &extractor_dialog::on_reply);

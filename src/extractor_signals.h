@@ -25,7 +25,15 @@ public:
 
 	void on_request(const request_context &ctx, const request_decision &d) override;
 
-	QList<evidence_request> evidence_for(const QString &site_host) const;
+	// What `site_host`'s pages requested, oldest first -- and with `page`,
+	// only what that page requested. **The page is the unit the evidence
+	// describes**: keyed by host alone, the second page of a session on one
+	// site was shown the first page's requests as its own, and the helper
+	// allowlist built from them let a generated script fetch addresses this
+	// page never asked for. A request reports its top-level page
+	// (`request_context::page`); a fragment is not a different page.
+	QList<evidence_request> evidence_for(const QString &site_host,
+	                                     const QUrl &page = QUrl()) const;
 	int count_for(const QString &site_host) const;
 	void clear_site(const QString &site_host);
 	// Forget every site at once, for "Clear browsing data".

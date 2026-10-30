@@ -525,6 +525,18 @@ int main(int argc, char *argv[]) {
 		                "through the real interceptor (%1)").arg(ev_before));
 		check(sig_before > 0,
 		       QString("and the filter signals (%1)").arg(sig_before));
+		// Each request names its page, and it is the tab's own address: the
+		// "Learn this site" dialog asks for exactly that page's requests.
+		web_view_backend *shown = nullptr;
+		for (web_view_backend *x : w.findChildren<web_view_backend *>())
+			if (x->widget() && x->widget()->isVisible())
+				shown = x;
+		const int on_page = (w.m_ex_signals && shown)
+		  ? int(w.m_ex_signals->evidence_for(origin, shown->url()).size()) : -1;
+		check(on_page > 0 && on_page < ev_before,
+		      QString("and the tab's page is named on its own requests: %1 of the "
+		              "site's %2, from %3").arg(on_page).arg(ev_before)
+		        .arg(shown ? shown->url().toString() : QStringLiteral("no view")));
 
 		int ev_after = -2, sig_after = -2;
 		bool saw_dialog = false, saw_confirmation = false, pressed = false;

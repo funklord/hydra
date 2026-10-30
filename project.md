@@ -18339,6 +18339,20 @@ ambiguous name needs the per-class question asked by hand.
 
 ## Open: these records are keyed by host, and one of them says it is a page
 
+**The evidence is now the page's (2026-10-30); the other observers are still
+open.** Requests carry their top-level page (`request_context::page`, from
+`firstPartyUrl` and Android's cached page address), each evidence entry
+keeps it, and the "Learn this site" dialog asks `evidence_for(host, page)` --
+so its "this page requested" is true and the helper allowlist built from it
+admits only what this page asked for. A fragment is not another page; a
+request that reported no page (Android, racing a tab's first navigation) is
+kept for every page of its site rather than lost. Decided without asking
+because the header had already stated the requirement this section quotes.
+`test_extloop` feeds two pages on one site and checks the evidence, the
+allowlist and the dialog; `try_forget` shows the real interceptor naming the
+tab's page (2 of the site's 4 requests). The rest of this section -- media,
+filter signals, the anti-adblock watch -- stands as written.
+
 `extractor_signals`' header states the requirement outright:
 
     it must survive exactly as long as the page it describes

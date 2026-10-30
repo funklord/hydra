@@ -33,6 +33,10 @@ struct request_decision {
 struct request_context {
 	QString       request_host;   // host the request goes to
 	QString       site_host;      // host of the page making it
+	// The top-level page's own address. Per-site observers key on the host;
+	// one that describes a page (`extractor_signals`) needs the page, which
+	// a host cannot tell apart from the next page on the same site.
+	QUrl          page;
 	QUrl          url;            // the full request URL
 	resource_kind kind = resource_kind::other;
 	// uBlock's type, where the backend can tell it; `unknown` matches any
