@@ -27,6 +27,10 @@ bool generic_cosmetics::covers(const QSet<QString> &hosts, const QString &host) 
 	if (hosts.isEmpty() || host.isEmpty())
 		return false;
 	QString h = host.toLower();
+	// An entity, `hqq.*`, is filed as written; a host answers to its own.
+	for (const QString &e : filter_list::entity_keys(h))
+		if (hosts.contains(e))
+			return true;
 	for (;;) {
 		if (hosts.contains(h))
 			return true;

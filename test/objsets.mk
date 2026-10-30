@@ -738,6 +738,7 @@ OBJS_test_subscription = \
 	$(BUILD_DIR)/app/blocked_page.o \
 	$(BUILD_DIR)/app/policy_engine.o \
 	$(BUILD_DIR)/app/request_filter.o \
+	$(BUILD_DIR)/app/cosmetic_filters.o \
 	$(BUILD_DIR)/app/filter_subscription.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/moc/moc_subscription_updater.o \

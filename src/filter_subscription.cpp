@@ -374,8 +374,13 @@ subscription_read read(const QString &text, int previous_rules,
 	// without them a blocked ad left its reserved space behind -- fourteen
 	// blank screens down Expressen's front page (measured on the emulator,
 	// 2026-10-29).
+	// `@@||host^$ghide`, and the shapes that read as the same thing for a
+	// host: an entity (`hqq.*`), a path after the host -- taken as the whole
+	// host, which lifts more hiding than the list asked and never adds any --
+	// and `@@*$ghide,domain=a|b`, which names its hosts in the option. 160
+	// lines of the default lists were in these and went unread (2026-10-30).
 	static const QRegularExpression hide_option(
-	  QStringLiteral("^@@\\|\\|([a-z0-9.-]+)\\^?\\$(.*)$"),
+	  QStringLiteral("^@@(?:\\|\\|([a-z0-9.*-]+)(?:[\\^/?][^$]*)?|\\*)\\$(.*)$"),
 	  QRegularExpression::CaseInsensitiveOption);
 	auto generic_shape = [&](const QString &raw) -> bool {
 		const QString t = raw.trimmed();
@@ -417,9 +422,19 @@ subscription_read read(const QString &text, int previous_rules,
 			                 opts.contains(QLatin1String("ghide"));
 			if (!elem && !gen)
 				return false;
+			QStringList hosts;
+			if (!m.captured(1).isEmpty())
+				hosts << m.captured(1).toLower();
+			for (const QString &o : opts)
+				if (o.startsWith(QLatin1String("domain=")))
+					for (const QString &d : o.mid(7).split(QLatin1Char('|'), Qt::SkipEmptyParts))
+						if (!d.startsWith(QLatin1Char('~')))
+							hosts << d;
+			if (hosts.isEmpty())
+				return false;   // `@@*$ghide` with no site would be everywhere
 			++rep.lines;
 			++rep.accepted;
-			(elem ? rep.elemhide : rep.generichide) << m.captured(1).toLower();
+			(elem ? rep.elemhide : rep.generichide) << hosts;
 			return true;
 		}
 		return false;

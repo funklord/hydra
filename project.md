@@ -38807,6 +38807,16 @@ with more than 300 characters of text. `test_subscription` reads the shapes
 `test_bundle` holds `for_host` and the page's selectors, the shield's
 escape hatch included.
 
+**And the turning-off read in more shapes (2026-10-30).** Only
+`@@||host^$ghide` was understood, so 160 lines went unread: an entity
+(`@@||hqq.*^$ghide`), a host with a path (`@@||vidzer.me/stream?$ghide`,
+taken as the whole host -- it lifts more hiding than asked, never adds
+any), and `@@*$ghide,domain=a|b`, which names its sites in the option.
+Each is a site where the list says generic hiding breaks the page, mostly
+anti-adblock walls. Now read, and `covers` answers to an entity; a bare
+`@@*$ghide` with no site is still refused. Hosts read from the default
+lists: 1,774 before, 2,760 after.
+
 
 ### Procedural cosmetic rules: what an element says, not only what it is
 

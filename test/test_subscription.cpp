@@ -11,6 +11,7 @@
 // failure that would otherwise promote an empty list over a working one and
 // turn ad blocking off without saying so.
 #include "filter_subscription.h"
+#include "cosmetic_filters.h"
 #include "blocked_page.h"
 #include "filter_list.h"
 #include "policy_engine.h"
@@ -1363,6 +1364,21 @@ int main(int argc, char **argv) {
 		        rep.elemhide == QStringList({ "bare.example" }),
 		      "$generichide and $ehide hosts, each in its own list");
 		check(rep.unsupported >= 1, "a scriptlet exception is still unsupported");
+		const subscription_read more = filter_subscription::read(
+		  "! Title: t\n@@||hqq.*^$ghide\n@@||vidzer.me/stream?$ghide\n"
+		  "@@*$ghide,domain=a.example|b.example|~c.example\n@@*$ghide\n"
+		  "@@||plain.example$ghide\n", 0, true);
+		const QStringList read_hosts = { "hqq.*", "vidzer.me", "a.example", "b.example",
+		                                 "plain.example" };
+		check(more.generichide == read_hosts,
+		      "an entity, a host with a path, a domain= list and a bare host are read; "
+		      "a bare * is not: " + more.generichide.join(" "));
+		generic_cosmetics g;
+		g.generichide = QSet<QString>(more.generichide.begin(), more.generichide.end());
+		check(generic_cosmetics::covers(g.generichide, "www.hqq.tv") &&
+		        generic_cosmetics::covers(g.generichide, "hqq.to") &&
+		        !generic_cosmetics::covers(g.generichide, "nothqq.tv"),
+		      "and an entity covers the site under any suffix");
 	}
 
 	section("a procedural selector is read into steps, and :style() is refused");
