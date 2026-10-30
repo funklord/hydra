@@ -38734,6 +38734,21 @@ load them from hosts nobody could list in advance; 259 now read. A
 narrowing like the others, checked in `applies`. `test_subscription`
 holds the spared host, a subdomain of one, and the site's own script.
 
+**And silence and an empty picture for an ad's media (2026-10-30).** 119
+lines name `noopmp3-0.1s`, `noop-1s.mp4` or `noopmp4-1s`, and a rule
+naming a resource this build did not carry was refused whole -- so the
+ad's media simply loaded. Both are in the catalog now, made here with
+ffmpeg rather than taken from uBlock (0.1 s of mono silence, 157 bytes;
+one second of black 16x16 H.264 with x264's settings banner taken out,
+820 bytes). **On the desktop a media stand-in cannot play**: Chromium
+will not load media from a custom scheme and never asks the `resource:`
+handler -- measured by logging it, with length and range headers tried
+and making no difference -- so the redirect reads to the page as a
+refusal, which is still the ad not playing. Android answers the original
+request with the bytes, and has no such limit; that path is not yet run
+against media. `try_filters` finds the ad's media never requested and
+the stand-ins' bytes loading as audio and video when served over http.
+
 **And regular expressions, with `to=` (2026-10-30).** `/.../` rules were
 refused outright -- 628 lines of the default lists, most of them the
 random-looking hosts that malware and pop-under networks rotate through,

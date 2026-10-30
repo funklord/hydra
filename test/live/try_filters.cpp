@@ -85,6 +85,21 @@ public:
 				        "(matchMedia('(prefers-color-scheme: dark)').matches"
 				        "?'dark':'light');"
 				        "</script></body></html>";
+			} else if (target.startsWith("/real.")) {
+				redirect_resources::resource res;
+				redirect_resources::find(target.endsWith("mp3") ? "noop-0.1s.mp3" : "noop-1s.mp4", &res);
+				body = res.body;
+				type = res.mime;
+			} else if (target.startsWith("/media")) {
+				// An ad's audio and video from the other host, which a rule
+				// answers with the stand-ins.
+				const QByteArray other = "http://127.0.0.2:" + QByteArray::number(port);
+				body = "<!doctype html><html><body>"
+				        "<audio id=\"a\" preload=\"auto\" src=\"" + other + "/ad.mp3\"></audio>"
+				        "<video id=\"v\" preload=\"auto\" muted src=\"" + other + "/ad.mp4\"></video>"
+				        "<audio id=\"ra\" preload=\"auto\" src=\"/real.mp3\"></audio>"
+				        "<video id=\"rv\" preload=\"auto\" muted src=\"/real.mp4\"></video>"
+				        "</body></html>";
 			} else if (target.startsWith("/cosmetic")) {
 				body = "<!doctype html><html><body>"
 				        "<div class=\"ad-banner\">ADVERT</div>"
@@ -387,6 +402,50 @@ int main(int argc, char *argv[]) {
 		}
 		check(opened && !leaked, QString("the way through opens the page, token left off (%1)")
 		                           .arg(server.asked.join(" ")));
+		filter.set_network_rules({});
+	}
+
+	// **The media stand-ins are media, and the ad's never arrives.** Played
+	// from the page's own server, the stand-in's bytes load with a length and
+	// no error, which is what shows the files are sound. Redirected to, they
+	// cannot play on the desktop: Chromium will not load media from a custom
+	// scheme and never asks its handler (measured 2026-10-30, with length and
+	// range headers tried) -- so there the redirect reads as a refusal, which
+	// is still the ad not playing. Android answers the original request with
+	// the bytes and has no such limit.
+	section("an ad's audio and video are refused; the stand-ins are sound media");
+	{
+		QList<network_rule> rules;
+		network_rule r;
+		parse_network_rule("||127.0.0.2^*/ad.mp3$media,redirect=noopmp3-0.1s", &r, nullptr);
+		rules << r;
+		parse_network_rule("||127.0.0.2^*/ad.mp4$media,redirect=noopmp4-1s", &r, nullptr);
+		rules << r;
+		filter.set_network_rules(rules);
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/media").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		spin(3500);
+		QWebEngineView *shown = nullptr;
+		for (QWebEngineView *v : w.findChildren<QWebEngineView *>())
+			if (v->isVisible())
+				shown = v;
+		QString said;
+		bool got = false;
+		if (shown)
+			shown->page()->runJavaScript(
+			  "(function(){var a=document.getElementById('ra'),v=document.getElementById('rv');"
+			  "return [a.error?a.error.code:0,a.duration>0,v.error?v.error.code:0,v.duration>0].join(',');})()",
+			  [&](const QVariant &x) { said = x.toString(); got = true; });
+		for (int i = 0; i < 100 && !got; ++i)
+			spin(50);
+		bool asked = false;
+		for (const QString &a : std::as_const(server.asked))
+			asked = asked || a.startsWith("/ad.");
+		check(!asked, "the ad's media never reached its server");
+		check(said == "0,true,0,true",
+		      "the stand-ins' bytes load as audio and video, with a length and no error "
+		      "(audio error, has length, video error, has length: " + said + ")");
 		filter.set_network_rules({});
 	}
 

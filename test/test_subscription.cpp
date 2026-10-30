@@ -1105,6 +1105,17 @@ int main(int argc, char **argv) {
 		check(redirect_resources::find("1x1.gif", &res) && res.body.size() == 43 &&
 		        res.body.startsWith("GIF89a"),
 		      "an image stand-in is a whole image");
+		check(redirect_resources::find("noopmp3-0.1s", &res) && res.mime == "audio/mpeg" &&
+		        res.body.size() == 157 && uchar(res.body.at(0)) == 0xff &&
+		        (uchar(res.body.at(1)) & 0xe0) == 0xe0,
+		      "silence for an audio ad, an MP3 frame from its first byte");
+		check(redirect_resources::find("noopmp4-1s", &res) && res.mime == "video/mp4" &&
+		        res.body.mid(4, 4) == "ftyp" && !res.body.contains("x264 - core"),
+		      "an empty picture for a video ad, with no encoder banner in it");
+		network_rule media;
+		check(parse_network_rule("||ads.example^$media,redirect=noopmp3-0.1s", &media, nullptr) ==
+		        parsed::option && media.resource == "noop-0.1s.mp3",
+		      "and a rule naming either is read: " + media.resource);
 	}
 
 	section("a redirect answers a request a blanket rule would refuse");
