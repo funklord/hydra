@@ -94,7 +94,14 @@ async def main():
 		pages = json.load(urllib.request.urlopen(f"http://127.0.0.1:{PORT}/json", timeout=40))
 		# Several WebViews can hold a youtube page (a tab left open, one in
 		# the background): the one on screen is the one being asked about.
-		shown = lambda p: json.loads(p.get("description") or "{}").get("visible", False)
+		# **Visible and painted**: a background tab's WebView can report itself
+		# visible while it has nothing on screen -- DevTools says `empty` --
+		# and with leftover tabs the probe asked one of those instead of the
+		# page in front (2026-10-30), which failed checks about the page in
+		# front for no reason of their own.
+		def shown(p):
+			d = json.loads(p.get("description") or "{}")
+			return d.get("visible", False) and not d.get("empty", False)
 		tube = [p for p in pages if p.get("type") == "page" and "youtube.com" in p.get("url", "")]
 		page = next((p for p in tube if shown(p)), tube[0] if tube else None)
 		# An expression is a question about the page in front, whatever it is.
@@ -106,7 +113,11 @@ async def main():
 		async with websockets.connect(page["webSocketDebuggerUrl"], max_size=None) as ws:
 			await ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate",
 			                          "params": {"expression": EXPRESSION or PROBE,
-			                                     "awaitPromise": True, "returnByValue": True}}))
+			                                     "awaitPromise": True, "returnByValue": True,
+			                                     # As if a person did it, so an
+			                                     # expression may use what needs a
+			                                     # gesture -- the clipboard.
+			                                     "userGesture": True}}))
 			while True:
 				m = json.loads(await asyncio.wait_for(ws.recv(), 20))
 				if m.get("id") == 1:

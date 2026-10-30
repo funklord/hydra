@@ -739,6 +739,17 @@ public:
 	// `refresh_suggestions`). Null on the desktop.
 	class QListWidget        *m_suggest_list = nullptr;
 	void show_suggest_list(bool on);
+	void offer_clipboard();
+	// Android: the address edited full-width, many lines (`address_editor`).
+	void open_address_editor();
+	void close_address_editor();
+	void submit_address_editor();
+	void place_address_editor();
+	QString cleaned_link(const QString &text) const;
+	class address_editor *m_address_editor = nullptr;
+	QWidget              *m_editor_panel = nullptr;
+	QTimer *m_suggest_timer = nullptr;   // Android: suggestions after a pause
+	QString m_typed;                     // the field as seen, composition included
 	QComboBox       *m_sort_box = nullptr;
 	QString          m_view_path;   // view.ini, beside the tree and the policy
 	QLineEdit       *m_search   = nullptr;

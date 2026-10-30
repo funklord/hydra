@@ -12,6 +12,8 @@
 #ifdef Q_OS_ANDROID
 
 #include "android_view.h"
+
+#include <QPixmap>
 #include "link_menu.h"
 #include "network_rules.h"
 #include "request_filter.h"
@@ -1099,6 +1101,27 @@ QString android_view::clean_url(const QString &url) {
 	return clean.isValid() ? clean.toString(QUrl::FullyEncoded) : QString();
 }
 
+// **The page's picture, taken just before it stepped aside** (Java's
+// `setVisible`): shown in its place while something covers it, so a menu or
+// the address editor opens over the page rather than over grey. Dropped if
+// the page is back by the time it arrives.
+extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onSnapshot(JNIEnv *env, jclass, jlong id, jbyteArray data) {
+	if (!data)
+		return;
+	const jsize n = env->GetArrayLength(data);
+	QByteArray bytes(n, Qt::Uninitialized);
+	env->GetByteArrayRegion(data, 0, n, reinterpret_cast<jbyte *>(bytes.data()));
+	android_view::deliver_snapshot(id, bytes);
+}
+
+void android_view::deliver_snapshot(qint64 id, const QByteArray &jpeg) {
+	QMetaObject::invokeMethod(qApp, [id, jpeg] {
+		if (android_view *v = s_views.value(id))
+			v->show_snapshot(jpeg);
+	}, Qt::QueuedConnection);
+}
+
 bool android_view::any_view_open() {
 	return !s_views.isEmpty();
 }
@@ -1496,6 +1519,20 @@ bool android_view::eventFilter(QObject *o, QEvent *e) {
 	return web_view_backend::eventFilter(o, e);
 }
 
+void android_view::show_snapshot(const QByteArray &jpeg) {
+	if (!m_widget || !(m_obscured || m_blocked))
+		return;
+	QPixmap p;
+	if (!p.loadFromData(jpeg, "JPEG"))
+		return;
+	p.setDevicePixelRatio(m_widget->devicePixelRatioF());
+	// Edge to edge, where the page was: the label's margin is for the text it
+	// shows when there is no WebView, and offset the picture by 24 pixels.
+	m_widget->setMargin(0);
+	m_widget->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+	m_widget->setPixmap(p);
+}
+
 void android_view::sync_geometry() {
 	if (!m_native || !m_widget)
 		return;
@@ -1511,9 +1548,15 @@ void android_view::sync_geometry() {
 	                                    jint(m_widget->height() * dpr));
 	// Never visible while a dialog is up, whatever the widget thinks: the widget
 	// is perfectly visible, it is just underneath something.
+	const bool shown = m_widget->isVisible() && !m_blocked && !m_obscured;
+	// The live page is back: its picture goes.
+	if (shown && !m_widget->pixmap().isNull()) {
+		m_widget->clear();
+		m_widget->setMargin(24);
+		m_widget->setAlignment(Qt::AlignCenter);
+	}
 	QJniObject::callStaticMethod<void>(
-	  k_cls, "setVisible", "(JZ)V", jlong(m_id),
-	  jboolean(m_widget->isVisible() && !m_blocked && !m_obscured));
+	  k_cls, "setVisible", "(JZ)V", jlong(m_id), jboolean(shown));
 }
 
 void android_view::set_desktop_site(bool on) {

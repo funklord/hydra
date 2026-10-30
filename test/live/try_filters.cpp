@@ -391,6 +391,22 @@ int main(int argc, char *argv[]) {
 		for (const QString &a : std::as_const(server.asked))
 			asked = asked || a.startsWith("/badpage");
 		check(!asked, "a token the warning did not make opens nothing");
+		// **And the warning that forged address got still works.** Its way
+		// through was appended to an address already carrying a token, and the
+		// stray one was the one read -- found on the emulator, 2026-10-30.
+		through.clear();
+		got = false;
+		for (QWebEngineView *v : w.findChildren<QWebEngineView *>())
+			if (v->isVisible())
+				shown = v;
+		if (shown)
+			shown->page()->runJavaScript(
+			  "document.querySelector('a.through').href",
+			  [&](const QVariant &v) { through = v.toString(); got = true; });
+		for (int i = 0; i < 100 && !got; ++i)
+			spin(50);
+		check(through.count("hydra-proceed=") == 1 && !through.contains("forged"),
+		      "and the warning shown for it carries one token, its own: " + through);
 		server.asked.clear();
 		bar->setText(through);
 		QMetaObject::invokeMethod(bar, "returnPressed");

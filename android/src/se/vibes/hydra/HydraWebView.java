@@ -1885,13 +1885,58 @@ public class HydraWebView {
     public static void setVisible(final long id, final boolean on) {
         onUi(new Runnable() {
             @Override public void run() {
-                WebView w = VIEWS.get(id);
+                final WebView w = VIEWS.get(id);
                 if (w == null)
                     return;
-                w.setVisibility(on ? android.view.View.VISIBLE
-                                   : android.view.View.GONE);
+                if (on || w.getVisibility() != android.view.View.VISIBLE
+                    || w.getWidth() <= 0 || w.getHeight() <= 0) {
+                    w.setVisibility(on ? android.view.View.VISIBLE
+                                       : android.view.View.GONE);
+                    return;
+                }
+                // **A picture of the page before it goes**, for the window to
+                // show in its place while a menu, the tree or the address
+                // editor is over it -- the page is a native view drawn above
+                // everything Qt paints, so it has to step aside, and what
+                // was left was a blank grey area (asked for by the holder,
+                // 2026-10-30). Copied from the window's own pixels, then
+                // hidden; if the copy fails the page is hidden all the same.
+                snapshot(id, w, new Runnable() {
+                    @Override public void run() {
+                        w.setVisibility(android.view.View.GONE);
+                    }
+                });
             }
         });
+    }
+
+    public static native void onSnapshot(long id, byte[] jpeg);
+
+    private static void snapshot(final long id, final WebView w, final Runnable then) {
+        try {
+            final Activity a = (Activity) w.getContext();
+            final int[] at = new int[2];
+            w.getLocationInWindow(at);
+            final android.graphics.Rect r = new android.graphics.Rect(
+                at[0], at[1], at[0] + w.getWidth(), at[1] + w.getHeight());
+            final android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(
+                w.getWidth(), w.getHeight(), android.graphics.Bitmap.Config.ARGB_8888);
+            android.view.PixelCopy.request(a.getWindow(), r, b,
+                new android.view.PixelCopy.OnPixelCopyFinishedListener() {
+                    @Override public void onPixelCopyFinished(int result) {
+                        if (result == android.view.PixelCopy.SUCCESS) {
+                            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                            b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, out);
+                            onSnapshot(id, out.toByteArray());
+                        }
+                        b.recycle();
+                        then.run();
+                    }
+                }, new android.os.Handler(android.os.Looper.getMainLooper()));
+        } catch (Throwable t) {
+            Log.w("hydra", "page snapshot failed: " + t);
+            then.run();
+        }
     }
 
     /**

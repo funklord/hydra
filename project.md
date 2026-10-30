@@ -27380,6 +27380,76 @@ list and a live app -- with the caveat that `adb shell input text` sends key
 events rather than going through the keyboard, so it shows the list works
 and may not reproduce the crash itself; the phone was the test of that.
 
+## The address bar on a phone, redone and tested by tapping keys (2026-10-30)
+
+**Reported by the holder: "completely broken in like a hundred ways", and
+then "I cannot join a meeting because it is impossible to paste a link".**
+Each fault below was reproduced on the emulator before it was fixed, and
+the fixes are held by `tool/emulator_checks.py`, which types by tapping
+Gboard's own keys -- `adb input text` sends hardware key events, which
+the keyboard composes differently, and it scrambled bursts of text that
+real taps did not (`https://example.org/meet-42` came out
+`:/http/example.org/meet-42s`). That measurement cost an afternoon of
+false leads and is the first thing to know before testing text input
+here: **a keyboard test is a test of the keyboard path it used.**
+
+**The checks tap suggestion rows by place, not by name.** The list is in
+Android's accessibility tree with its bounds, but its rows are not: Qt's
+bridge never announces rows put into the list after the tree first read
+it, so a check looking for "Hacker News" found nothing while the row sat
+on screen (screenshot and `uiautomator dump`, same moment). Each such
+check is judged by where its tap leads instead. Fixing the bridge is
+accessibility work, deferred until the software is finished; a screen
+reader cannot reach these rows until then.
+
+- **Paste could not be tapped.** Qt's paste bubble is drawn over the menu
+  bar and does not take the touch: it lands in the View menu under it.
+  Now the editor offers what is on the clipboard as rows of its own --
+  **Paste and go** and **Paste** -- the way Chrome on Android does.
+- **The editor**: tapping the bar opens `address_editor` across the whole
+  window, over the toolbar, wrapping a long link over up to five lines
+  and scrolling past that, with Go and Clear beside it and the
+  suggestion and paste rows under it (the holder asked for it bigger and
+  multi-line). Return or the keyboard's Go submits; a tap anywhere else
+  closes it -- the page under it is a picture in a label, which takes no
+  focus, so this is done in the window's event filter.
+- **Pasted links arrive cleaned**: the rows, Ctrl+V and the keyboard's
+  clipboard chip all pass through `cleaned_link`, the lists' parameter
+  removals and redirect skips. And a built-in set of tracking tags --
+  `utm_*`, `fbclid`, `gclid`, `msclkid`, `igshid`, `mc_cid` and their
+  kin -- is installed with the lists' rules, since uBlock's defaults
+  leave `utm_*` to separate URL-cleaning lists. A list's
+  `@@...$removeparam` still lifts one. Measured: a copied
+  `.../story?utm_campaign=x&fbclid=IwAR9z&id=5` is offered as
+  `.../story?id=5`.
+- **The word being composed counts as typed.** Gboard holds the current
+  word out of `text()` until a space or punctuation, so suggestions
+  followed a word behind (`hacker` suggested nothing) and the Go button
+  searched for an empty field (`duckduckgo.com/?q=`). The field now
+  reports text with the composition, and submitting commits it first.
+- **The page gets focus after going somewhere**, as in every browser:
+  left in the bar, the next tap only moved the cursor -- no select-all,
+  no paste rows.
+- **Suggestions wait for a pause** (150 ms), and only while somebody is
+  in the bar: a timer from the last keystroke fired after Go had loaded
+  the page, put the list back, and left the page hidden behind it.
+- **Each row is a finger tall.** The list was sized for rows of twice the
+  font's height, but the rows drew at their text's height stacked at its
+  top: "Paste" was a strip a third of a centimetre high over empty list,
+  and a tap on the lower half of it did nothing. Each row now takes the
+  height the list was sized for.
+- **A picture of the page while something covers it** (the holder's
+  suggestion): the page is a native view drawn above everything Qt
+  paints, so it steps aside for a menu, the drawer or the editor, and
+  left a grey area. Java now copies its pixels (`PixelCopy`) before
+  hiding it and Qt shows them in its place until it is back.
+
+**Measured and not changed**: `ImhNoPredictiveText` looked guilty -- with
+it, `adb` bursts scrambled -- and with real key taps the bar behaves the
+same with or without it; the URL keyboard (`ImhUrlCharactersOnly`) does
+have a space bar, contrary to the comment that refused it, and was not
+needed either.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

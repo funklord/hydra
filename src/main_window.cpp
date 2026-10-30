@@ -5,6 +5,10 @@
 #include <QStandardItemModel>
 #include <QCompleter>
 #include <QListWidget>
+#include <QSignalBlocker>
+#include <QTextDocument>
+#include <QAbstractTextDocumentLayout>
+#include <QFrame>
 #include <QRandomGenerator>
 #include <QUrlQuery>
 
@@ -122,6 +126,7 @@
 #include <QStyle>
 #include <QClipboard>
 #include <QGuiApplication>
+#include <QInputMethod>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -1030,17 +1035,132 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_suggest_list->hide();
 	connect(m_suggest_list, &QListWidget::itemClicked, this, [this](QListWidgetItem *it) {
 		const QString url = it ? it->data(Qt::UserRole).toString() : QString();
+		const QString kind = it ? it->data(Qt::UserRole + 1).toString() : QString();
 		show_suggest_list(false);
 		if (url.isEmpty())
 			return;
+		if (kind == QLatin1String("paste") && m_editor_panel && m_editor_panel->isVisible()) {
+			m_address_editor->paste_text(url);
+			m_address_editor->setFocus(Qt::OtherFocusReason);
+			return;
+		}
+		if (kind == QLatin1String("paste")) {
+			// Into the field at the cursor, over whatever is selected -- which
+			// after the first tap is the whole old address.
+			m_address->insert(url);
+			m_address->setModified(true);
+			m_address->setFocus(Qt::OtherFocusReason);
+			return;
+		}
+		close_address_editor();
 		m_address->setText(url);
 		navigate_to_address();
 	});
+	// **Paste, from a row in the window's own list.** Qt's paste bubble on
+	// Android is drawn over the menu bar and does not take the tap: the touch
+	// lands in the View menu under it, and nothing is pasted -- which made a
+	// meeting link impossible to open (the holder, 2026-10-30; reproduced on
+	// the emulator). Chrome on Android offers the copied link the same way.
+	// Queued: the focus arrives inside a touch, and the list moves the page
+	// aside through Java, which is not something to do from in there.
+	connect(address_field, &address_line::focused, this, [this] {
+		QTimer::singleShot(0, this, [this] {
+			if (!m_address->hasFocus())
+				return;
+			if (m_address_editor)
+				open_address_editor();
+			else if (!m_address->isModified())
+				offer_clipboard();
+		});
+	});
 	connect(m_address, &QLineEdit::editingFinished, this, [this] { show_suggest_list(false); });
+
+	// **The editing box** (`address_editor`): the window's width, over the
+	// toolbar, with Go and Clear beside it. The toolbar's field opens it on
+	// focus and gets what was typed back on Go.
+	m_editor_panel = new QFrame(this);
+	m_editor_panel->setObjectName("address_editor_panel");
+	m_editor_panel->setAutoFillBackground(true);
+	auto *panel_row = new QHBoxLayout(m_editor_panel);
+	panel_row->setContentsMargins(4, 4, 4, 4);
+	panel_row->setSpacing(4);
+	m_address_editor = new address_editor(m_editor_panel);
+	m_address_editor->setObjectName("address_editor");
+	m_address_editor->setAccessibleName("Editing the address");
+	m_address_editor->cleaner = [this](const QString &t) { return cleaned_link(t); };
+	panel_row->addWidget(m_address_editor, 1);
+	auto *panel_buttons = new QVBoxLayout;
+	panel_buttons->setSpacing(4);
+	auto *go_button = new QToolButton(m_editor_panel);
+	go_button->setIcon(themed_icon({ "go-jump", "media-playback-start" }, style(),
+	                               QStyle::SP_ArrowForward));
+	go_button->setText("Go");
+	go_button->setAccessibleName("Go to the address being edited");
+	go_button->setFocusPolicy(Qt::NoFocus);
+	auto *clear_button = new QToolButton(m_editor_panel);
+	clear_button->setIcon(themed_icon({ "edit-clear" }, style(), QStyle::SP_LineEditClearButton));
+	clear_button->setText("Clear");
+	clear_button->setAccessibleName("Clear the address");
+	clear_button->setFocusPolicy(Qt::NoFocus);
+	panel_buttons->addWidget(go_button);
+	panel_buttons->addWidget(clear_button);
+	panel_buttons->addStretch(1);
+	panel_row->addLayout(panel_buttons);
+	m_editor_panel->hide();
+	connect(go_button, &QToolButton::clicked, this, &main_window::submit_address_editor);
+	connect(clear_button, &QToolButton::clicked, this, [this] {
+		m_address_editor->clear();
+		m_address_editor->setFocus(Qt::OtherFocusReason);
+	});
+	connect(m_address_editor, &address_editor::submitted, this, &main_window::submit_address_editor);
+	connect(m_address_editor, &address_editor::abandoned, this, &main_window::close_address_editor);
+	connect(m_address_editor, &address_editor::left, this, [this] {
+		// Queued: where focus went is known only once it has arrived. The
+		// rows and buttons take no focus, so tapping them keeps it here.
+		QTimer::singleShot(0, this, [this] {
+			if (m_editor_panel && m_editor_panel->isVisible() &&
+			    !m_editor_panel->isAncestorOf(QApplication::focusWidget()))
+				close_address_editor();
+		});
+	});
+	connect(m_address_editor, &address_editor::typing, this, [this](const QString &t) {
+		m_typed = t;
+		place_address_editor();
+		if (m_suggest_timer)
+			m_suggest_timer->start();
+	});
 #else
 	m_address->setCompleter(m_completer);
 #endif
+#ifdef Q_OS_ANDROID
+	// **After the keys stop, not on each one.** Rebuilding the list on every
+	// keystroke reached into Java -- `set_obscured` moves the page aside --
+	// from inside the keyboard's own input event, and a burst of typing came
+	// out scrambled: `https://example.org/meet-42` typed in one go read
+	// `:/http/example.org/meet-42s`, while the same text typed in pieces was
+	// right (emulator, 2026-10-30). Chrome waits for a pause the same way.
+	m_suggest_timer = new QTimer(this);
+	m_suggest_timer->setSingleShot(true);
+	m_suggest_timer->setInterval(150);
+	connect(m_suggest_timer, &QTimer::timeout, this, [this] {
+		// Only while somebody is still in the bar: a timer started by the
+		// last keystroke fired after Go had loaded the page, put the list
+		// back, and left the page moved aside behind it (emulator,
+		// 2026-10-30).
+		if (m_address->hasFocus() || (m_address_editor && m_address_editor->hasFocus()))
+			refresh_suggestions(m_typed);
+	});
+	connect(m_address, &QLineEdit::textEdited, this, [this](const QString &t) {
+		m_typed = t;
+		m_suggest_timer->start();
+	});
+	connect(address_field, &address_line::typing, this, [this](const QString &t) {
+		m_typed = t;
+		m_suggest_timer->start();
+	});
+#else
 	connect(m_address, &QLineEdit::textEdited, this, &main_window::refresh_suggestions);
+#endif
 	connect(m_completer, qOverload<const QModelIndex &>(&QCompleter::activated), this,
 	         [this](const QModelIndex &at) {
 		const QString url = at.data(Qt::EditRole).toString();
@@ -3934,6 +4054,19 @@ void main_window::set_tree_visible(bool visible) {
 }
 
 bool main_window::eventFilter(QObject *watched, QEvent *event) {
+	// **A tap anywhere but the address editor and its list closes it.** The
+	// page under it is a picture in a label, and a label takes no focus -- so
+	// tapping the page left the editor open and the page hidden (emulator,
+	// 2026-10-30). Queued, so the press still reaches what it was for.
+	if (m_editor_panel && m_editor_panel->isVisible() &&
+	    (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::TouchBegin) &&
+	    watched->isWidgetType()) {
+		QWidget *w = static_cast<QWidget *>(watched);
+		const bool inside = w == m_editor_panel || m_editor_panel->isAncestorOf(w) ||
+		                    (m_suggest_list && (w == m_suggest_list || m_suggest_list->isAncestorOf(w)));
+		if (!inside)
+			QTimer::singleShot(0, this, [this] { close_address_editor(); });
+	}
 	// **The drawer's right edge, which had no handle at all.** In drawer mode
 	// the sidebar is an overlay rather than a splitter pane, so the splitter's
 	// handle is not there to drag -- reported from use as "I can't resize the
@@ -5454,9 +5587,24 @@ bool main_window::allow_navigation(web_view_backend *view, const QUrl &url,
 	// token -- the person chose, so the host is let through for the session
 	// and the address loaded without the token.
 	if (m_filter) {
-		const QUrlQuery query(url);
-		const QString token = query.queryItemValue(blocked_page::token_key());
-		if (!token.isEmpty() && m_page_block_tokens.contains(token)) {
+		// **Every value of the key, and the address without any of them.** A
+		// page that already carried a token -- a forged one, or the way
+		// through of an earlier warning -- got a second added by the next
+		// warning, the first was the one read, and the person was refused
+		// again past a warning they had answered (found by
+		// `tool/emulator_checks.py`, 2026-10-30).
+		QUrlQuery query(url);
+		const QStringList offered = query.allQueryItemValues(blocked_page::token_key());
+		query.removeAllQueryItems(blocked_page::token_key());
+		QUrl bare = url;
+		bare.setQuery(query);
+		if (query.isEmpty())
+			bare.setQuery(QString());
+		QString token;
+		for (const QString &t : offered)
+			if (m_page_block_tokens.contains(t))
+				token = t;
+		if (!token.isEmpty()) {
 			const QUrl target = m_page_block_tokens.take(token);
 			m_filter->proceed(target.host());
 			QPointer<web_view_backend> v(view);
@@ -5466,18 +5614,18 @@ bool main_window::allow_navigation(web_view_backend *view, const QUrl &url,
 			}, Qt::QueuedConnection);
 			return false;
 		}
-		const QString rule = m_filter->page_block(url);
+		const QString rule = m_filter->page_block(bare);
 		if (!rule.isEmpty()) {
 			const QString made = QString::number(QRandomGenerator::global()->generate64(), 36);
-			m_page_block_tokens.insert(made, url);
+			m_page_block_tokens.insert(made, bare);
 			const bool dark = palette().color(QPalette::Window).lightness() < 128;
-			const QString html = blocked_page::build(url, rule, made, dark);
+			const QString html = blocked_page::build(bare, rule, made, dark);
 			QPointer<web_view_backend> v(view);
 			// Not from inside the engine's own decision, as with the locked
 			// tab's sub-tab below.
-			QMetaObject::invokeMethod(this, [v, html, url] {
+			QMetaObject::invokeMethod(this, [v, html, bare] {
 				if (v)
-					v->show_html(html, url);
+					v->show_html(html, bare);
 			}, Qt::QueuedConnection);
 			if (m_status)
 				m_status->showMessage(QString("Did not open %1: a filter list names it as a "
@@ -6719,6 +6867,27 @@ int main_window::load_subscriptions() {
 		apply_badfilters(cancelled, &option_rules, nullptr);
 	}
 	m_subscribed->replace(all);
+	// **The tracking tags every link carries, taken off whether a list names
+	// them or not.** uBlock's default lists remove `fbclid` and a few others
+	// but leave `utm_source` and its family to separate URL-cleaning lists, so
+	// a link pasted from Facebook kept half of its tracking (measured on the
+	// emulator, 2026-10-30; the holder asked for the fat to be cut). These are
+	// tags only advertising and analytics read; a list's `@@...$removeparam`
+	// lifts any of them on a site that needs one.
+	static const char *const k_tracking[] = {
+		"$removeparam=/^utm_/", "$removeparam=fbclid", "$removeparam=gclid",
+		"$removeparam=dclid", "$removeparam=gbraid", "$removeparam=wbraid",
+		"$removeparam=msclkid", "$removeparam=igshid", "$removeparam=mc_cid",
+		"$removeparam=mc_eid", "$removeparam=_hsenc", "$removeparam=_hsmi",
+		"$removeparam=yclid", "$removeparam=twclid", "$removeparam=ttclid",
+		"$removeparam=li_fat_id", "$removeparam=mkt_tok", "$removeparam=oly_anon_id",
+		"$removeparam=oly_enc_id", "$removeparam=vero_id", "$removeparam=wickedid",
+	};
+	for (const char *line : k_tracking) {
+		network_rule r;
+		if (parse_network_rule(QString::fromLatin1(line), &r, nullptr) == parsed::option)
+			option_rules << r;
+	}
 	if (m_filter)
 		m_filter->set_network_rules(option_rules);
 	return taken;
@@ -7238,6 +7407,112 @@ void main_window::on_search_changed(const QString &text) {
 	refresh_placeholder_text();
 }
 
+// The clipboard's text as the first rows of the suggestion list: "Paste and
+// go" and "Paste". Android only, where the list exists and the system's own
+// paste bubble cannot be tapped. Nothing when the clipboard holds no text or
+// more than one line of it, which is not something to put in an address bar.
+void main_window::offer_clipboard() {
+	if (!m_suggest_list)
+		return;
+	const QString text = QGuiApplication::clipboard()->text().trimmed();
+	if (text.isEmpty() || text.size() > 4096 || text.contains(QLatin1Char('\n'))) {
+		show_suggest_list(false);
+		return;
+	}
+	m_suggest_list->clear();
+	// Cleaned before it is shown: what the row says is what will be used.
+	const QString link = cleaned_link(text);
+	const QString shown = link.size() > 80 ? link.left(77) + QStringLiteral("...") : link;
+	auto *go = new QListWidgetItem(QStringLiteral("Paste and go: ") + shown);
+	go->setData(Qt::UserRole, link);
+	go->setData(Qt::UserRole + 1, QStringLiteral("paste-go"));
+	m_suggest_list->addItem(go);
+	auto *in = new QListWidgetItem(QStringLiteral("Paste"));
+	in->setData(Qt::UserRole, link);
+	in->setData(Qt::UserRole + 1, QStringLiteral("paste"));
+	m_suggest_list->addItem(in);
+	show_suggest_list(true);
+}
+
+// A link with the lists' tracking parameters taken off and a tracking
+// redirect skipped, as `request_filter::clean_navigation` does to a
+// navigation -- applied to what is pasted, so it is seen cleaned. Anything that
+// is not an http or https link is left as it is.
+QString main_window::cleaned_link(const QString &text) const {
+	const QString t = text.trimmed();
+	const QUrl u(t, QUrl::StrictMode);
+	if (!m_filter || !u.isValid() ||
+	    (u.scheme() != QLatin1String("http") && u.scheme() != QLatin1String("https")))
+		return t;
+	const QUrl c = m_filter->clean_navigation(u);
+	return c.isValid() ? c.toString(QUrl::FullyEncoded) : t;
+}
+
+void main_window::place_address_editor() {
+	if (!m_editor_panel || !m_address_editor)
+		return;
+	const int top = m_address->mapTo(this, QPoint(0, 0)).y() - 4;
+	const qreal lines = m_address_editor->document()->documentLayout()->documentSize().height();
+	const int shown = qBound(2, int(lines + 0.5), 5);
+	const int h = shown * m_address_editor->fontMetrics().lineSpacing() +
+	              2 * int(m_address_editor->document()->documentMargin()) +
+	              2 * m_address_editor->frameWidth() + 8;
+	m_editor_panel->setGeometry(0, qMax(0, top), width(), qMax(h, 96));
+	m_editor_panel->raise();
+	if (m_suggest_list && m_suggest_list->isVisible())
+		show_suggest_list(true);
+}
+
+void main_window::open_address_editor() {
+	if (!m_address_editor)
+		return;
+	const bool edited = m_address->isModified();
+	{
+		// Filled quietly: the page's own address is not something typed, and
+		// as a change it started the suggestion timer, which put suggestions
+		// for that address over the paste rows 150 ms later (emulator,
+		// 2026-10-30).
+		const QSignalBlocker quiet(m_address_editor);
+		m_address_editor->set_text(m_address->text());
+	}
+	if (m_suggest_timer)
+		m_suggest_timer->stop();
+	m_typed = m_address->text();
+	m_editor_panel->show();
+	place_address_editor();
+	if (web_view_backend *v = current_view())
+		v->set_obscured(true);
+	m_address_editor->setFocus(Qt::OtherFocusReason);
+	m_address_editor->selectAll();
+	if (!edited)
+		offer_clipboard();
+}
+
+void main_window::close_address_editor() {
+	if (!m_editor_panel || !m_editor_panel->isVisible())
+		return;
+	if (m_suggest_timer)
+		m_suggest_timer->stop();
+	m_editor_panel->hide();
+	show_suggest_list(false);
+	web_view_backend *v = current_view();
+	if (v && !(m_drawer_mode && m_drawer_open))
+		v->set_obscured(false);
+	if (v && v->widget())
+		v->widget()->setFocus(Qt::OtherFocusReason);
+}
+
+void main_window::submit_address_editor() {
+	if (!m_address_editor)
+		return;
+	QGuiApplication::inputMethod()->commit();
+	const QString typed = m_address_editor->text();
+	close_address_editor();
+	m_address->setText(typed);
+	m_address->setModified(true);
+	navigate_to_address();
+}
+
 void main_window::refresh_suggestions(const QString &typed) {
 	if (!m_suggestions || !m_completer || !m_model)
 		return;
@@ -7261,6 +7536,10 @@ void main_window::refresh_suggestions(const QString &typed) {
 		item->setData(s.url, Qt::EditRole);
 		item->setToolTip(s.url);
 		m_suggestions->appendRow(item);
+	}
+	if (m_suggest_list && typed.trimmed().isEmpty()) {
+		offer_clipboard();
+		return;
 	}
 	if (m_suggest_list) {
 		m_suggest_list->clear();
@@ -7294,13 +7573,22 @@ void main_window::show_suggest_list(bool on) {
 		if (!m_suggest_list->isVisible())
 			return;
 		m_suggest_list->hide();
-		if (v && !(m_drawer_mode && m_drawer_open))
+		if (v && !(m_drawer_mode && m_drawer_open) &&
+		    !(m_editor_panel && m_editor_panel->isVisible()))
 			v->set_obscured(false);
 		return;
 	}
-	const QPoint below = m_address->mapTo(this, QPoint(0, m_address->height()));
+	const QPoint below = (m_editor_panel && m_editor_panel->isVisible())
+	  ? QPoint(0, m_editor_panel->geometry().bottom())
+	  : m_address->mapTo(this, QPoint(0, m_address->height()));
 	const int rows = qMin(m_suggest_list->count(), 8);
+	// Each row as tall as the list was sized for, so a finger has it: sized
+	// alone, the rows drew at their text's height stacked at the top, and a
+	// tap on the lower half of "Paste" landed in the empty space below it
+	// (emulator, 2026-10-30).
 	const int row = qMax(m_suggest_list->sizeHintForRow(0), fontMetrics().height() * 2);
+	for (int i = 0; i < m_suggest_list->count(); ++i)
+		m_suggest_list->item(i)->setSizeHint(QSize(0, row));
 	m_suggest_list->setGeometry(0, below.y() + 2, width(),
 	                            qMin(rows * row + 2 * m_suggest_list->frameWidth(),
 	                                 height() - below.y() - 2));
@@ -7311,6 +7599,14 @@ void main_window::show_suggest_list(bool on) {
 }
 
 void main_window::navigate_to_address() {
+	// **The word still being composed is part of what was typed.** Gboard
+	// holds it outside `text()` until a space or punctuation; pressed then,
+	// the Go button searched for nothing -- `duckduckgo.com/?q=` for a field
+	// that read "wikipedia" (emulator, 2026-10-30). Committing first hands it
+	// to the field.
+	QGuiApplication::inputMethod()->commit();
+	if (m_suggest_timer)
+		m_suggest_timer->stop();
 	const QString text = m_address->text().trimmed();
 	// The edit is finished, so `update_address` may have the field back: what
 	// comes next is this navigation's own url, canonicalised, and it should
@@ -7349,6 +7645,16 @@ void main_window::navigate_to_address() {
 
 	if (web_view_backend *v = current_view()) {
 		v->load(target);
+		// **The page has the keyboard next, as in every browser.** Left in
+		// the bar, the next tap on it only moved the cursor -- no select-all,
+		// no paste row -- because a field that already has focus gets no
+		// focus-in (emulator, 2026-10-30). On Android this also puts the
+		// on-screen keyboard away.
+		show_suggest_list(false);
+		if (QWidget *w = v->widget())
+			w->setFocus(Qt::OtherFocusReason);
+		else
+			m_address->clearFocus();
 		return;
 	}
 

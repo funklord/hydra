@@ -38,6 +38,18 @@
 #      tree"); the phone was the test of that;
 #   9. Find on Page counts what is on the page: built for Android long ago
 #      and never once run on a device until this check.
+#  10. the address bar, typed by tapping the keyboard's own keys
+#      (2026-10-30): a tap opens the editor across the window; the
+#      keyboard's Go key and the editor's Go button; a word still being
+#      composed counted as typed; a tab suggested from a composing word; a
+#      tap on the page closes the editor; and a tagged link on the
+#      clipboard offered as Paste and go and Paste, cleaned of its tags;
+#  11. the lists against real sites (2026-10-30): a tracker's parameter is
+#      taken off an opened address and off a page's own navigation; a page
+#      a list says not to visit (7zip.es, in the Badware list) is refused
+#      with a warning whose way through works and a forged one does not;
+#      and dailymail's procedural rule hides a planted sponsored puff by a
+#      marker, leaves its twin, and shows it again once its text changes.
 #
 # What makes it stop: every adb call has a timeout, every wait is bounded,
 # and the emulator -- started in its own session -- is killed in `finally`,
@@ -91,15 +103,21 @@ def probe(expression=None):
 		cmd.append(expression)
 	return subprocess.run(cmd, capture_output=True, text=True, timeout=120).stdout
 
-def tap(label, limit=30):
-	# Taps the node whose description or text starts with `label`, or whose
-	# resource id is `label` -- the system's own dialogs name their controls.
+def tap(label, limit=30, exact=False):
+	# Taps the node whose description or text starts with `label` (is it,
+	# with `exact`), or whose resource id is `label` -- the system's own
+	# dialogs name their controls.
 	def found():
 		adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
 		tree = et.fromstring(adb("shell", "cat", "/sdcard/ui.xml") or "<x/>")
 		for n in tree.iter("node"):
 			name = n.get("content-desc") or n.get("text") or ""
-			if name.startswith(label) or n.get("resource-id") == label:
+			# Not on screen is not there: a closed drawer's rows are in the
+			# tree with empty bounds, and tapping one tapped the corner.
+			if n.get("bounds") in (None, "[0,0][0,0]"):
+				continue
+			if (name == label if exact else name.startswith(label)) or \
+			   n.get("resource-id") == label:
 				x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds")))
 				adb("shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
 				return True
@@ -378,11 +396,17 @@ def main():
 			    "-d", f"http://127.0.0.1:{port}/article", "-n", f"{APP}/.HydraActivity")
 			time.sleep(10)
 			ok = tap("Address", limit=10)
+			# The tap opens the address editor, a moment later: typed into
+			# before it has focus, the text goes nowhere.
+			wait_for("the address editor", lambda: "Editing the address" in (
+			  adb("shell", "uiautomator", "dump", "/sdcard/ui.xml") and
+			  adb("shell", "cat", "/sdcard/ui.xml")), 10, step=1)
 			adb("shell", "input", "text", "127.0.0")
-			time.sleep(3)
-			adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
-			shown = adb("shell", "cat", "/sdcard/ui.xml")
-			check(ok and "127.0.0.1" in shown and "Suggestions" in shown,
+			def listed():
+				adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+				shown = adb("shell", "cat", "/sdcard/ui.xml")
+				return "127.0.0.1" in shown and "Suggestions" in shown
+			check(ok and wait_for("the suggestions", listed, 15, step=2),
 			      "the suggestions list, inside the window")
 			check(adb("shell", "pidof", APP).strip() != "", "and the app is still running")
 
@@ -402,6 +426,198 @@ def main():
 				return re.search(r"\b[1-6] of 6\b", adb("shell", "cat", "/sdcard/ui.xml")) is not None
 			check(wait_for("the find count", counted, 15, step=2),
 			      "\"rain\" found six times, once in each paragraph")
+
+			def open_url(url, wait=12):
+				adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
+				    "-d", f"'{url}'", "-n", f"{APP}/.HydraActivity")
+				time.sleep(wait)
+
+			# **The address bar, used the way a finger uses it** (2026-10-30,
+			# after the holder could not paste a meeting link). Typed by
+			# tapping the keyboard's own keys: `adb input text` sends hardware
+			# key events, which the keyboard composes differently, and it
+			# scrambled text that real taps did not -- so it tested the wrong
+			# thing. The key positions are Gboard's letter layout on this
+			# AVD's 1080x2340 screen.
+			print("\n== the address bar, typed by tapping keys ==")
+			keys = {}
+			for letters, y, xs in (("qwertyuiop", 1655, [58, 165, 273, 378, 486, 593, 700, 807, 915, 1021]),
+			                       ("asdfghjkl", 1810, [111, 219, 325, 433, 539, 646, 753, 860, 968]),
+			                       ("zxcvbnm", 1966, [219, 325, 433, 539, 646, 753, 860])):
+				for c, x in zip(letters, xs):
+					keys[c] = (x, y)
+			keys["."] = (860, 2120)
+			def type_keys(text):
+				# The keyboard first: after a navigation it has gone away, and
+				# coming back on a slow emulator takes longer than a fixed
+				# wait -- taps made before it is up land on the page, nothing
+				# is typed, and every check after fails for that one reason.
+				wait_for("the keyboard", lambda: "mInputShown=true" in
+				         adb("shell", "dumpsys", "input_method"), 15, step=1)
+				time.sleep(0.5)
+				for c in text:
+					adb("shell", "input", "tap", str(keys[c][0]), str(keys[c][1]))
+					time.sleep(0.15)
+			def bar():
+				adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+				tree = et.fromstring(adb("shell", "cat", "/sdcard/ui.xml") or "<x/>")
+				for n in tree.iter("node"):
+					if (n.get("content-desc") or "").startswith("Address"):
+						x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds")))
+						return (x1 + x2) // 2, (y1 + y2) // 2
+				return None
+			def on_screen(label):
+				adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+				tree = et.fromstring(adb("shell", "cat", "/sdcard/ui.xml") or "<x/>")
+				return any((n.get("content-desc") or n.get("text") or "").startswith(label)
+				           and n.get("bounds") not in (None, "[0,0][0,0]")
+				           for n in tree.iter("node"))
+			def tap_bar():
+				at = bar()
+				if at:
+					adb("shell", "input", "tap", str(at[0]), str(at[1]))
+				# Until the editor it opens is there: on a loaded machine a
+				# fixed pause was too short, and keys tapped before it had
+				# focus went nowhere -- every check after failed for that.
+				wait_for("the address editor", lambda: on_screen("Editing the address"), 15, step=1)
+				return at is not None
+			def href():
+				return probe("location.href").strip()
+			def tap_row(index, rows):
+				# The suggestion list is in the accessibility tree with its
+				# bounds, but its rows are not: Qt's Android bridge never
+				# announces rows put into the list after it was first read
+				# (2026-10-30; accessibility is deferred). So a row is tapped
+				# by place -- rows are equal in height -- and each check
+				# below is judged by where the tap leads, not by its label.
+				def found():
+					adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+					tree = et.fromstring(adb("shell", "cat", "/sdcard/ui.xml") or "<x/>")
+					for n in tree.iter("node"):
+						if (n.get("resource-id") or "").endswith("address_suggestions") and \
+						   n.get("bounds") not in (None, "[0,0][0,0]"):
+							x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds")))
+							y = y1 + (y2 - y1) * (2 * index + 1) // (2 * rows)
+							adb("shell", "input", "tap", str((x1 + x2) // 2), str(y))
+							return True
+					return False
+				return wait_for("the suggestions", found, 10, step=1)
+
+			adb("shell", "am", "force-stop", APP)
+			open_url("https://example.com/", wait=15)
+			check(tap_bar(), "found the address bar")
+			# Tapping it opens the editor across the window (`address_editor`).
+			check(on_screen("Editing the address"), "tapping the bar opens the editor")
+			type_keys("example.net")
+			adb("shell", "input", "tap", "993", "2120")   # the keyboard's Go key
+			time.sleep(8)
+			check(href() == "http://example.net/", f"the keyboard's Go key goes there ({href()})")
+
+			tap_bar()
+			type_keys("wikipedia")
+			# Still composing: Go must not search for an empty field.
+			check(tap("Go to the address being edited", limit=5), "the editor's Go button")
+			time.sleep(8)
+			got = href()
+			check("q=wikipedia" in got, f"Go with a word still composing searches for it ({got})")
+
+			tap_bar()
+			type_keys("hacker")
+			time.sleep(2)
+			check(tap_row(0, 1),
+			      "a tab's name, still composing, is suggested; tapping it goes there")
+			time.sleep(8)
+			check(href() == "https://news.ycombinator.com/", f"to the tab's address ({href()})")
+
+			tap_bar()
+			adb("shell", "input", "keyevent", "KEYCODE_BACK")    # the keyboard away
+			adb("shell", "input", "tap", "540", "900")           # the page's picture
+			time.sleep(3)
+			check(href() == "https://news.ycombinator.com/",
+			      "a tap on the page closes the editor and the page is back")
+
+			# Paste: the system's own bubble cannot be tapped, so the editor
+			# offers the clipboard as rows of its own -- cleaned of tracking
+			# tags. The page copies, the way a person copies from a page.
+			tagged = "https://example.org/story?utm_campaign=x&fbclid=IwAR9z&id=5"
+			clean = "https://example.org/story?id=5"
+			adb("shell", "input", "tap", "540", "900")
+			time.sleep(2)
+			copied = probe("(function(){var t=document.createElement('textarea');"
+			               f"t.value='{tagged}';document.body.appendChild(t);t.focus();"
+			               "t.select();var ok=document.execCommand('copy');t.remove();"
+			               "return 'copied '+ok})()").strip()
+			check(copied == "copied true", f"a tagged link copied from a page ({copied})")
+			tap_bar()
+			time.sleep(2)
+			check(tap_row(0, 2),
+			      "the editor offers it as Paste and go, the tracking tags already gone")
+			time.sleep(8)
+			check(href() == clean, f"and goes to the clean address ({href()})")
+			open_url("https://example.com/", wait=12)
+			tap_bar()
+			time.sleep(2)
+			check(tap_row(1, 2), "Paste, on its own")
+			check(tap("Go to the address being edited", limit=5), "and Go")
+			time.sleep(8)
+			check(href() == clean, f"put the clean address in the editor to go to ({href()})")
+
+			# **Checks of the lists against real sites**, last: each moves the
+			# tab somewhere else, and the lists have been in force since the
+			# ad_status check above.
+
+			print("\n== a tracker's parameter leaves the address ==")
+			open_url("https://example.com/?fbclid=abc&id=7")
+			href = probe("location.href").strip()
+			check(href == "https://example.com/?id=7",
+			      f"opened from outside: fbclid taken off ({href})")
+			probe("(function(){location.href='https://example.com/?gclid=zz&q=2';return 'nav'})()")
+			time.sleep(8)
+			href = probe("location.href").strip()
+			check(href == "https://example.com/?q=2",
+			      f"navigated to by the page: gclid taken off ({href})")
+
+			print("\n== a page a list says not to visit is refused, with a way through ==")
+			# 7zip.es is a fake download site in uBlock's Badware list, and
+			# answers over valid TLS, which vlc.de does not on this emulator.
+			open_url("https://7zip.es/")
+			shown = json.loads(probe("JSON.stringify({t: document.title, h: location.host,"
+			                         " w: (document.querySelector('a.through') || {}).href || ''})")
+			                   .strip() or "{}")
+			check(shown.get("t", "").startswith("Blocked:") and shown.get("h") == "7zip.es",
+			      f"the warning in its place ({shown.get('t')})")
+			check("hydra-proceed=" in shown.get("w", ""), "with a way through")
+			probe("(function(){location.href='https://7zip.es/?hydra-proceed=forged';return 'nav'})()")
+			time.sleep(8)
+			title = probe("document.title").strip()
+			check(title.startswith("Blocked:"), f"a token the warning did not make opens nothing ({title})")
+			probe("(function(){document.querySelector('a.through').click();return 'clicked'})()")
+			def through():
+				t = probe("document.title + ' | ' + location.href").strip()
+				return t and not t.startswith("Blocked:") and "7zip.es" in t \
+				   and "hydra-proceed" not in t
+			check(wait_for("the page past the warning", through, 30, step=3),
+			      "the warning's own way through opens the site, token left off")
+
+			print("\n== a list's procedural rule hides by what an element says ==")
+			# dailymail's own rule, `.pufftext:has-text(/SPONSORED/):upward(2)`,
+			# on two puffs planted alike but for their text -- the site's layout
+			# changes, the rule's subject is what is under test.
+			open_url("https://www.dailymail.com/home/index.html", wait=20)
+			probe("(function(){var mk=function(id,t){var o=document.createElement('div');o.id=id;"
+			      "o.innerHTML='<div><div class=\"pufftext\"><span>'+t+'</span></div></div>';"
+			      "document.body.appendChild(o);};mk('hc-sp','SPONSORED');mk('hc-no','Story');"
+			      "return 'planted'})()")
+			time.sleep(3)
+			state = probe("JSON.stringify({sp:getComputedStyle(document.getElementById('hc-sp')).display,"
+			              "no:getComputedStyle(document.getElementById('hc-no')).display,"
+			              "inline:document.getElementById('hc-sp').getAttribute('style')})").strip()
+			check('"sp":"none"' in state and '"no":"block"' in state and '"inline":null' in state,
+			      f"the sponsored one hidden by a marker, its twin shown ({state})")
+			probe("(function(){document.querySelector('#hc-sp span').textContent='Story';return 'flip'})()")
+			time.sleep(3)
+			state = probe("getComputedStyle(document.getElementById('hc-sp')).display").strip()
+			check(state == "block", f"and shown again once it says something else ({state})")
 		finally:
 			adb("reverse", "--remove", f"tcp:{port}")
 			# The AVD keeps its data between runs, so what this run wrote

@@ -142,6 +142,9 @@ public:
 	// Asked by Java's navigation hook, on the UI thread, before it lets a
 	// navigation go; the filter is safe to ask from any thread.
 	static QString clean_url(const QString &url);
+	// The page's picture while something covers it (Java's `onSnapshot`).
+	void show_snapshot(const QByteArray &jpeg);
+	static void deliver_snapshot(qint64 id, const QByteArray &jpeg);
 
 	// **Whether this page may set or send a third-party cookie.** The same
 	// per-site policy the desktop applies, reached the same way -- through the

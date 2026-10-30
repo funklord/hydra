@@ -1,9 +1,14 @@
 #pragma once
 
+#include <QInputMethodEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QLineEdit>
+#include <QMimeData>
+#include <QPlainTextEdit>
 #include <QStringList>
+
+#include <functional>
 
 class QString;
 class QUrl;
@@ -37,8 +42,29 @@ signals:
 	// Escape, with something typed: the person has changed their mind. The
 	// window puts the page's own address back.
 	void abandoned();
+	// The field took focus -- the moment the window offers what is on the
+	// clipboard (`main_window::offer_clipboard`).
+	void focused();
+	// What is in the field as somebody sees it, the word the keyboard is still
+	// composing included. `text()` leaves that word out until it is
+	// committed, so on a phone the suggestions followed one word behind.
+	void typing(const QString &shown);
 
 protected:
+	// **The word being composed counts as typed.** Gboard holds the current
+	// word as a composition until a space or a punctuation mark, and Qt keeps
+	// it out of `text()` and sends no `textEdited` until then -- so `hacker`
+	// typed on a phone suggested nothing, and the field read as empty and
+	// offered the clipboard instead (emulator, 2026-10-30).
+	void inputMethodEvent(QInputMethodEvent *event) override {
+		QLineEdit::inputMethodEvent(event);
+		QString shown = text();
+		const QString pre = event->preeditString();
+		if (!pre.isEmpty())
+			shown.insert(qBound(0, cursorPosition(), int(shown.size())), pre);
+		emit typing(shown);
+	}
+
 	// **The escape hatch from a half-typed address, and it is needed now in a
 	// way it was not before.** `update_address` leaves a modified field alone
 	// so that a redirect cannot eat what somebody is typing -- which means
@@ -87,6 +113,7 @@ protected:
 		QLineEdit::focusInEvent(event);
 		if (event->reason() == Qt::MouseFocusReason)
 			m_select_on_release = true;
+		emit focused();
 	}
 
 	void mouseReleaseEvent(QMouseEvent *event) override {
@@ -106,6 +133,114 @@ private:
 	// follows -- so the first tap selects and a second, the field already
 	// focused, places the cursor as a second click should.
 	bool m_select_on_release = false;
+};
+
+// **Where an address is edited on a phone**: the whole width of the window,
+// as many lines as the address needs up to five, and then it scrolls. Asked
+// for by the holder on 2026-10-30, after a one-line box a third of a phone's
+// width showed a long link a few dozen characters at a time and moving
+// through it meant dragging a cursor nobody could see the ends of.
+//
+// The toolbar's `address_line` is still the address bar; this takes over
+// from it while somebody is typing (`main_window::open_address_editor`), and
+// hands what was typed back to it to be navigated. Plain text, wrapped at any
+// character -- an address has no spaces to wrap at -- and never more than one
+// paragraph: Return submits rather than breaking a line, and a pasted line
+// break becomes nothing.
+//
+// **What is pasted is cleaned as it lands** (`cleaner`): the lists' tracking
+// parameters taken off and a tracking redirect skipped, so a link copied out
+// of Facebook arrives without its `fbclid`. That covers each way a paste
+// arrives -- the window's own Paste rows, Ctrl+V, and the keyboard's clipboard
+// chip, which comes as committed text rather than a paste.
+class address_editor : public QPlainTextEdit {
+	Q_OBJECT
+public:
+	explicit address_editor(QWidget *parent = nullptr) : QPlainTextEdit(parent) {
+		setWordWrapMode(QTextOption::WrapAnywhere);
+		setTabChangesFocus(true);
+		setInputMethodHints(Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText);
+		setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+		setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		connect(this, &QPlainTextEdit::textChanged, this, [this] { emit typing(shown()); });
+	}
+
+	// The cleaning applied to anything pasted; identity when unset.
+	std::function<QString(const QString &)> cleaner;
+
+	QString text() const { return toPlainText().simplified(); }
+	void set_text(const QString &t) { setPlainText(t); }
+
+	// Puts `t` at the cursor, over the selection, cleaned as a paste is.
+	void paste_text(const QString &t) { insertPlainText(clean(t)); }
+
+	QVariant inputMethodQuery(Qt::InputMethodQuery query) const override {
+		if (query == Qt::ImEnterKeyType)
+			return int(Qt::EnterKeyGo);
+		return QPlainTextEdit::inputMethodQuery(query);
+	}
+
+signals:
+	void submitted();          // Return, or the keyboard's Go
+	void abandoned();          // Escape
+	void typing(const QString &shown);
+	void left();               // focus went elsewhere
+
+protected:
+	void keyPressEvent(QKeyEvent *event) override {
+		if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+			emit submitted();
+			event->accept();
+			return;
+		}
+		if (event->key() == Qt::Key_Escape) {
+			emit abandoned();
+			event->accept();
+			return;
+		}
+		QPlainTextEdit::keyPressEvent(event);
+	}
+
+	void insertFromMimeData(const QMimeData *source) override {
+		if (source && source->hasText())
+			paste_text(source->text());
+	}
+
+	// The keyboard's clipboard chip commits the clipboard as typed text, so a
+	// link arriving whole in one commit is treated as the paste it is.
+	void inputMethodEvent(QInputMethodEvent *event) override {
+		const QString commit = event->commitString();
+		if (commit.contains(QLatin1String("://")) || commit.contains(QLatin1Char('\n')))
+			event->setCommitString(clean(commit), event->replacementStart(),
+			                       event->replacementLength());
+		QPlainTextEdit::inputMethodEvent(event);
+		m_preedit = event->preeditString();
+		emit typing(shown());
+	}
+
+	void focusOutEvent(QFocusEvent *event) override {
+		QPlainTextEdit::focusOutEvent(event);
+		// A popup the editor opened itself -- the keyboard's own -- is not
+		// somebody leaving.
+		if (event->reason() != Qt::PopupFocusReason)
+			emit left();
+	}
+
+private:
+	QString clean(const QString &t) const {
+		QString one = t;
+		one.replace(QLatin1Char('\n'), QLatin1Char(' ')).replace(QLatin1Char('\r'), QLatin1Char(' '));
+		one = one.trimmed();
+		return cleaner ? cleaner(one) : one;
+	}
+	// The field as seen, the word still being composed included.
+	QString shown() const {
+		QString s = toPlainText();
+		if (!m_preedit.isEmpty())
+			s.insert(qBound(0, textCursor().position(), int(s.size())), m_preedit);
+		return s.simplified();
+	}
+	QString m_preedit;
 };
 
 // What the address bar does with what somebody typed.
