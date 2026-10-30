@@ -361,12 +361,27 @@ all:
 # `$(filter %.cpp,$^)` because the headers are prerequisites and `$^` would
 # otherwise hand them to the compiler -- see build-and-commit.md, which was
 # written after exactly that.
+#
+# **It did not link from 2026-10-29**, when rules with options came in:
+# `filter_subscription` reads them through `network_rules`, which asks
+# `policy_engine` for a site's registrable domain, and `policy_engine` is a
+# QObject -- so the tool needs that class's moc output, made here, beside
+# it. Nothing said so until the target was run.
 COVERAGE_BIN  = $(BUILD_DIR)/list-coverage
+COVERAGE_MOC  = $(BUILD_DIR)/coverage-moc/moc_policy_engine.cpp
 COVERAGE_SRCS = tool/list_coverage.cpp src/filter_subscription.cpp \
                  src/filter_list.cpp src/scriptlets.cpp src/site_rules.cpp \
-                 src/procedural_cosmetic.cpp
+                 src/procedural_cosmetic.cpp src/network_rules.cpp \
+                 src/policy_engine.cpp src/policy.cpp
+COVERAGE_QT_LIBEXEC := $(shell pkg-config --variable=libexecdir Qt6Core 2>/dev/null)
 
-$(COVERAGE_BIN): $(COVERAGE_SRCS) $(wildcard src/*.h)
+$(COVERAGE_MOC): src/policy_engine.h
+	@test -n "$(COVERAGE_QT_LIBEXEC)" || { \
+	  echo "coverage: pkg-config names no libexecdir for Qt6Core, so no moc." >&2; exit 1; }
+	@mkdir -p $(dir $@)
+	$(COVERAGE_QT_LIBEXEC)/moc -o $@ $<
+
+$(COVERAGE_BIN): $(COVERAGE_SRCS) $(COVERAGE_MOC) $(wildcard src/*.h)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) -Os -g -std=gnu++17 -Wall -Wextra -Isrc \
 	        $(shell pkg-config --cflags Qt6Core) \
