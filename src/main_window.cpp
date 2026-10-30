@@ -5084,7 +5084,7 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 		// opens blank -- the tabs already saved to disk under the old
 		// behaviour are the reason this is checked here as well as at the
 		// door.
-		const auto load_the_url = [this, n, view] {
+		const auto load_the_url = [n, view] {
 			const QUrl target = n->url.isEmpty() ? QUrl()
 			                                      : QUrl::fromUserInput(n->url);
 			view->load(target.isEmpty() || !renders_as_page(target)
