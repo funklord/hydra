@@ -77,6 +77,7 @@ OBJSETS_SOURCES = \
 	test/test_tree.cpp \
 	test/test_tree_scale.cpp \
 	test/test_watch.cpp \
+	test/test_watchdog.cpp \
 	test/test_ytdlp.cpp \
 	test/test_ytdlp_live.cpp \
 	test/live/try_adblock_fix.cpp \
@@ -791,6 +792,8 @@ OBJS_test_watch = \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o
+
+OBJS_test_watchdog =
 
 OBJS_test_ytdlp = \
 	$(BUILD_DIR)/app/ytdlp_updater.o \
