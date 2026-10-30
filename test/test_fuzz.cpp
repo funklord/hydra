@@ -23,8 +23,12 @@
 #include "filter_subscription.h"
 #include "hls_playlist.h"
 #include "network_rules.h"
+#include "node.h"
 #include "procedural_cosmetic.h"
+#include "reader_extract.h"
 #include "scriptlets.h"
+#include "session_import.h"
+#include "tree_serializer.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -33,7 +37,9 @@
 #include <QRandomGenerator>
 #include <QUrl>
 #include <cstdio>
+#include <cstring>
 #include <functional>
+#include <lz4.h>
 
 static int g_pass = 0, g_fail = 0;
 static void check(bool ok, const QString &w) {
@@ -92,6 +98,44 @@ struct target {
 	bool lines = true;   // corpus files are split into lines for this one
 };
 
+QByteArray le32(qint32 v) {
+	QByteArray b(4, 0);
+	std::memcpy(b.data(), &v, 4);
+	return b;
+}
+
+// A block liblz4 compressed, behind the size the reader is told to expect.
+QByteArray lz4_seed(const QByteArray &raw) {
+	QByteArray out(LZ4_compressBound(int(raw.size())), 0);
+	const int n = LZ4_compress_default(raw.constData(), out.data(), int(raw.size()), int(out.size()));
+	return le32(qint32(raw.size())) + out.left(qMax(0, n));
+}
+
+// Chromium's session log, built the way `test_session` builds it.
+QByteArray snss_seed() {
+	auto cmd = [](quint8 id, const QByteArray &payload) {
+		QByteArray out;
+		const quint16 size = quint16(payload.size() + 1);
+		out.append(char(size & 0xff)).append(char(size >> 8)).append(char(id));
+		return out + payload;
+	};
+	auto nav = [&](qint32 tab, qint32 index, const QByteArray &url) {
+		QByteArray inner = le32(tab) + le32(index) + le32(qint32(url.size())) + url;
+		inner += QByteArray((4 - url.size() % 4) % 4, '\0');
+		inner += le32(1) + QByteArray("T\0", 2) + QByteArray(2, '\0');
+		return cmd(6, le32(qint32(inner.size())) + inner);
+	};
+	QByteArray f = QByteArray::fromHex("534e535303000000");
+	f += cmd(0, le32(10) + le32(1));
+	f += nav(1, 0, "https://one.test/a");
+	f += nav(1, 1, "https://one.test/b");
+	f += cmd(7, le32(1) + le32(1));
+	f += cmd(0, le32(10) + le32(2));
+	f += nav(2, 0, "https://two.test/");
+	f += cmd(7, le32(2) + le32(0));
+	return f;
+}
+
 }  // namespace
 
 int main(int argc, char **argv) {
@@ -103,6 +147,16 @@ int main(int argc, char **argv) {
 	const QString corpus = qEnvironmentVariable("HYDRA_FUZZ_CORPUS");
 
 	const QUrl base("https://cdn.example/v/master.m3u8");
+	// **Two decoders, one answer.** Where liblz4 and the hand-written decoder
+	// both accept a block, they must agree on every byte; a crash is not the
+	// only way for a decompressor to be wrong.
+	int lz4_disagreements = 0, lz4_both = 0;
+	QByteArray lz4_disagreed;
+	const QByteArray session_json =
+	  "{\"windows\":[{\"selected\":1,\"tabs\":[{\"index\":2,\"entries\":["
+	  "{\"url\":\"https://a.test/1\",\"title\":\"One\"},"
+	  "{\"url\":\"https://a.test/2\",\"title\":\"Two\"}]},"
+	  "{\"index\":1,\"entries\":[{\"url\":\"about:blank\"}]}]}]}";
 	QList<target> targets = {
 		{ "filter_subscription::read",
 			{ "! Title: x\n||ads.example^\nexample.com##.ad\n@@||good.example^$document\n"
@@ -196,6 +250,59 @@ int main(int argc, char **argv) {
 				r.body = b;
 				agent_fetch::servable(r);
 			}, false },
+		{ "session_import::lz4_block_builtin",
+			{ lz4_seed("hello, session"), lz4_seed(QByteArray(400, 'x')),
+				lz4_seed(QByteArray("abcdefgh").repeated(60)), lz4_seed(session_json) },
+			{ QByteArray("\xff\xff\xff\xff", 4), QByteArray("\x00\x00", 2), QByteArray("\xf0", 1),
+				QByteArray("\x0f", 1), QByteArray("\x01\x00", 2) },
+			[&](const QByteArray &b) {
+				if (b.size() < 4)
+					return;
+				qint32 want = 0;
+				std::memcpy(&want, b.constData(), 4);
+				want = qBound(0, want, 1 << 20);
+				const QByteArray block = b.mid(4);
+				QString e1, e2;
+				const QByteArray ours = session_import::lz4_block_builtin(block, want, &e1);
+				const QByteArray theirs = session_import::lz4_block_decompress(block, want, &e2);
+				if (session_import::using_system_lz4() && e1.isEmpty() && e2.isEmpty())
+					++lz4_both;
+				if (session_import::using_system_lz4() && e1.isEmpty() && e2.isEmpty() &&
+				    ours != theirs) {
+					++lz4_disagreements;
+					lz4_disagreed = b;
+				}
+			}, false },
+		{ "session_import::mozlz4_decompress",
+			{ QByteArray("mozLz40\0", 8) + lz4_seed(session_json) },
+			{ QByteArray("mozLz40\0", 8), QByteArray("\xff\xff\xff\x7f", 4) },
+			[](const QByteArray &b) { QString e; session_import::mozlz4_decompress(b, &e); }, false },
+		{ "session_import::replay_snss",
+			{ snss_seed() },
+			{ QByteArray::fromHex("534e5353"), QByteArray::fromHex("03000000"),
+				QByteArray::fromHex("ffff"), QByteArray::fromHex("ffffffff"),
+				QByteArray::fromHex("0500"), QByteArray::fromHex("06"), QByteArray::fromHex("07") },
+			[](const QByteArray &b) { QString e; int n = 0; session_import::replay_snss(b, &e, &n); },
+			false },
+		{ "session_import::parse_firefox_session",
+			{ session_json },
+			{ "{", "}", "[", "]", ",", ":", "\"", "\"index\":", "\"entries\":", "\"tabs\":",
+				"-1", "99999999999", "null" },
+			[](const QByteArray &b) { QString e; session_import::parse_firefox_session(b, &e); }, false },
+		{ "reader_extract::parse",
+			{ "{\"ok\":true,\"title\":\"A story\",\"byline\":\"Ann\",\"site\":\"News\","
+				"\"html\":\"<p>Text of the story, long enough.</p>\"}" },
+			{ "{", "}", "\"", ":", ",", "\"ok\":", "true", "null", "\"html\":", "<script>" },
+			[](const QByteArray &b) {
+				reader_extract::article a; QString why;
+				reader_extract::parse(QString::fromUtf8(b), &a, &why);
+			}, false },
+		{ "tree_serializer::parse_proposal",
+			{ "- [f0] folder | Work\n  - [a1] open | Qt Documentation | https://doc.qt.io | tags=qt,docs\n"
+				"  - [a2] unopened | Two | https://two.test\n- [f1] folder | Play\n" },
+			{ "- [", "] ", "folder", "open", "unopened", " | ", "tags=", "  ", "\n", "[f", "]" },
+			[](const QByteArray &b) { delete tree_serializer::parse_proposal(QString::fromUtf8(b)); },
+			false },
 	};
 
 	// A corpus of real input, when one is named: lists and manifests as they
@@ -261,6 +368,16 @@ int main(int argc, char **argv) {
 		                             .arg(QString::fromLatin1(worst_input.left(300).toPercentEncoding(" /:.,=#$|^~()[]{}<>\"'")))
 		                         : QString()));
 	}
+
+	section("the two LZ4 decoders agree");
+	check(lz4_disagreements == 0 && (lz4_both > 0 || !session_import::using_system_lz4()),
+	      session_import::using_system_lz4()
+	        ? QString("where both accepted a block, the bytes were the same "
+	            "(%1 accepted by both, %2 disagreed%3)")
+	      .arg(lz4_both).arg(lz4_disagreements)
+	            .arg(lz4_disagreements ? ", first on: " + QString::fromLatin1(lz4_disagreed.left(64).toHex())
+	                                   : QString())
+	        : QStringLiteral("not compared: this build has no liblz4"));
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

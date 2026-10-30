@@ -307,11 +307,15 @@ OBJS_test_fuzz = \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
 	$(BUILD_DIR)/app/filter_list.o \
+	$(BUILD_DIR)/app/reader_extract.o \
+	$(BUILD_DIR)/app/session_import.o \
+	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/app/filter_subscription.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/policy_engine.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/policy.o

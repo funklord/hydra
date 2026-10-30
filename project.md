@@ -28714,7 +28714,7 @@ suites pass.
 Nothing in the tree fed the parsers anything but well-formed fixtures,
 while each reads what other people write: subscription lists, scriptlet
 calls, procedural selectors, HLS and DASH manifests, fetched pages.
-`test_fuzz` mutates seeds for nine of them -- truncation, a flipped byte, a
+`test_fuzz` mutates seeds for each of them -- truncation, a flipped byte, a
 span deleted or repeated, a token of the grammar spliced in, a long run of
 one character -- from a fixed seed, so a failure is a reproduction, and
 fails if any input takes over 200 ms. Run alone it is a moment of
@@ -28723,6 +28723,15 @@ fails if any input takes over 200 ms. Run alone it is a moment of
 with the holder's seven lists (5.2 MB) -- between 6,494 and 7.8 million
 inputs each, nothing slower than 109 ms, no memory error, and the one shift
 above.
+
+**Then six more, all reading files hydra did not write**: the hand-written
+LZ4 decoder, mozlz4 files, Chromium's SNSS log, Firefox's session JSON, the
+reader's JSON and the reorganiser's proposal text. The LZ4 decoder is also
+compared with liblz4 wherever both accept a block -- a decompressor can be
+wrong without crashing. A minute each under ASan and UBSan: clean, and the
+two decoders agreed on all 50 blocks both accepted. Fifty of 152,553 is
+thin, because a mutated block is almost always invalid; a mutator that kept
+blocks well-formed would make that comparison worth more.
 
 ### The first sweep, and the one suite its own guard killed
 
