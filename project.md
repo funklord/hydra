@@ -28689,6 +28689,15 @@ pass, one suite at a time. And a sanitized suite runs at roughly the factor
 ASan costs, so the whole sweep is a long job rather than a quick one, which is
 why this is a separate target and not a flag on the default.
 
+**A sweep on 2026-10-30 found one, and it was in a test.** 52 suites clean;
+`test_rotation` aborted with a heap use-after-free in its own `main`. Its
+fake factory listed every view it made, including the warm-up view the
+window builds and drops in its constructor, so the subscription-reload check
+summed a counter read from freed memory -- passing in an ordinary build on
+whatever the freed bytes held. The factory now drops a view from its list
+when the view is destroyed; 598 pass under ASan. The two other drivers
+that keep view lists were read for the same fault and do not have it.
+
 ### The first sweep, and the one suite its own guard killed
 
 Every offline suite under ASan and UBSan, 2026-09-29: **39 clean on the first

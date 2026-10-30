@@ -332,6 +332,12 @@ public:
 		auto *v = new fake_view(parent);
 		v->m_restore_ok = restore_ok;
 		views << v;
+		// **Only the views still alive.** The window builds one view in its
+		// constructor and drops it (the warm-up that keeps X from unmapping
+		// the window on the first tab), and a list that kept it had every
+		// loop over `views` reading a freed object -- ASan found the reload
+		// check summing a counter out of freed memory.
+		QObject::connect(v, &QObject::destroyed, [this, v] { views.removeAll(v); });
 		return v;
 	}
 	void set_external_url_handler(external_url_handler) override {}
