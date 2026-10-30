@@ -38815,7 +38815,9 @@ any), and `@@*$ghide,domain=a|b`, which names its sites in the option.
 Each is a site where the list says generic hiding breaks the page, mostly
 anti-adblock walls. Now read, and `covers` answers to an entity; a bare
 `@@*$ghide` with no site is still refused. Hosts read from the default
-lists: 1,774 before, 2,760 after.
+lists: 887 before, 1,380 after. (The commit that made this, `7cbe81e`,
+says 1,774 and 2,760: measured over a directory that also held a copy of
+those very lines, so every host was counted twice. Corrected here.)
 
 
 ### Procedural cosmetic rules: what an element says, not only what it is

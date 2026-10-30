@@ -97,8 +97,8 @@ int main(int argc, char **argv) {
 			// does not implement, each for its own reason.
 			{ "||ads.example.com^$csp=default-src", line_kind::unsupported,
 			   "a rule with an option this build does not read" },
-			{ "/^https?:\\/\\/ads\\./", line_kind::unsupported,
-			   "a regular-expression rule" },
+			{ "/^https?:\\/\\/ads\\./", line_kind::option,
+			   "a regular-expression rule, which the option reader compiles" },
 			{ "example.com##^script:has-text(ads)", line_kind::unsupported,
 			   "an HTML filter" },
 			{ "example.com#?#div:has(> .ad)", line_kind::unsupported,
@@ -1739,6 +1739,77 @@ int main(int argc, char **argv) {
 		      "the warning forbids scripts, and the rule is shown escaped");
 		check(page.contains("href=\"https://www.vlc.de/dl?a=1&amp;hydra-proceed=tok123\""),
 		      "and its way through carries the token");
+	}
+
+	section("regular expressions and to=: rules for hosts no plain pattern can name");
+	{
+		network_rule r;
+		QString why;
+		check(parse_network_rule("/^https?:\\/\\/[a-z]{8,15}\\.top\\/[a-z]{4,}\\.json$/$xhr,3p", &r, &why) ==
+		        parsed::option && r.regex && r.types == request_type::xhr && r.party == 3,
+		      QString("a regex ending in $ keeps its options apart (%1)").arg(why));
+		check(parse_network_rule("/ads[0-9]+\\.js/", &r, &why) == parsed::option && r.regex,
+		      "and one with no options at all is read, not left to the block list");
+		check(parse_network_rule("/foo\\.js$/", &r, &why) == parsed::option && r.regex &&
+		        r.pattern == "/foo\\.js$/",
+		      "one ending in $ with no options keeps its anchor");
+		check(parse_network_rule("/theme/app.js|$script,1p,replace=/max/0/", &r, &why) !=
+		        parsed::option || !r.regex,
+		      "a path rule whose options end in a slash is not a regex");
+		check(parse_network_rule("/^https?:\\/\\/[a-z]{8,15}\\.top\\/[a-z]{4,}\\.json$/$xhr", &r, &why) ==
+		        parsed::option && r.literal == ".top/",
+		      "the text a regex cannot match without is kept to test first: " + r.literal);
+		check(parse_network_rule("/(ads|track)er\\.js/$script", &r, &why) == parsed::option &&
+		        r.literal == "er.js" &&
+		        parse_network_rule("/ads|track/$script", &r, &why) == parsed::option &&
+		        r.literal.isEmpty(),
+		      "outside a group, and none where the regex is an alternation");
+		check(parse_network_rule("/a(b/$script", &r, &why) == parsed::refused,
+		      QString("one that does not compile is refused (%1)").arg(why));
+		check(parse_network_rule("||cdn.example^$script,to=mom|~safe.mom", &r, &why) ==
+		        parsed::option && r.to == QStringList{ "mom" } &&
+		        r.to_exclude == QStringList{ "safe.mom" },
+		      "to= is read, with its exclusions");
+		QList<network_rule> rules;
+		const char *const lines[] = {
+			"/^https?:\\/\\/[a-z]{8,15}\\.top\\/[a-z]{4,}\\.json$/$xhr,3p",
+			"/^https?:\\/\\/qqh[0-9]\\.mom\\//$doc,to=mom",
+			"*$script,3p,to=mom|~safe.mom",
+			"/\\/[0-9a-f]{32}\\.js$/$script,match-case",
+		};
+		for (const char *line : lines) {
+			if (parse_network_rule(QString::fromLatin1(line), &r, nullptr) == parsed::option)
+				rules << r;
+		}
+		check(rules.size() == 4, QString("all four read (%1)").arg(rules.size()));
+		network_rule_set set;
+		set.replace(rules);
+		auto blocks = [&](const char *url, unsigned type) {
+			network_rule_set::request q;
+			q.url = QString::fromLatin1(url);
+			q.lower = q.url.toLower();
+			q.host = QUrl(q.url).host();
+			q.site = "news.example";
+			q.type = type;
+			return set.blocks(q);
+		};
+		check(blocks("https://abcdefghij.top/feeds.json", request_type::xhr) &&
+		        !blocks("https://abc.top/feeds.json", request_type::xhr) &&
+		        !blocks("https://abcdefghij.top/feeds.json", request_type::script),
+		      "a regex matches what it describes, of its type only");
+		check(blocks("https://x.qqh1.mom/a.js", request_type::script) &&
+		        !blocks("https://x.safe.mom/a.js", request_type::script) &&
+		        !blocks("https://x.example/a.js", request_type::script),
+		      "to= blocks on the hosts it names, and not on the one it excludes");
+		check(blocks("https://cdn.example/0123456789abcdef0123456789abcdef.js", request_type::script) &&
+		        !blocks("https://cdn.example/0123456789ABCDEF0123456789ABCDEF.js", request_type::script),
+		      "match-case keeps a regex case-sensitive");
+		policy_engine pol;
+		request_filter f(&pol);
+		f.set_network_rules(rules);
+		check(!f.page_block(QUrl("https://qqh7.mom/landing")).isEmpty() &&
+		        f.page_block(QUrl("https://other.mom/")).isEmpty(),
+		      "a regex page block with to= refuses its page only");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

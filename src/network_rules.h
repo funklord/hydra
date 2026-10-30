@@ -139,6 +139,15 @@ struct network_rule {
 	// default lists, mostly pop-under and anti-adblock scripts on sites that
 	// load them from hosts nobody could list in advance (2026-10-30).
 	QStringList denyallow;
+	// `to=` hosts: the request's own host must be one of `to` and none of
+	// `to_exclude`. The page has `domain=`; this is the other end.
+	QStringList to;
+	QStringList to_exclude;
+	// `/.../`: the pattern is a regular expression, compiled as written --
+	// 628 lines of the default lists, 534 read, most of them random-looking
+	// hosts that malware and pop-under networks rotate through, which no
+	// plain pattern can name (2026-10-30).
+	bool        regex = false;
 	int         party = 0;           // 0 any, 1 first-party only, 3 third-party only
 	// Compiled once, by `filter_list::pattern_regex`.
 	QRegularExpression match;

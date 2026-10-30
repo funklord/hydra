@@ -289,13 +289,9 @@ line_kind classify(const QString &line, filter_rule *out, QString *why,
 		reason("an exception rule, and this engine has no unblock path");
 		return line_kind::unsupported;
 	}
-	// A regular-expression rule, `/pattern/`. `filter_list::matches` would take
-	// it as a literal substring including the slashes.
-	if (t.size() > 2 && t.startsWith(QLatin1Char('/')) &&
-	    t.endsWith(QLatin1Char('/'))) {
-		reason("a regular-expression rule, which this engine does not compile");
-		return line_kind::unsupported;
-	}
+	// A regular-expression rule, `/pattern/`, is `parse_network_rule`'s, read
+	// or refused above: `filter_list::matches` would take it as a literal
+	// substring including the slashes.
 	// **Options make a rule NARROWER, and ignoring them makes it wider.**
 	// `||cdn.example^$script` asks for scripts from that host; enforced with
 	// the options dropped it takes the stylesheet and the images too, and
