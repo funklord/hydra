@@ -38693,6 +38693,19 @@ both refused with the warning, and the way through opened 7zip.es.
 (`vlc.de`'s own certificate is refused by that emulator, `net_error -202`,
 so its way through ends at the site's TLS, not at hydra.)
 
+**And a rule that blocks a host whole, decided 2026-10-30.** Only `$doc`
+and `$all` refused a page at first. A plain `||host^` -- in a list, in the
+person's own, or the browser's own ad hosts -- refused the page's own
+request on the desktop, which showed as Chromium's bare "blocked by
+client" error with no way on, and on Android let the page load. Now it
+gets the same warning and way through: uBlock's strict blocking, for the
+same rules. **Whole-host rules only** (`filter_list::host_rule_for`, the
+`||host^` rules with nothing after them): a path rule like `/ads/` that a
+page's address merely contains refuses nothing. A list's exception for
+the page's address lifts it. The cost, chosen knowingly: clicking an ad,
+which goes through an ad host's redirect, now shows the warning, as it
+does under uBlock.
+
 ### `$removeparam`: a tracker's parameters leave the page's address
 
 **269 lines of the default lists, refused as an unknown option until

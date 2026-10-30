@@ -83,6 +83,13 @@ public:
 	// Does this URL match any accepted network rule?
 	bool blocks(const QString &url, const QString &site_host) const;
 
+	// The text of a rule that blocks this host whole -- `||host^` with
+	// nothing after it, for the host or a parent -- or empty. What a page
+	// warning names (`request_filter::page_block`): uBlock's strict blocking
+	// is for these, and not for a path rule that a page's address merely
+	// contains.
+	QString host_rule_for(const QString &host) const;
+
 	// Static breadth check plus simulation against `observed` (sec 12.4).
 	static dry_run evaluate(const filter_rule &r, const QStringList &observed,
 	                         const QString &site_host,

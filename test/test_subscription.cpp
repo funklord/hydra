@@ -1743,6 +1743,29 @@ int main(int argc, char **argv) {
 		check(!f.page_block(QUrl("https://files.example/download/x")).isEmpty(),
 		      "and for no other");
 
+		// Whole-host rules, plain or the browser's own ad hosts: strict
+		// blocking. A path rule a page's address merely contains is not.
+		filter_list plain;
+		filter_rule pr;
+		filter_list::parse_rule("||tracker.example^", &pr);
+		plain.add(pr);
+		filter_list::parse_rule("/ads/", &pr);
+		plain.add(pr);
+		policy_engine pol2;
+		request_filter g(&pol2);
+		g.set_subscription_list(&plain);
+		check(g.page_block(QUrl("https://www.tracker.example/x")) == "||tracker.example^",
+		      "a whole-host rule refuses the page, named");
+		check(g.page_block(QUrl("https://news.example/ads/story")).isEmpty(),
+		      "a path rule the address contains does not");
+		check(!g.page_block(QUrl("https://doubleclick.net/click")).isEmpty(),
+		      "nor does a known ad host get through");
+		network_rule lift;
+		parse_network_rule("@@||tracker.example^", &lift, nullptr);
+		g.set_network_rules({ lift });
+		check(g.page_block(QUrl("https://www.tracker.example/x")).isEmpty(),
+		      "and a list's exception for the address lifts it");
+
 		const QString page = blocked_page::build(QUrl("https://www.vlc.de/dl?a=1"),
 		                                         "||vlc.de^$doc<script>", "tok123", false);
 		check(page.contains("default-src 'none'") && !page.contains("<script>") &&

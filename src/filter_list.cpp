@@ -608,6 +608,22 @@ void filter_list::reindex() {
 		index_one(i);
 }
 
+QString filter_list::host_rule_for(const QString &host) const {
+	QReadLocker locker(&m_lock);
+	if (m_compiled.size() != m_rules.size())
+		return QString();
+	const QString h = host.toLower();
+	for (int at = 0; at >= 0 && at < h.size(); at = h.indexOf('.', at + 1) + 1) {
+		const auto it = m_by_host.constFind(h.mid(at));
+		if (it != m_by_host.cend() && !it->isEmpty())
+			return m_rules.at(it->first()).text;
+		// The step wraps to 0 once no dot is left; `blocks` stops the same way.
+		if (h.indexOf('.', at) < 0)
+			break;
+	}
+	return QString();
+}
+
 bool filter_list::blocks(const QString &url, const QString &site_host) const {
 	// Read-locked: this is the one method called off the UI thread -- the
 	// interceptor runs on Qt WebEngine's own thread -- while rules are added and

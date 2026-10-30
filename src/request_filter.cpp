@@ -123,13 +123,41 @@ QUrl request_filter::clean_navigation(const QUrl &url) const {
 
 QString request_filter::page_block(const QUrl &url) const {
 	const QString host = url.host().toLower();
-	if (!m_engine || host.isEmpty() || m_rules.size() == 0 ||
+	if (!m_engine || host.isEmpty() ||
 	    (url.scheme() != QLatin1String("http") && url.scheme() != QLatin1String("https")))
 		return QString();
 	if (m_engine->is_allowed(feature::ads, host) || proceeded(host) ||
 	    m_rules.site_allowed(host))
 		return QString();
-	return m_rules.page_blocked(url.toString(QUrl::FullyEncoded), host);
+	const QString page = m_rules.page_blocked(url.toString(QUrl::FullyEncoded), host);
+	if (!page.isEmpty())
+		return page;
+	// **And a rule that blocks the host whole**, `||host^` in a list or the
+	// person's own, or a known ad host -- uBlock's strict blocking, for the
+	// same rules. The desktop's interceptor already refused such a page's
+	// own request, which showed as Chromium's bare "blocked" error with no
+	// way on; Android let it load. A list's exception for the page's address
+	// lifts it, as it lifts a request (decided 2026-10-30, `project.md`).
+	network_rule_set::request q;
+	q.url = url.toString(QUrl::FullyEncoded);
+	q.lower = q.url.toLower();
+	q.host = q.site = host;
+	q.type = request_type::other;
+	if (m_rules.size() > 0 && m_rules.allows(q))
+		return QString();
+	if (m_list) {
+		const QString own = m_list->host_rule_for(host);
+		if (!own.isEmpty())
+			return own;
+	}
+	if (m_subscribed) {
+		const QString listed = m_subscribed->host_rule_for(host);
+		if (!listed.isEmpty())
+			return listed;
+	}
+	if (is_ad_host(host))
+		return QStringLiteral("a host on this browser's own list of ad servers");
+	return QString();
 }
 
 // The site, not the host name: `vlc.de` answers with a redirect to
