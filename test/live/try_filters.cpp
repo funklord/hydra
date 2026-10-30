@@ -22,6 +22,7 @@
 #include "main_window.h"
 #include "policy_engine.h"
 #include "request_filter.h"
+#include "network_rules.h"
 #include <QStyleHints>
 #include "theme.h"
 #include "settings_dialog.h"
@@ -283,6 +284,31 @@ int main(int argc, char *argv[]) {
 		check(said == (want_dark ? "dark" : "light"),
 		      QString("a page sees prefers-color-scheme: %1 (%2)")
 		          .arg(want_dark ? "dark" : "light", said));
+	}
+
+	// **$removeparam, through the real interceptor**: the page is asked for
+	// without the tracker's parameter, and the address bar shows it so.
+	section("a list's $removeparam takes a parameter out of the page's address");
+	{
+		QList<network_rule> rules;
+		network_rule r;
+		parse_network_rule("$removeparam=utm_source", &r, nullptr);
+		rules << r;
+		filter.set_network_rules(rules);
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/pageR?utm_source=news&id=7").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		spin(2500);
+		bool clean = false, tracked = false;
+		for (const QString &a : std::as_const(server.asked)) {
+			clean = clean || a == "/pageR?id=7";
+			tracked = tracked || a.contains("utm_source");
+		}
+		check(clean && !tracked, QString("the server was asked for /pageR?id=7 only (%1)")
+		                           .arg(server.asked.join(" ")));
+		check(!bar->text().contains("utm_source") && bar->text().contains("id=7"),
+		      "and the address bar shows the clean address: " + bar->text());
+		filter.set_network_rules({});
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

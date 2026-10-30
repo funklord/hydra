@@ -360,6 +360,8 @@ public class HydraWebView {
      * a refusal is what it is looking for.
      */
     public static native String requestVerdict(String url, String accept, String pageUrl);
+    /** A navigation's address with the lists' removeparam removals made, or empty. */
+    public static native String cleanUrl(String url);
     public static native String resourceMime(String name);
     public static native byte[] resourceBody(String name);
 
@@ -1468,6 +1470,17 @@ public class HydraWebView {
                         // is the negation of permission.
                         if (!allowNavigation(id, url, req.hasGesture()))
                             return true;
+                        // A tracker's parameters on the address: go to the
+                        // address without them instead.
+                        final String clean = cleanUrl(url);
+                        if (clean != null && !clean.isEmpty() && !clean.equals(url)) {
+                            // loadUrl does not come back through this hook,
+                            // so the document-start script is armed for the
+                            // address that will actually load.
+                            armDocumentStart(id, v, clean, null);
+                            v.loadUrl(clean);
+                            return true;
+                        }
                         // Allowed, and the load has not started yet -- which is
                         // the only moment a document-start script for *this*
                         // url can still be registered. A link click never goes

@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
 			// A scriptlet naming the catalog is its own kind; the section
 			// below is about those. These are the ones this build reads and
 			// does not implement, each for its own reason.
-			{ "||ads.example.com^$removeparam=utm_source", line_kind::unsupported,
+			{ "||ads.example.com^$csp=default-src", line_kind::unsupported,
 			   "a rule with an option this build does not read" },
 			{ "/^https?:\\/\\/ads\\./", line_kind::unsupported,
 			   "a regular-expression rule" },
@@ -376,9 +376,9 @@ int main(int argc, char **argv) {
 		// coincidence, and what found it was sabotaging the gate and reading
 		// WHICH checks went red rather than that some did.
 		// The two exceptions that stood here became readable 2026-10-29, and
-		// so did the popup rules after them; `$removeparam` is not.
+		// so did the popup rules and `$removeparam` after them; `$csp` is not.
 		const subscription_read unread = filter_subscription::read(
-		  "||a.example^$removeparam=x\n||b.example^$removeparam=y\n"
+		  "||a.example^$csp=x\n||b.example^$csp=y\n"
 		  "example.com##+js(trusted-click-element, .accept)\n");
 		check(!unread.ok() && unread.refusal.contains("3 candidate"),
 		       QString("three lines, none enforceable (%1)")
@@ -1194,8 +1194,8 @@ int main(int argc, char **argv) {
 		check(parse_network_rule("||ads.example^$third-party,badfilter", &r, &why, &target) ==
 		        parsed::badfilter && target == "||ads.example^$third-party",
 		      QString("badfilter names the rule it cancels (%1)").arg(target));
-		check(parse_network_rule("||ads.example^$removeparam=x", &r, &why) == parsed::refused &&
-		        why.contains("removeparam"),
+		check(parse_network_rule("||ads.example^$csp=x", &r, &why) == parsed::refused &&
+		        why.contains("csp"),
 		      QString("an unknown option is refused, named (%1)").arg(why));
 		check(parse_network_rule("||ads.example^", &r, &why) == parsed::none,
 		      "and a plain rule is the block list's");
@@ -1486,6 +1486,85 @@ int main(int argc, char **argv) {
 		check(blocks("https://cdn.example/promo-tile.png", "www.amazon.de") &&
 		        !blocks("https://cdn.example/promo-tile.png", "www.amazon.co.jp"),
 		      "and an entity rule with no host, with an excluded suffix");
+	}
+
+	section("$removeparam: a tracker's parameters leave a page's address");
+	{
+		network_rule r;
+		QString why;
+		check(parse_network_rule("$removeparam=fbclid", &r, &why) == parsed::option &&
+		        r.act == network_rule::action::removeparam && r.param == "fbclid" &&
+		        !r.exception,
+		      QString("a bare removal everywhere is read, not refused (%1)").arg(why));
+		check(parse_network_rule("@@||shop.example^$removeparam=ref", &r, &why) ==
+		        parsed::option && r.act == network_rule::action::removeparam && r.exception,
+		      "an @@ removal is a removal's exception, not a block's");
+		check(parse_network_rule("$removeparam=/[unclosed/", &r, &why) == parsed::refused,
+		      QString("a pattern that does not compile is refused (%1)").arg(why));
+		QList<network_rule> rules;
+		for (const char *line : { "$removeparam=fbclid", "$removeparam=/^utm_/",
+		                          "||news.example^$removeparam=ref",
+		                          "@@||news.example/keep^$removeparam=ref",
+		                          "||bare.example^$removeparam",
+		                          "||only.example^$removeparam=~id",
+		                          "$removeparam=sid,xhr",
+		                          "@@||exempt.example^$removeparam",
+		                          "||ads.example^$important" }) {
+			if (parse_network_rule(QString::fromLatin1(line), &r, nullptr) == parsed::option)
+				rules << r;
+		}
+		check(rules.size() == 9, QString("all nine read (%1)").arg(rules.size()));
+		network_rule_set set;
+		set.replace(rules);
+		auto clean = [&](const char *url) {
+			network_rule_set::request q;
+			q.url = QString::fromLatin1(url);
+			q.lower = q.url.toLower();
+			q.host = QUrl(q.url).host();
+			q.site = q.host;
+			q.type = request_type::other;
+			return set.clean(q);
+		};
+		check(clean("https://a.example/p?id=7&fbclid=XyZ&utm_source=tw&utm_medium=x#top") ==
+		        "https://a.example/p?id=7#top",
+		      "by name and by pattern, the rest and the fragment kept: " +
+		        clean("https://a.example/p?id=7&fbclid=XyZ&utm_source=tw&utm_medium=x#top"));
+		check(clean("https://a.example/p?fbclid=1") == "https://a.example/p",
+		      "and the ? goes when nothing is left");
+		check(clean("https://a.example/p?id=7").isEmpty() && clean("https://a.example/p").isEmpty(),
+		      "an address with nothing to take is left alone");
+		check(clean("https://news.example/a?ref=x&q=1") == "https://news.example/a?q=1" &&
+		        clean("https://other.example/a?ref=x").isEmpty(),
+		      "a scoped removal on its site only");
+		check(clean("https://news.example/keep?ref=x").isEmpty(),
+		      "lifted by its exception on the path the exception names");
+		check(clean("https://bare.example/?a=1&b=2") == "https://bare.example/" &&
+		        clean("https://only.example/?a=1&id=2&b=3") == "https://only.example/?id=2",
+		      "bare takes every one, ~name all but that one");
+		check(clean("https://a.example/?sid=1").isEmpty(),
+		      "a removal for another type ($xhr) does not touch a navigation");
+		check(clean("https://exempt.example/?fbclid=1").isEmpty(),
+		      "a bare exception lifts every removal there");
+		network_rule_set::request q;
+		q.url = "https://ads.example/x.js";
+		q.lower = q.url;
+		q.host = "ads.example";
+		q.site = "page.example";
+		check(set.blocks(q), "and the block list beside them is unchanged");
+
+		policy_engine pol;
+		request_filter f(&pol);
+		f.set_network_rules(rules);
+		check(f.clean_navigation(QUrl("https://a.example/p?id=7&fbclid=1")) ==
+		        QUrl("https://a.example/p?id=7"),
+		      "the filter answers a navigation with the clean address");
+		pol.set_setting("a.example", policy::feature::ads, policy::setting::allow);
+		check(!f.clean_navigation(QUrl("https://a.example/p?id=7&fbclid=1")).isValid(),
+		      "and leaves it alone where the shield allows ads, as for every list rule");
+		const subscription_read rep = filter_subscription::read(
+		  "! Title: Privacy\n$removeparam=fbclid\n@@||x.example^$removeparam=ref\n");
+		check(rep.ok() && rep.removeparams == 2 && rep.summary().contains("2 parameter removals"),
+		      "a list of them is usable, and counted: " + rep.summary());
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

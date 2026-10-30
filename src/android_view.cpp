@@ -413,6 +413,13 @@ Java_se_vibes_hydra_HydraWebView_requestVerdict(JNIEnv *env, jclass, jstring url
 	return env->NewStringUTF(v.toUtf8().constData());
 }
 
+// A navigation's clean address: see `android_view::clean_url`.
+extern "C" JNIEXPORT jstring JNICALL
+Java_se_vibes_hydra_HydraWebView_cleanUrl(JNIEnv *env, jclass, jstring url) {
+	const QString v = android_view::clean_url(from_java(env, url));
+	return env->NewStringUTF(v.toUtf8().constData());
+}
+
 // A redirect resource's type and bytes, for Java to answer a request with.
 extern "C" JNIEXPORT jstring JNICALL
 Java_se_vibes_hydra_HydraWebView_resourceMime(JNIEnv *env, jclass, jstring name) {
@@ -1085,6 +1092,13 @@ QString android_view::request_verdict(const QString &url, const QString &accept,
 	return d.redirect.isEmpty() ? QStringLiteral("block") : d.redirect;
 }
 
+QString android_view::clean_url(const QString &url) {
+	if (!s_filter)
+		return QString();
+	const QUrl clean = s_filter->clean_navigation(QUrl(url));
+	return clean.isValid() ? clean.toString(QUrl::FullyEncoded) : QString();
+}
+
 bool android_view::any_view_open() {
 	return !s_views.isEmpty();
 }
@@ -1560,7 +1574,11 @@ void android_view::refresh() {
 	                   .arg(m_url.toString().toHtmlEscaped())));
 }
 
-void android_view::load(const QUrl &url) {
+void android_view::load(const QUrl &address) {
+	// An address typed or opened never passes the navigation hook, which
+	// sees only what the page itself navigates to.
+	const QUrl clean = s_filter ? s_filter->clean_navigation(address) : QUrl();
+	const QUrl url = clean.isValid() ? clean : address;
 	m_url = url;
 	if (!m_native) {
 		// No WebView: say so, and say what was asked for.

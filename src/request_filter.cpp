@@ -93,6 +93,21 @@ bool request_filter::blocks_popup(const QUrl &url, const QString &opener_host) c
 	return v.block && (!v.allow || v.important);
 }
 
+QUrl request_filter::clean_navigation(const QUrl &url) const {
+	const QString host = url.host();
+	if (!m_engine || !url.hasQuery() || m_rules.size() == 0 ||
+	    m_engine->is_allowed(feature::ads, host) || m_rules.site_allowed(host))
+		return QUrl();
+	network_rule_set::request q;
+	q.url = url.toString(QUrl::FullyEncoded);
+	q.lower = q.url.toLower();
+	q.host = host;
+	q.site = host;
+	q.type = request_type::other;
+	const QString clean = m_rules.clean(q);
+	return clean.isEmpty() ? QUrl() : QUrl(clean, QUrl::StrictMode);
+}
+
 request_decision request_filter::decide(const request_context &ctx) const {
 	request_decision d;
 	if (!m_engine)

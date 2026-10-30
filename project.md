@@ -38654,6 +38654,39 @@ target here, but its execution context is reachable from the page target's
 `Runtime.executionContextCreated` list; and a `pgrep` wait loop matched its
 own command line, as `running-code.md` warns, and waited out its full term.
 
+### `$removeparam`: a tracker's parameters leave the page's address
+
+**269 lines of the default lists, refused as an unknown option until
+2026-10-30** -- `$removeparam=fbclid`, `=gclid`, `=/^utm_/` and their like,
+almost all of them the tags an advertiser or a platform adds to a link so
+the visit can be attributed. Now `network_rules` reads them as their own
+action, `removeparam`: by name, by `/regex/` against `name=value`, `~name`
+for all but that one, or bare for all; scoped by pattern, `domain=` and
+party like any rule. **An `@@` line with it lifts that removal and
+nothing else** -- bare, every removal there -- which is why it cannot be
+an ordinary exception: read as one it would have lifted blocks.
+
+**Navigations only**, the page and its frames, which is uBlock's default
+when no type is named: a request a page makes for itself was built with
+its parameters on purpose, and Android can change only where a navigation
+goes. A rule naming another type (`$xhr`) is kept and not applied. The
+rules sit apart from the block index (`m_params`), so no request pays for
+them. `request_filter::clean_navigation` answers to the shield as every
+list rule does. The desktop interceptor redirects a page or frame request
+to the clean address; on Android `shouldOverrideUrlLoading` loads the
+clean one instead, arming the document-start script for it, and
+`android_view::load` cleans what is typed or opened.
+
+Measured: 257 of the lists' 273 removal lines read, the rest using `to=`
+or a pattern this reader cannot split. `test_subscription` holds the
+forms, the exceptions, the type limit and the shield; `try_filters` loads
+`?utm_source=news&id=7` through the real interceptor and the server is
+asked for `?id=7` only. **On the emulator with the real lists**, an
+address opened from outside lost its `fbclid` and a page's own navigation
+its `gclid`. (Tried first within a minute of a fresh install, neither
+was cleaned: the lists are fetched 60 s after start, and were not yet in
+force -- not a fault.)
+
 ### `$popup`: a window the lists name is refused, clicked or not
 
 **What the lists still could not say, counted 2026-10-29** over the holder's

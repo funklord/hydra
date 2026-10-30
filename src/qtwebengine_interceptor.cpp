@@ -56,4 +56,13 @@ void qtwebengine_interceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
 	}
 	if (d.strip_referer)
 		info.setHttpHeader(QByteArray("Referer"), QByteArray());
+	// **A page or a frame arriving with a tracker's parameters** goes to the
+	// address without them (`request_filter::clean_navigation`). A redirect
+	// is asked about again, and the clean address has nothing left to take.
+	if (info.resourceType() == RT::ResourceTypeMainFrame ||
+	    info.resourceType() == RT::ResourceTypeSubFrame) {
+		const QUrl clean = m_filter->clean_navigation(ctx.url);
+		if (clean.isValid() && clean != ctx.url)
+			info.redirect(clean);
+	}
 }

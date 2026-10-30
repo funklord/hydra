@@ -137,6 +137,11 @@ public:
 	                               const QString &page_url);
 	static bool should_block(const QString &url, const QString &accept,
 	                          const QString &page_url);
+	// A navigation's address with the lists' `$removeparam` removals made,
+	// or empty when nothing is taken out (`request_filter::clean_navigation`).
+	// Asked by Java's navigation hook, on the UI thread, before it lets a
+	// navigation go; the filter is safe to ask from any thread.
+	static QString clean_url(const QString &url);
 
 	// **Whether this page may set or send a third-party cookie.** The same
 	// per-site policy the desktop applies, reached the same way -- through the

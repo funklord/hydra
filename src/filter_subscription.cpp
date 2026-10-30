@@ -22,6 +22,8 @@ QString subscription_read::summary() const {
 		         .arg(needs_trust);
 	if (option_blocks > 0)
 		s += QString(", %1 with options").arg(option_blocks);
+	if (removeparams > 0)
+		s += QString(", %1 parameter removals").arg(removeparams);
 	if (exceptions > 0)
 		s += QString(", %1 exception(s)").arg(exceptions);
 	if (redirects > 0)
@@ -510,6 +512,8 @@ subscription_read read(const QString &text, int previous_rules,
 					++rep.redirects;
 				else if (option.act == network_rule::action::allow)
 					++rep.exceptions;
+				else if (option.act == network_rule::action::removeparam)
+					++rep.removeparams;
 				else
 					++rep.option_blocks;
 				rep.option_rules.push_back(option);

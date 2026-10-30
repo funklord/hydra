@@ -81,18 +81,31 @@ enum : unsigned {
 //    -- did nothing here, and every page it fixes stayed broken. An exception
 //    outranks every block that is not `$important`, the ad-host list and the
 //    plain lists included. `@@...$document` exempts a whole site;
-//  * **redirect**: `$redirect=` and `$redirect-rule=`, above.
+//  * **redirect**: `$redirect=` and `$redirect-rule=`, above;
+//  * **removeparam**: `$removeparam=utm_source` takes a parameter out of a
+//    page's address -- by name, `/regex/` against `name=value`, `~name` for
+//    all but that one, or bare for all. 269 lines of the default lists,
+//    almost all of them trackers' parameters. An `@@` line with it lifts
+//    the same removal (bare: every removal) and nothing else, which is why
+//    it is its own action: read as an ordinary exception it would have
+//    lifted blocks. Applied to navigations only -- the page and its frames,
+//    uBlock's default when no type is named -- since a request a page makes
+//    for itself was built with its parameters on purpose, and Android can
+//    change only where a navigation goes. A rule naming another type is
+//    kept and not applied.
 //
 // `$badfilter` cancels the rule it repeats and is applied across every list
 // by whoever assembles them (`apply_badfilters`), since the rule it cancels
 // is usually in another list.
 struct network_rule {
-	enum class action { block, allow, redirect };
+	enum class action { block, allow, redirect, removeparam };
 	action      act = action::block;
 	QString     text;        // the line, for $badfilter to name it by
 	QString     pattern;     // the network half, as the list wrote it
 	QString     host;        // for `||host...` patterns, the index key
 	QString     resource;    // for a redirect: the canonical name
+	QString     param;       // for removeparam: name, /regex/, ~name, or empty for all
+	bool        exception = false;   // removeparam: an `@@` line, lifting one
 	int         priority = 0;
 	bool        rule_only = false;   // `redirect-rule=`: only where blocked anyway
 	bool        important = false;   // a block no exception reaches
@@ -159,6 +172,9 @@ public:
 	bool blocks(const request &r, bool *important = nullptr) const;
 	// Whether an exception lifts a block for this request.
 	bool allows(const request &r) const;
+	// The address with what `removeparam` rules take out of it removed, or
+	// empty when they take nothing. For a navigation: see the action.
+	QString clean(const request &r) const;
 	// Whether a `$document` exception exempts this page whole.
 	bool site_allowed(const QString &site) const;
 
@@ -169,6 +185,7 @@ private:
 	QList<network_rule>        m_rules;
 	QHash<QString, QList<int>> m_by_host;    // `||host` patterns
 	QHash<QString, QList<int>> m_by_site;    // no host, but domain= sites
+	QList<int>                 m_params;     // removeparam rules, asked apart
 	QHash<QString, QList<int>> m_by_token;   // neither: by a token of the pattern
 	// **No token either, filed by three characters of its literal.** Patterns
 	// like `.com/ad/` have no run of four to file by, and as one list tried

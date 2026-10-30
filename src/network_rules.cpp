@@ -155,11 +155,18 @@ parsed parse_network_rule(const QString &line, network_rule *out, QString *why,
 		if (!h.endsWith(QLatin1Char('.')))
 			r.host = h.toLower();
 	}
-	bool badfilter = false, match_case = false;
+	bool badfilter = false, match_case = false, removes = false;
 	for (const QString &raw : options.split(QLatin1Char(','))) {
 		const QString o = raw.trimmed();
 		if (o.isEmpty())
 			continue;
+		if (o == QLatin1String("removeparam") || o == QLatin1String("queryprune") ||
+		    o.startsWith(QLatin1String("removeparam=")) ||
+		    o.startsWith(QLatin1String("queryprune="))) {
+			removes = true;
+			r.param = o.section(QLatin1Char('='), 1);
+			continue;
+		}
 		if (o.startsWith(QLatin1String("redirect=")) ||
 		    o.startsWith(QLatin1String("redirect-rule="))) {
 			if (allow)
@@ -222,6 +229,10 @@ parsed parse_network_rule(const QString &line, network_rule *out, QString *why,
 		// whole, which is what the Unbreak list uses it for. As a block it
 		// would refuse the page itself, which this engine does not do.
 		if (o == QLatin1String("document") || o == QLatin1String("doc")) {
+			// A removal for the page is what a removal does anyway.
+			if (options.contains(QLatin1String("removeparam")) ||
+			    options.contains(QLatin1String("queryprune")))
+				continue;
 			if (!allow)
 				return refuse(QStringLiteral("blocks a page itself ($document), "
 				                             "which this engine does not do"));
@@ -253,13 +264,27 @@ parsed parse_network_rule(const QString &line, network_rule *out, QString *why,
 		}
 		return parsed::badfilter;
 	}
+	if (removes) {
+		if (r.act == network_rule::action::redirect)
+			return refuse(QStringLiteral("removeparam with a redirect"));
+		r.exception = allow;
+		r.act = network_rule::action::removeparam;
+		if (r.param.startsWith(QLatin1Char('/'))) {
+			const QString body = r.param.mid(1, r.param.lastIndexOf(QLatin1Char('/')) - 1);
+			if (r.param.lastIndexOf(QLatin1Char('/')) < 1 ||
+			    !QRegularExpression(body).isValid())
+				return refuse(QStringLiteral("a removeparam pattern that does not compile"));
+		}
+	}
 	r.match = filter_list::pattern_regex(r.pattern);
 	r.literal = filter_list::literal_of(r.pattern);
 	if (match_case)
 		r.match.setPatternOptions(QRegularExpression::NoPatternOption);
 	if (!r.match.isValid())
 		return refuse(QStringLiteral("a rule whose pattern does not compile"));
-	if (r.pattern.isEmpty() && !r.document && r.include.isEmpty())
+	// A removal with no pattern is the ordinary kind -- `$removeparam=fbclid`
+	// everywhere -- and takes nothing but the parameter it names.
+	if (r.pattern.isEmpty() && !r.document && r.include.isEmpty() && !removes)
 		return refuse(QStringLiteral("a rule with no pattern and no site, which would "
 		                             "match every request everywhere"));
 	if (out)
@@ -286,6 +311,7 @@ void network_rule_set::replace(const QList<network_rule> &rules) {
 	m_rules = rules;
 	m_by_host.clear();
 	m_by_site.clear();
+	m_params.clear();
 	m_by_token.clear();
 	m_by_gram.clear();
 	m_rest.clear();
@@ -293,6 +319,10 @@ void network_rule_set::replace(const QList<network_rule> &rules) {
 	m_documents_by_host.clear();
 	for (int i = 0; i < m_rules.size(); ++i) {
 		const network_rule &r = m_rules[i];
+		if (r.act == network_rule::action::removeparam) {
+			m_params << i;
+			continue;
+		}
 		if (r.document) {
 			if (!r.host.isEmpty())
 				m_documents_by_host[r.host] << i;
@@ -523,6 +553,82 @@ bool network_rule_set::allows(const request &r) const {
 		return hit;
 	});
 	return hit;
+}
+
+QString network_rule_set::clean(const request &r) const {
+	QReadLocker guard(&m_lock);
+	const int q = r.url.indexOf(QLatin1Char('?'));
+	if (m_params.isEmpty() || q < 0)
+		return QString();
+	const bool same = same_party_of(r);
+	const auto applies_here = [&](const network_rule &rule) {
+		// A rule naming a type other than a page or a frame is not for a
+		// navigation; one naming none is.
+		const unsigned nav = request_type::subdocument | request_type::other;
+		if (rule.types && !(rule.types & nav))
+			return false;
+		network_rule plain = rule;
+		plain.types = 0;
+		return applies(plain, r, same);
+	};
+	QList<const network_rule *> removing;
+	QSet<QString> lifted;
+	bool all_lifted = false;
+	for (int i : m_params) {
+		const network_rule &rule = m_rules[i];
+		if (!applies_here(rule))
+			continue;
+		if (rule.exception) {
+			if (rule.param.isEmpty())
+				all_lifted = true;
+			lifted.insert(rule.param);
+		} else {
+			removing << &rule;
+		}
+	}
+	if (all_lifted || removing.isEmpty())
+		return QString();
+
+	const int hash = r.url.indexOf(QLatin1Char('#'), q);
+	const QString query = r.url.mid(q + 1, hash < 0 ? -1 : hash - q - 1);
+	const QString fragment = hash < 0 ? QString() : r.url.mid(hash);
+	QStringList kept;
+	bool changed = false;
+	for (const QString &pair : query.split(QLatin1Char('&'))) {
+		if (pair.isEmpty())
+			continue;
+		const QString name = QUrl::fromPercentEncoding(pair.section(QLatin1Char('='), 0, 0).toUtf8());
+		bool drop = false;
+		for (const network_rule *rule : removing) {
+			if (lifted.contains(rule->param))
+				continue;
+			const QString &p = rule->param;
+			if (p.isEmpty()) {
+				drop = true;
+			} else if (p.startsWith(QLatin1Char('~'))) {
+				drop = name != p.mid(1);
+			} else if (p.startsWith(QLatin1Char('/')) && p.lastIndexOf(QLatin1Char('/')) > 0) {
+				const int end = p.lastIndexOf(QLatin1Char('/'));
+				const QRegularExpression re(
+				  p.mid(1, end - 1), p.mid(end + 1).contains(QLatin1Char('i'))
+				                       ? QRegularExpression::CaseInsensitiveOption
+				                       : QRegularExpression::NoPatternOption);
+				drop = re.match(QUrl::fromPercentEncoding(pair.toUtf8())).hasMatch();
+			} else {
+				drop = name == p;
+			}
+			if (drop)
+				break;
+		}
+		if (drop)
+			changed = true;
+		else
+			kept << pair;
+	}
+	if (!changed)
+		return QString();
+	return r.url.left(q) + (kept.isEmpty() ? QString() : QLatin1Char('?') + kept.join(QLatin1Char('&'))) +
+	       fragment;
 }
 
 bool network_rule_set::site_allowed(const QString &site) const {

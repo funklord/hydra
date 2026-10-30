@@ -76,6 +76,7 @@ struct subscription_read {
 	int redirects   = 0;
 	int exceptions  = 0;
 	int option_blocks = 0;
+	int removeparams = 0;  // `$removeparam`: parameters taken out of a page's address
 	int badfilters  = 0;
 	QString refusal;       // non-empty: the body was not a usable filter list
 	QList<filter_rule> rules;
