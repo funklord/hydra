@@ -38687,6 +38687,14 @@ its `gclid`. (Tried first within a minute of a fresh install, neither
 was cleaned: the lists are fetched 60 s after start, and were not yet in
 force -- not a fault.)
 
+**And `$denyallow`, the same day**: a block that spares the hosts it
+names -- `*$script,3p,denyallow=gstatic.com|cloudflare.com,domain=site`
+refuses every third-party script on the site but those. 260 lines of the
+default lists, mostly pop-under and anti-adblock scripts on sites that
+load them from hosts nobody could list in advance; 259 now read. A
+narrowing like the others, checked in `applies`. `test_subscription`
+holds the spared host, a subdomain of one, and the site's own script.
+
 ### `$popup`: a window the lists name is refused, clicked or not
 
 **What the lists still could not say, counted 2026-10-29** over the holder's

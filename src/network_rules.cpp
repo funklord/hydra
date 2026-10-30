@@ -203,6 +203,15 @@ parsed parse_network_rule(const QString &line, network_rule *out, QString *why,
 			}
 			continue;
 		}
+		if (o.startsWith(QLatin1String("denyallow="))) {
+			for (const QString &d : o.mid(10).split(QLatin1Char('|'), Qt::SkipEmptyParts)) {
+				if (d.startsWith(QLatin1Char('~')))
+					return refuse(QStringLiteral("a negated denyallow host, which uBlock "
+					                             "does not define either"));
+				r.denyallow << d.toLower();
+			}
+			continue;
+		}
 		if (o == QLatin1String("1p") || o == QLatin1String("first-party") ||
 		    o == QLatin1String("~third-party") || o == QLatin1String("~3p")) {
 			r.party = 1;
@@ -458,6 +467,12 @@ bool network_rule_set::applies(const network_rule &rule, const request &r,
 	for (const QString &d : rule.exclude)
 		if (site_in(site, d))
 			return false;
+	if (!rule.denyallow.isEmpty()) {
+		const QString host = r.host.toLower();
+		for (const QString &d : rule.denyallow)
+			if (site_in(host, d))
+				return false;
+	}
 	if (rule.pattern.isEmpty())
 		return true;
 	// Against the lowercased address, case-sensitively: the same answer as a

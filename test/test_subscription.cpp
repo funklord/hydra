@@ -1087,8 +1087,8 @@ int main(int argc, char **argv) {
 		          .arg(why));
 		why.clear();
 		check(filter_subscription::classify(
-		        "||x.example^$script,redirect=noopjs,denyallow=y.example",
-		        nullptr, &why) == line_kind::unsupported && why.contains("denyallow"),
+		        "||x.example^$script,redirect=noopjs,csp=default-src",
+		        nullptr, &why) == line_kind::unsupported && why.contains("csp"),
 		      QString("and so is an option this reader does not know (%1)").arg(why));
 		const subscription_read rep = filter_subscription::read(
 		  "! Title: t\n||ads.example^\n" + k_ad_status + "\n");
@@ -1565,6 +1565,34 @@ int main(int argc, char **argv) {
 		  "! Title: Privacy\n$removeparam=fbclid\n@@||x.example^$removeparam=ref\n");
 		check(rep.ok() && rep.removeparams == 2 && rep.summary().contains("2 parameter removals"),
 		      "a list of them is usable, and counted: " + rep.summary());
+	}
+
+	section("$denyallow: a block that spares the hosts it names");
+	{
+		network_rule r;
+		QString why;
+		check(parse_network_rule("*$script,3p,denyallow=gstatic.com|cloudflare.com,domain=pirate.example",
+		                         &r, &why) == parsed::option &&
+		        r.denyallow == QStringList({ "gstatic.com", "cloudflare.com" }),
+		      QString("read, with its hosts (%1)").arg(why));
+		network_rule_set set;
+		set.replace({ r });
+		auto blocks = [&](const char *url) {
+			network_rule_set::request q;
+			q.url = QString::fromLatin1(url);
+			q.lower = q.url.toLower();
+			q.host = QUrl(q.url).host();
+			q.site = "www.pirate.example";
+			q.type = request_type::script;
+			return set.blocks(q);
+		};
+		check(blocks("https://popunder.example/p.js"),
+		      "a third-party script from anywhere else is blocked");
+		check(!blocks("https://www.gstatic.com/recaptcha.js") &&
+		        !blocks("https://cdnjs.cloudflare.com/x.js"),
+		      "one from a named host, or a subdomain of one, is spared");
+		check(!blocks("https://cdn.pirate.example/app.js"),
+		      "and the site's own script is first-party, which the rule does not name");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

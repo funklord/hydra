@@ -114,6 +114,12 @@ struct network_rule {
 	unsigned    not_types = 0;       // `~type`
 	QStringList include;             // domain= sites, empty: any
 	QStringList exclude;             // domain=~ sites
+	// `denyallow=` hosts: requests to these are spared by an otherwise
+	// matching rule. `*$script,3p,denyallow=gstatic.com,domain=site` blocks
+	// every third-party script on the site but Google's -- 260 lines of the
+	// default lists, mostly pop-under and anti-adblock scripts on sites that
+	// load them from hosts nobody could list in advance (2026-10-30).
+	QStringList denyallow;
 	int         party = 0;           // 0 any, 1 first-party only, 3 third-party only
 	// Compiled once, by `filter_list::pattern_regex`.
 	QRegularExpression match;
