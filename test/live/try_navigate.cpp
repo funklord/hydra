@@ -15,6 +15,7 @@
 #include "shell_fixture.h"
 
 #include "node.h"
+#include "settings_dialog.h"
 #include "policy.h"
 #include "tab_tree_model.h"
 #include "tree_sort_proxy.h"
@@ -24,6 +25,7 @@
 #include "web_view_backend.h"
 
 #include <QFile>
+#include <QHostInfo>
 #include <QAbstractItemView>
 #include <QCompleter>
 #include <QKeyEvent>
@@ -447,6 +449,45 @@ int main(int argc, char *argv[]) {
 			spin(200);
 			check(!completer->popup()->isVisible(), "and nothing is offered for what matches nothing");
 		}
+	}
+
+	// **`nas/share` or `AC/DC` is the network's to decide** (`host_to_ask`).
+	// This machine's own name, which the resolver knows, with a path, goes to
+	// that machine; a made-up word with a path is searched. The search engine
+	// is pointed at a port nothing listens on, so no search leaves the machine
+	// -- what is read is the address each was sent to.
+	section("a single-label host with a path is looked up before it is searched");
+	{
+		const QString saved = settings_store::search_engine();
+		settings_store::set_search_engine("http://127.0.0.1:1/search?q=%1");
+		auto sent_to = [&](const QString &typed) {
+			address->setText(typed);
+			emit address->returnPressed();
+			web_view_backend *v = nullptr;
+			for (int i = 0; i < 50; ++i) {
+				spin(100);
+				for (web_view_backend *x : w.findChildren<web_view_backend *>())
+					if (x->widget() && x->widget()->isVisible())
+						v = x;
+				if (v && v->url().toString().contains(typed.section('/', 0, 0)))
+					break;
+			}
+			return v ? v->url() : QUrl();
+		};
+		const QString me = QHostInfo::localHostName();
+		const QHostInfo known = QHostInfo::fromName(me);
+		if (me.contains('.') || known.error() != QHostInfo::NoError || known.addresses().isEmpty()) {
+			std::printf("  --    not checked: this machine's name (%s) is not a single "
+			            "label the resolver knows\n", qPrintable(me));
+		} else {
+			const QUrl u = sent_to(me + "/share");
+			check(u.host() == me.toLower() && u.path() == "/share",
+			      QString("%1/share went to that machine (%2)").arg(me, u.toString()));
+		}
+		const QUrl s = sent_to("nosuchhostzq/share");
+		check(s.host() == "127.0.0.1" && s.toString().contains("nosuchhostzq"),
+		      QString("a word nothing answers to was searched for (%1)").arg(s.toString()));
+		settings_store::set_search_engine(saved);
 	}
 
 	return report();

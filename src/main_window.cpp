@@ -127,6 +127,7 @@
 #include <QStyle>
 #include <QClipboard>
 #include <QGuiApplication>
+#include <QHostInfo>
 #include <QInputMethod>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
@@ -7742,6 +7743,34 @@ void main_window::navigate_to_address() {
 		return;
 	}
 
+	// **`nas/share` or `AC/DC`: the network decides, before anything is
+	// searched** (`host_to_ask`). A host the resolver knows is a machine
+	// here, and goes to the address; one it does not know is searched for,
+	// as before. Bounded, so a resolver that never answers costs three
+	// seconds and not the navigation -- and then it is searched, since what
+	// does not resolve could not have loaded either.
+	const QString host = host_to_ask(text);
+	if (!host.isEmpty()) {
+		m_status->showMessage(QString("Looking for a machine called %1…").arg(host), 3000);
+		auto *pending = new QObject(this);
+		auto go = [this, pending, text, target](bool found) {
+			if (pending->property("done").toBool())
+				return;
+			pending->setProperty("done", true);
+			pending->deleteLater();
+			m_status->clearMessage();
+			open_typed(text, found ? QUrl::fromUserInput(text) : target);
+		};
+		QHostInfo::lookupHost(host, pending, [go](const QHostInfo &info) {
+			go(info.error() == QHostInfo::NoError && !info.addresses().isEmpty());
+		});
+		QTimer::singleShot(3000, pending, [go] { go(false); });
+		return;
+	}
+	open_typed(text, target);
+}
+
+void main_window::open_typed(const QString &text, const QUrl &target) {
 	if (web_view_backend *v = current_view()) {
 		v->load(target);
 		// **The page has the keyboard next, as in every browser.** Left in

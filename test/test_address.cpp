@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
 	}
 
 	// -------------------------------------------------------------------
-	// **Recorded behaviour at an open question, not an endorsement of it.**
+	// **The classifier's answer to an ambiguous shape, which the network now settles.**
 	//
 	// `address_input.h` accepts one leak by name: "a bare word with no dot --
 	// `wiki`, `router` -- is searched ... the word itself goes out, and it is
@@ -128,15 +128,15 @@ int main(int argc, char **argv) {
 	// past that sentence, and it is not what the sentence licensed: what goes
 	// out is the host and the path together.
 	//
-	// It is left as it is because the counter-cases are real and common --
-	// `AC/DC`, `TCP/IP`, `and/or`, `24/7`, `km/h` are all two short alphabetic
-	// segments and are indistinguishable in shape from `router/admin`. There
-	// is no syntactic rule that separates them, so this is a product decision
-	// rather than a defect with an obvious fix; see project.md.
+	// The counter-cases are real and common -- `AC/DC`, `TCP/IP`, `and/or`,
+	// `24/7`, `km/h` are indistinguishable in shape from `router/admin` -- so
+	// the classifier still searches the shape, and the window asks the
+	// resolver first (`host_to_ask`, the section after this one): a host on
+	// this network resolves and a word does not. See project.md.
 	//
-	// Pinned here so that whichever way it is settled, the change is
-	// deliberate: these assertions fail the moment the classifier moves.
-	section("single-label hosts with a path -- the open question");
+	// Pinned so that a change to the classifier itself is deliberate: these
+	// assertions fail the moment it moves.
+	section("single-label hosts with a path -- searched by shape");
 	{
 		is_search("router/admin");
 		is_search("nas/share");
@@ -151,6 +151,39 @@ int main(int argc, char **argv) {
 		is_search("AC/DC");
 		is_search("TCP/IP");
 		is_search("and/or");
+	}
+
+	// **The shape is still searched, and the network now decides it**:
+	// `host_to_ask` names the label to look up first, and only for this
+	// shape. A host the resolver knows goes to the address; a word does not
+	// resolve, and is searched as it always was.
+	section("which single labels are asked of the resolver first");
+	{
+		const struct { const char *text, *host; } cases[] = {
+			{ "router/admin", "router" },
+			{ "nas/share", "nas" },
+			{ "intranet/wiki/Main_Page", "intranet" },
+			{ "printer/status?job=1", "printer" },
+			// With a port it is not searched at all: `printer:` reads as a
+			// scheme, so it is an address already.
+			{ "printer:631/status", "" },
+			{ "gitlab/-/profile", "gitlab" },
+			{ "AC/DC", "AC" },
+			{ "and/or", "and" },
+			// Not asked: a number would be read as an IPv4 address.
+			{ "24/7", "" },
+			// Not this shape: a bare word, prose, and what is an address already.
+			{ "router", "" },
+			{ "what is nas/share", "" },
+			{ "localhost/admin", "" },
+			{ "192.168.1.1/admin", "" },
+			{ "internal.corp.example/secret", "" },
+			{ "/etc/hosts", "" },
+			{ "-bad/x", "" },
+		};
+		for (const auto &c : cases)
+			check(host_to_ask(c.text) == QLatin1String(c.host),
+			      QString("%1 -> '%2' (got '%3')").arg(c.text, c.host, host_to_ask(c.text)));
 	}
 
 	section("building the search url");

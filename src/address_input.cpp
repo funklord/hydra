@@ -2,6 +2,7 @@
 
 #include <QFileInfo>
 #include <QHostAddress>
+#include <QRegularExpression>
 #include <QString>
 #include <QStringList>
 #include <QUrl>
@@ -139,6 +140,22 @@ bool looks_like_address(const QString &text) {
 	if (host.compare("localhost", Qt::CaseInsensitive) == 0)
 		return true;
 	return has_tld(host);
+}
+
+QString host_to_ask(const QString &text) {
+	const QString t = text.trimmed();
+	if (looks_like_address(t))
+		return QString();
+	static const QRegularExpression shape(QStringLiteral(
+	  "^([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?::[0-9]{1,5})?/\\S*$"));
+	const QRegularExpressionMatch m = shape.match(t);
+	if (!m.hasMatch())
+		return QString();
+	const QString label = m.captured(1);
+	for (const QChar c : label)
+		if (c.isLetter())
+			return label;
+	return QString();
 }
 
 QUrl search_url(const QString &terms, const QString &tmpl) {

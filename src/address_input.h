@@ -284,6 +284,24 @@ private:
 // because it is the one such host that is always real.
 bool looks_like_address(const QString &text);
 
+// **The host to ask the local resolver about before searching**, or empty.
+//
+// A single-label host with a path -- `nas/share`, `printer/status?job=1` --
+// cannot be told from `AC/DC` or `and/or` by its shape, and searching it
+// sends a private hostname and path to a third party. But the machine can
+// tell them apart: a host on this network resolves and a word does not
+// (measured here: `debian-nabbe` resolved, and `router`, `ac`, `tcp`, `and`
+// and `km` did not). So for exactly that shape this names the label, and
+// the caller asks the resolver -- which sees every host this browser loads
+// anyway -- and goes to the address when it answers, to the search when it
+// does not.
+//
+// Empty for everything `looks_like_address` already decides, for a bare word
+// with no path (the one leak the rule above accepts), and for a label with
+// no letter in it: `24/7` would be read by the resolver as the IPv4 address
+// 0.0.0.24.
+QString host_to_ask(const QString &text);
+
 // The search url for `terms` under `tmpl`, where `tmpl` carries a single `%1`
 // standing for the encoded terms. Returns an invalid QUrl if the template has
 // no `%1`, so a mistyped setting fails visibly rather than searching for
