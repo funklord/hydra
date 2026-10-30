@@ -38734,6 +38734,23 @@ load them from hosts nobody could list in advance; 259 now read. A
 narrowing like the others, checked in `applies`. `test_subscription`
 holds the spared host, a subdomain of one, and the site's own script.
 
+**And regular expressions, with `to=` (2026-10-30).** `/.../` rules were
+refused outright -- 628 lines of the default lists, most of them the
+random-looking hosts that malware and pop-under networks rotate through,
+which no plain pattern can name -- and `to=`, the request's own host as
+`domain=` is the page's, was an unknown option. Both are read now: a
+regex compiled as written (case-insensitive unless `match-case`), its
+options found after the closing slash since a regex may end in `$`; 534
+read. **Cost was the question, and it was measured**: tried on every
+request they took a decision from 13 to 57 us over 60,000 requests of
+mixed type and party. So each regex carries the text it cannot match
+without (`required_text`: the longest top-level run, outside classes and
+groups, less what a quantifier makes optional, and never one every
+address has) -- tested as a substring first and filed in the trigram
+index -- and a `to=` rule is filed by its hosts. With both: 27 us. A
+regex `$doc` with `to=` is a page block filed by those hosts.
+`test_subscription` holds the reading, the prefilter and the matching.
+
 **And `$urlskip`, the same day**: `||ay.live/st/*^url=http$doc,urlskip=?url`
 goes straight to the destination a tracking redirect carries in its own
 address, without visiting the redirect. The steps read it out -- `?name`,
