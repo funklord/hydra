@@ -115,6 +115,20 @@ int main(int argc, char **argv) {
 		check(!other.paywalled_present, "and class=paywalled-banner is not");
 	}
 
+	section("paragraphs whose end tags were left out, as a minifier leaves them");
+	{
+		const reading closed = read("this tab", 200,
+		  "<article><p>The first paragraph of the story, long enough to be counted.</p>"
+		  "<p>The second paragraph of the story, long enough to be counted.</p></article>");
+		const reading open = read("googlebot", 200,
+		  "<article><p>The first paragraph of the story, long enough to be counted."
+		  "<p>The second paragraph of the story, long enough to be counted.</article>");
+		check(open.paragraphs == 2 && open.text_chars == closed.text_chars,
+		      QString("counted alike with and without </p> (%1 and %2 paragraphs, %3 and %4 chars)")
+		        .arg(open.paragraphs).arg(closed.paragraphs)
+		        .arg(open.text_chars).arg(closed.text_chars));
+	}
+
 	section("a bot check instead of the page");
 	{
 		const reading r = read("bingbot", 247, k_challenge);

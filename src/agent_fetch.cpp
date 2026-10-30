@@ -78,8 +78,14 @@ reading read(const QString &agent, int status, const QByteArray &body) {
 	r.bytes = body.size();
 	const QString html = QString::fromUtf8(body);
 
+	// **A paragraph ends at `</p>` or where the next block begins**: HTML
+	// lets the end tag be left out and minifiers leave it out. The tab is read
+	// from the engine's serialised DOM, which always writes it, and a fetched
+	// answer is read raw -- so requiring it measured the two differently, and
+	// a crawler's whole article without end tags would have counted as none.
 	static const QRegularExpression para(
-	  QStringLiteral("<p(?:\\s[^>]*)?>(.*?)</p>"),
+	  QStringLiteral("<p(?:\\s[^>]*)?>(.*?)(?=</p>|<p[\\s>]|</?(?:div|article|section|"
+	                 "main|aside|header|footer|ul|ol|table|h[1-6]|blockquote|body)\\b)"),
 	  QRegularExpression::CaseInsensitiveOption | QRegularExpression::DotMatchesEverythingOption);
 	for (auto it = para.globalMatch(html); it.hasNext();) {
 		const QString t = plain(it.next().captured(1));

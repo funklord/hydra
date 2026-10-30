@@ -39298,6 +39298,12 @@ with nothing to switch on:
   across JNI on Android); and a page already being asked about is not
   asked again, since Android reports one load finishing twice and the
   first version fetched everything twice.
+- **A paragraph without its end tag is a paragraph**: HTML lets `</p>` be
+  left out, and the tab is measured from the engine's serialised DOM, which
+  always writes it, while a fetched answer is read raw -- so a crawler's
+  whole article from a minifier would have counted as none. Found by
+  looking for the bare-class fault's shape -- the tab and the answers
+  measured differently -- rather than by a failure.
 - **A bare class is a class**: `class=paywalled`, as a minifier writes it,
   was not recognised as the paid part, so on the emulator Googlebot's
   whole article read as a teaser and was not shown -- found by the
