@@ -158,6 +158,22 @@ class files(http.server.BaseHTTPRequestHandler):
 			        + para * 6 + "</article>").encode()
 			self.send_response(200)
 			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/story"):
+			# A page that keeps its article from the person and sends Google's
+			# crawler all of it, as try_scriptlets serves on the desktop.
+			whole = "Googlebot" in self.headers.get("User-Agent", "")
+			rest = ("<div class=paywalled>" + "<p>The rest of the story, a paragraph "
+			        "only a crawler is sent.</p>" * 12 + "</div>") if whole else \
+			       "<p>Subscribe to read the rest of this story, today only.</p>"
+			body = ("<!doctype html><meta name=viewport content='width=device-width'>"
+			        "<title>A story</title><script type='application/ld+json'>"
+			        '{"@type":"NewsArticle","isAccessibleForFree":false,"hasPart":'
+			        '{"isAccessibleForFree":false,"cssSelector":".paywalled"}}</script>'
+			        "<style>.paywalled{display:none}</style>"
+			        "<p>The opening of the story, which everybody is sent in full.</p>"
+			        + rest).encode()
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
 		elif self.path.startswith("/file"):
 			body = b"hydra download check\n"
 			self.send_response(200)
@@ -561,6 +577,21 @@ def main():
 			check(tap("Go to the address being edited", limit=5), "and Go")
 			time.sleep(8)
 			check(href() == clean, f"put the clean address in the editor to go to ({href()})")
+
+			print("\n== a paywalled page is shown as a crawler is sent it ==")
+			# hydra's own fetch, from the phone: through `adb reverse` like the
+			# page, and over the OpenSSL the package carries for https.
+			open_url(f"http://127.0.0.1:{port}/story", wait=15)
+			text = ""
+			for _ in range(10):
+				text = probe("document.body.innerText").strip()
+				if "only a crawler" in text:
+					break
+				time.sleep(2)
+			check(text.count("only a crawler is sent") == 12 and "Subscribe" not in text,
+			      f"the tab shows the crawler's copy, all twelve paragraphs ({len(text)} chars)")
+			asked = sum(1 for p, _ in files.seen if p == "/story")
+			check(asked >= 7, f"the page, and once per client ({asked} requests)")
 
 			# **Checks of the lists against real sites**, last: each moves the
 			# tab somewhere else, and the lists have been in force since the

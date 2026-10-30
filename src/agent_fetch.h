@@ -57,6 +57,11 @@ struct reading {
 	QString paywalled_selector;         // JSON-LD hasPart cssSelector
 	bool    paywalled_present = false;  // that selector's class is in the body
 	QString opening;           // the first paragraph's start
+	// What was sent, and from where after redirects: kept so an answer that
+	// holds more than the tab can be shown (`helps`, `servable`). Empty in a
+	// reading made by `read` alone.
+	QByteArray body;
+	QUrl       url;
 };
 
 // Reads one answer. Pure, so it is tested on fixtures.
@@ -64,6 +69,24 @@ reading read(const QString &agent, int status, const QByteArray &body);
 
 // One line per reading, for the log and the model's next turn.
 QString describe(const reading &r);
+
+// **Which answer, if any, holds more of the article than the tab does** --
+// the decision behind showing a page as a crawler is sent it, which the
+// holder settled on 2026-10-30: "we load pages as crawlers if it helps".
+// Helps means an answer that is the page (2xx, not a bot check) and either
+// carries the part the page declares not free where the tab does not, or
+// has clearly more paragraph text: half as much again, and at least 1,000
+// characters more, so a different sidebar is not taken for the article.
+// Of several, the one with the most text. -1 when none does.
+int helps(const reading &tab, const QList<reading> &answers);
+
+// The answer as a document to show in place of the page: without its
+// scripts, which are what put a paywall back over text the server sent --
+// the JSON-LD stays, being data -- and with the part the page declared
+// paywalled forced visible where it names it by class, since a stylesheet
+// can hide it as well as a script. Empty when the result is past what a
+// view will take (`show_html` goes through a data url of 2 MB).
+QString servable(const reading &r);
 
 }  // namespace agent_fetch
 

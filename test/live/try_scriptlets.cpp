@@ -40,16 +40,20 @@
 #include "theme.h"
 #include "tree_sort_proxy.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
 #include <QLineEdit>
+#include <QStatusBar>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QTreeView>
+#include <QWebEnginePage>
+#include <QWebEngineView>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -92,6 +96,28 @@ public:
 				// the flag to something the stand-in never would.
 				type = "application/javascript";
 				body = "window.google_ad_status = 'real';";
+			} else if (target.startsWith("/story") || target.startsWith("/locked")) {
+				// **A news page that keeps its article from the person**:
+				// it says so in its JSON-LD, sends a teaser, and -- for
+				// `/story` only -- sends Google's crawler the whole thing,
+				// with a script that would put the wall back.
+				const bool whole = target.startsWith("/story") && head.contains("Googlebot");
+				body = "<!doctype html><html><head><title>A story</title>"
+				        "<script type=\"application/ld+json\">{\"@type\":\"NewsArticle\","
+				        "\"isAccessibleForFree\":false,\"hasPart\":{\"@type\":\"WebPageElement\","
+				        "\"isAccessibleForFree\":false,\"cssSelector\":\".paywalled\"}}</script>"
+				        "<style>.paywalled{display:none}</style></head><body>"
+				        "<p>The opening of the story, which everybody is sent in full.</p>";
+				if (whole) {
+					body += "<div class=\"paywalled\">";
+					for (int i = 0; i < 12; ++i)
+						body += "<p>The rest of the story, a paragraph only a crawler is sent.</p>";
+					body += "</div><script>document.querySelector('.paywalled')"
+					        ".textContent = 'Subscribe to read on';</script>";
+				} else {
+					body += "<p>Subscribe to read the rest of this story, today only.</p>";
+				}
+				body += "</body></html>";
 			} else if (target.startsWith("/js/sdkloader/ima3.js")) {
 				// The real SDK, as far as this test is concerned: it would
 				// leave the player waiting on an ad that never comes.
@@ -430,6 +456,67 @@ int main(int argc, char *argv[]) {
 		              "player was told to play (%1)").arg(said));
 		check(!server.asked.contains("/js/sdkloader/ima3.js"),
 		      "and the real SDK was never fetched");
+	}
+
+	section("a paywalled page is shown as a crawler is sent it, when one is sent more");
+	{
+		QStatusBar *status = window.findChild<QStatusBar *>();
+		// Every message, since a later one replaces it on the bar.
+		QStringList messages;
+		if (status)
+			QObject::connect(status, &QStatusBar::messageChanged, &window,
+			                 [&](const QString &m) { if (!m.isEmpty()) messages << m; });
+		auto text_of_page = [&]() {
+			QString text;
+			bool got = false;
+			for (QWebEngineView *v : window.findChildren<QWebEngineView *>())
+				if (v->isVisible()) {
+					v->page()->toPlainText([&](const QString &t) { text = t; got = true; });
+					break;
+				}
+			for (int i = 0; i < 50 && !got; ++i)
+				spin(100);
+			return text;
+		};
+		auto said = [&](const QString &what) {
+			for (int i = 0; i < 150; ++i) {
+				for (const QString &m : messages)
+					if (m.contains(what))
+						return m;
+				spin(100);
+			}
+			return QString();
+		};
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/story").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		const QString whose = said("Google's crawler");
+		check(!whose.isEmpty(), QString("the status line says whose copy it is (%1)").arg(whose));
+		spin(1000);
+		const QString copy = text_of_page();
+		check(copy.count("only a crawler is sent") == 12 && !copy.contains("Subscribe"),
+		      QString("the tab shows all twelve paragraphs, the wall's script and "
+		              "its stylesheet both beaten (%1 chars)").arg(copy.size()));
+		int fetched = 0;
+		for (const QString &a : server.asked)
+			fetched += a == QLatin1String("/story");
+		check(fetched == 7, QString("the page once, and once per client (%1)").arg(fetched));
+
+		QMetaObject::invokeMethod(&window, [&] {
+			for (QAction *a : window.findChildren<QAction *>())
+				if (a->text().remove('&') == QLatin1String("Reload")) { a->trigger(); break; }
+		});
+		spin(3000);
+		const QString sent = text_of_page();
+		check(sent.contains("Subscribe to read") && !sent.contains("only a crawler"),
+		      "a reload shows the page as sent to the person: " + sent.left(120));
+		messages.clear();
+
+		bar->setText(QString("http://127.0.0.1:%1/locked").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		const QString kept = said("from crawlers too");
+		check(!kept.isEmpty(), QString("a page nobody is sent more of says so (%1)").arg(kept));
+		check(text_of_page().contains("Subscribe to read"), "and is left as it was sent");
 	}
 
 	section("a marked request goes out rewritten, in a real engine");

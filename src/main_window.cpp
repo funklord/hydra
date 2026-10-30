@@ -31,6 +31,7 @@
 #include "web_view_backend.h"
 #include "web_view_factory.h"
 #include "address_input.h"
+#include "agent_fetch.h"
 #include "scheme_rules.h"
 #include "scriptlets.h"
 #include "user_agent.h"
@@ -4976,6 +4977,8 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 		// after this hash, and a slot run then wrote into freed memory --
 		// test_rotation crashed tearing down its window.
 		m_reader.remove(view);
+		m_crawler_copy.remove(view);
+		m_crawler_pending.remove(view);
 		connect(view, &web_view_backend::load_finished, this, [this, view](bool ok) {
 			// A tab in reader mode leaves it on the load after the reader
 			// document's own: a link followed, Back, a reload.
@@ -4984,6 +4987,8 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 				if (view == current_view())
 					refresh_reader_action();
 			}
+			if (ok)
+				try_crawler_copy(view);
 			// Removed *after* the chrome is told, because
 			// `on_load_finished` reads when this load began.
 			if (view == current_view())
@@ -5939,6 +5944,100 @@ void main_window::toggle_reader() {
 		m_reader.insert(v, reader_state{ page, 0 });
 		v->show_html(reader_page::build(a, page, dark), page);
 		refresh_reader_action();
+	});
+}
+
+// **A page that keeps its article from the person, shown as a crawler is
+// sent it** -- the holder's decision, 2026-10-30: "we load pages as crawlers
+// if it helps". Only for a page that says in its JSON-LD that it is not free
+// and whose paid part is not in the tab: a subscriber who is signed in has
+// that part, and is never asked about. Then the address is fetched as each
+// client in `agent_fetch`'s catalog, with no cookies, and an answer that
+// holds more (`agent_fetch::helps`) is shown in the tab without its scripts,
+// at the page's own address. The status line says so, and a reload shows
+// the page as sent to the person.
+void main_window::try_crawler_copy(web_view_backend *view) {
+	if (!view || !view->can_show_html())
+		return;
+	const QUrl page = view->url();
+	// The copy's own load, and any later load of the same page in this tab
+	// -- the reload that shows it as sent to the person -- are left alone;
+	// going anywhere else ends it.
+	if (auto it = m_crawler_copy.find(view); it != m_crawler_copy.end()) {
+		if (it->page == page) {
+			++it->loads;
+			return;
+		}
+		m_crawler_copy.erase(it);
+	}
+	if (m_reader.contains(view) ||
+	    (page.scheme() != QLatin1String("http") && page.scheme() != QLatin1String("https")) ||
+	    m_crawler_refused.contains(page.host()))
+		return;
+	QPointer<QObject> alive(view);
+	if (m_crawler_pending.value(view) == page)
+		return;
+	// The page itself is sent only when its JSON-LD says it is not free:
+	// every load asks, and the rest are answered with nothing rather than
+	// with their whole document (908 KB for one news front page).
+	m_crawler_pending.insert(view, page);
+	view->run_probe(QStringLiteral(
+	  "(function () {"
+	  "  var ld = '';"
+	  "  document.querySelectorAll('script[type=\"application/ld+json\"]')"
+	  "    .forEach(function (s) { ld += s.textContent; });"
+	  "  if (!/\"isAccessibleForFree\"\\s*:\\s*\"?false/i.test(ld)) return '';"
+	  "  var h = document.documentElement.outerHTML;"
+	  "  return h.length < 4000000 ? h : ''; })()"),
+	  [this, view, alive, page](const QString &html) {
+		if (!alive)
+			return;
+		if (view->url() != page || html.isEmpty()) {
+			m_crawler_pending.remove(view);
+			return;
+		}
+		const agent_fetch::reading tab =
+		  agent_fetch::read(QStringLiteral("this tab"), 200, html.toUtf8());
+		if (!tab.declared_paywall || tab.paywalled_present) {
+			m_crawler_pending.remove(view);
+			return;
+		}
+		auto *fetcher = new agent_fetcher(this);
+		fetcher->fetch_all(page, [this, view, alive, page, tab, fetcher](
+		                           const QList<agent_fetch::reading> &answers) {
+			fetcher->deleteLater();
+			if (!alive)
+				return;
+			m_crawler_pending.remove(view);
+			if (view->url() != page || m_reader.contains(view))
+				return;
+			const int i = agent_fetch::helps(tab, answers);
+			const QString html = i < 0 ? QString() : agent_fetch::servable(answers[i]);
+			if (html.isEmpty()) {
+				m_crawler_refused.insert(page.host());
+				if (view == current_view())
+					m_status->showMessage(
+					  QString("%1 keeps the rest of this article from crawlers "
+					          "too.").arg(page.host()), 6000);
+				return;
+			}
+			const QString &name = answers[i].agent;
+			const QString who =
+			  name == QLatin1String("browser")     ? QStringLiteral("a first-time visitor")
+			: name == QLatin1String("from-google") ? QStringLiteral("a visitor from Google")
+			: name == QLatin1String("googlebot")   ? QStringLiteral("Google's crawler")
+			: name == QLatin1String("bingbot")     ? QStringLiteral("Bing's crawler")
+			: name == QLatin1String("facebook")    ? QStringLiteral("Facebook's link preview")
+			: name == QLatin1String("twitterbot")  ? QStringLiteral("X's link preview")
+			                                       : name;
+			m_crawler_copy.insert(view, reader_state{ page, 0 });
+			view->show_html(html, page);
+			if (view == current_view())
+				m_status->showMessage(
+				  QString("Showing the article as %1 is sent it: the page sent "
+				          "you a teaser. Reload to see it as sent to you.")
+				    .arg(who), 12000);
+		});
 	});
 }
 
@@ -8650,8 +8749,26 @@ void main_window::reload_page() {
 		m_status->showMessage("Stopped.", 3000);
 		return;
 	}
-	if (web_view_backend *v = current_view())
-		v->reload();
+	web_view_backend *v = current_view();
+	if (!v)
+		return;
+	// **A document this program put in the tab reloads as itself**: both
+	// backends show it from data with the page's address as its base, and
+	// reloading data shows the data again. So a reload of a crawler's copy
+	// or a reader document asks for the page, which is what the person
+	// means and what the status line promised.
+	if (auto it = m_crawler_copy.find(v); it != m_crawler_copy.end() && it->page == v->url()) {
+		v->load(it->page);
+		return;
+	}
+	if (auto it = m_reader.find(v); it != m_reader.end()) {
+		const QUrl page = it->page;
+		m_reader.erase(it);
+		v->load(page);
+		refresh_reader_action();
+		return;
+	}
+	v->reload();
 }
 
 void main_window::mark_dirty() {

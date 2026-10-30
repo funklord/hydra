@@ -39293,9 +39293,67 @@ person gets. So nothing reachable holds the rest.
 a server that answers by agent and sets a cookie (a second run sends none
 back); `test_investigation` carries the action to the next prompt and a
 host without it answering why; `try_investigate` runs it through the real
-window and tab. Not yet: a rule kind that acts on what it finds -- serving
-a page as one of these clients -- which is a decision about what hydra
-pretends to be, and the holder's.
+window and tab.
+
+### A paywalled page shown as a crawler is sent it
+
+**Decided by the holder on 2026-10-30: "we load pages as crawlers if it
+helps."** That was the question the section above left open -- what
+hydra may pretend to be -- and the answer is now built, automatically,
+with nothing to switch on:
+
+- **When**: a page has finished loading, says in its JSON-LD that it is not
+  free, and the part it declares paywalled is not in the tab (read from
+  the tab's DOM in the isolated world, by the same `agent_fetch::read`
+  that reads the fetched answers, so the two are measured alike). A
+  subscriber who is signed in has that part, and nothing is fetched. The
+  JSON-LD is looked at inside the page first, so every other page answers
+  with nothing rather than its whole document (908 KB for one front page,
+  across JNI on Android); and a page already being asked about is not
+  asked again, since Android reports one load finishing twice and the
+  first version fetched everything twice.
+- **A bare class is a class**: `class=paywalled`, as a minifier writes it,
+  was not recognised as the paid part, so on the emulator Googlebot's
+  whole article read as a teaser and was not shown -- found by the
+  emulator check, whose page happened to write it that way.
+- **What**: the address is fetched as every client in the catalog, with no
+  cookies (`agent_fetcher`), and `agent_fetch::helps` picks the answer
+  that is the page (2xx, not a bot check) and either carries the paid part
+  or clearly more text -- half as much again and 1,000 characters more,
+  so a longer sidebar is not taken for the article.
+- **Shown** in the tab at the page's own address, without its scripts --
+  which are what put a wall back over text the server sent -- and with the
+  declared part forced visible, since a stylesheet can hide it as well
+  (`agent_fetch::servable`). The status line names whose copy it is, and
+  **Reload shows the page as sent to the person**. That needed
+  `reload_page` to ask for the page: both backends show a built document
+  from data, and reloading data shows the data again. Reader mode had the
+  same fault, unnoticed, and takes the same branch.
+- **A site that sends nobody more** is said so once ("keeps the rest of
+  this article from crawlers too") and not asked again this session,
+  rather than costing six fetches per article.
+
+**Measured against real sites the same day, with curl**: Dagens Nyheter
+declares its articles not free and sends every client the same teaser,
+Googlebot included (and refuses bingbot, Facebook's, X's and a Google
+referer outright on one article, 406); SvD's sampled pages were free. So
+on these, as on Dagens ETC, the server keeps the rest -- the feature is
+for the sites that do send a crawler more, and costs the others one round
+of fetches per session.
+
+**Proved**: `test_agent_fetch` (29) -- a bare class, the choice from a teaser and from a
+full tab, a little more text against a great deal, bot checks and
+refusals never chosen, the longest of several, the copy without its
+scripts but with its JSON-LD, the paid part forced visible in the head,
+and nothing offered past the 2 MB a view takes. `try_scriptlets`, in the
+real window and engine: a page whose server sends Googlebot twelve more
+paragraphs, under a stylesheet and a script that hide them, is shown with
+all twelve; the server saw the page once and once per client; Reload
+shows the teaser; a page nobody is sent more of says so and is left as
+it was. Breaking the forced-visible style turns the twelve-paragraph
+check red (58 characters shown). On Android, `tool/emulator_checks.py`
+serves the same page through `adb reverse`, and hydra's own fetches reach
+it: the tab shows all twelve paragraphs.
 
 ## The AI load knob
 

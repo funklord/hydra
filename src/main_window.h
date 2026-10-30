@@ -694,6 +694,7 @@ public:
 	// Reader mode (Ctrl+Alt+R): the article alone, in readable type, in place
 	// of the page, or the page back again. Public so a test drives it.
 	void toggle_reader();
+	void try_crawler_copy(web_view_backend *view);
 	void refresh_reader_action();
 
 	// Save a copy of the current page to the downloads folder (Ctrl+Shift+S).
@@ -914,6 +915,17 @@ public:
 		int  loads = 0;
 	};
 	QHash<web_view_backend *, reader_state> m_reader;
+	// **Pages shown as a crawler is sent them** (`try_crawler_copy`): the
+	// page each tab's copy stands in for, and the loads since -- the first is
+	// the copy itself; any later one of the same page (Reload asks for the
+	// page, `reload_page`) shows it as sent to the person and is left alone. Hosts where no client was
+	// sent more are not asked again this session: a site that keeps the rest
+	// on its server for everybody costs six fetches per article otherwise.
+	QHash<web_view_backend *, reader_state> m_crawler_copy;
+	QSet<QString> m_crawler_refused;
+	// The page each tab is being asked about now: a load can finish twice
+	// (Android reports it so), and the second must not fetch it all again.
+	QHash<web_view_backend *, QUrl> m_crawler_pending;
 	QAction            *m_save_page_action = nullptr;
 	QAction            *m_close_tab_action = nullptr;
 	bool                m_page_fullscreen = false;

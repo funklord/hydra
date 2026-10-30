@@ -101,11 +101,67 @@ int main(int argc, char **argv) {
 		      "read through @graph, and the part is found by its class: " + describe(r));
 	}
 
+	section("the paid part named by a bare class, as a minifier writes it");
+	{
+		const reading r = read("googlebot", 200,
+		  "<script type=\"application/ld+json\">{\"isAccessibleForFree\":false,\"hasPart\":"
+		  "{\"isAccessibleForFree\":false,\"cssSelector\":\".paywalled\"}}</script>"
+		  "<div class=paywalled><p>The paid part, with its class written without quotes.</p></div>");
+		check(r.paywalled_present, "class=paywalled is the paid part: " + describe(r));
+		const reading other = read("googlebot", 200,
+		  "<script type=\"application/ld+json\">{\"isAccessibleForFree\":false,\"hasPart\":"
+		  "{\"isAccessibleForFree\":false,\"cssSelector\":\".paywalled\"}}</script>"
+		  "<div class=paywalled-banner><p>A banner whose class only begins the same way.</p></div>");
+		check(!other.paywalled_present, "and class=paywalled-banner is not");
+	}
+
 	section("a bot check instead of the page");
 	{
 		const reading r = read("bingbot", 247, k_challenge);
 		check(r.challenge && r.paragraphs == 0, describe(r));
 		check(describe(r).contains("bot check"), "said as such");
+	}
+
+	section("what counts as more, and what is shown");
+	{
+		const reading tab = read("this tab", 200, k_teaser);
+		// More text with no paid part in it: helps only when it is clearly
+		// more -- a longer sidebar is not the article.
+		auto with = [](int paragraphs) {
+			QByteArray b = "<html><body>";
+			for (int i = 0; i < paragraphs; ++i)
+				b += "<p>A paragraph of some other text, long enough to be counted here.</p>";
+			return read("bingbot", 200, b + "</body></html>");
+		};
+		check(helps(tab, { with(3) }) == -1, "a little more text is not taken for the article");
+		check(helps(tab, { with(30) }) == 0, "a great deal more is");
+		reading blocked = with(30);
+		blocked.challenge = true;
+		reading failed = with(30);
+		failed.status = 403;
+		check(helps(tab, { blocked, failed }) == -1, "a bot check or a refusal never is");
+		check(helps(tab, { with(20), with(30), with(25) }) == 1, "of several, the longest");
+
+		reading r = read("googlebot", 200,
+		  QByteArray("<html><head><script>putTheWallBack()</script>"
+		             "<script type=\"application/ld+json\">{\"isAccessibleForFree\":false,"
+		             "\"hasPart\":{\"isAccessibleForFree\":false,\"cssSelector\":\".paywalled\"}}"
+		             "</script></head><body><div class=\"paywalled\"><p>The rest.</p></div>"
+		             "<SCRIPT src=\"/wall.js\"></SCRIPT></body></html>"));
+		r.body = QByteArray("<html><head><script>putTheWallBack()</script>"
+		             "<script type=\"application/ld+json\">{}</script></head><body>"
+		             "<div class=\"paywalled\"><p>The rest.</p></div>"
+		             "<SCRIPT src=\"/wall.js\"></SCRIPT></body></html>");
+		const QString shown = servable(r);
+		check(!shown.contains("putTheWallBack") && !shown.contains("wall.js"),
+		      "the copy is shown without its scripts: " + shown.left(160));
+		check(shown.contains("application/ld+json") && shown.contains("The rest."),
+		      "its JSON-LD and its text stay");
+		check(shown.contains(".paywalled{display:block!important") &&
+		        shown.indexOf(".paywalled{") < shown.indexOf("</head>"),
+		      "and the paid part is forced visible, in the head");
+		r.body = QByteArray(1600 * 1000, 'x');
+		check(servable(r).isEmpty(), "past what a view takes, nothing is offered");
 	}
 
 	section("the catalog is closed and named");
@@ -159,6 +215,18 @@ int main(int argc, char **argv) {
 			cookie = cookie || server.heads[i].toLower().contains("\r\ncookie:");
 		check(done && server.heads.size() == before + catalog().size() && !cookie,
 		      "a second run sends no cookie the first was given");
+
+		// **Which answer to show** (`helps`): from a teaser, the crawler's
+		// with the paid part; from a tab that has it, none.
+		const reading teaser = read("this tab", 200, k_teaser);
+		const int pick = helps(teaser, got);
+		check(pick >= 0 && got[pick].agent == QLatin1String("googlebot"),
+		      QString("from the teaser, googlebot's answer is the one that helps (%1)")
+		        .arg(pick >= 0 ? got[pick].agent : QStringLiteral("none")));
+		check(helps(read("this tab", 200, k_full), got) == -1,
+		      "and from a tab that already has the paid part, none does");
+		check(!got[pick].body.isEmpty() && got[pick].url == url,
+		      "the answer keeps what was sent and where from");
 
 		done = false;
 		f.fetch_all(QUrl("file:///etc/passwd"), [&](const QList<reading> &r) { got = r; done = true; });

@@ -103,8 +103,11 @@ reading read(const QString &agent, int status, const QByteArray &body) {
 	static const QRegularExpression cls(QStringLiteral("^\\.([A-Za-z0-9_-]+)$"));
 	const QRegularExpressionMatch m = cls.match(r.paywalled_selector.trimmed());
 	if (m.hasMatch()) {
+		// Quoted, among other classes, or bare -- `class=paywalled` is valid
+		// HTML and what a minifier writes, and missing it read a crawler's
+		// whole article as a teaser (emulator, 2026-10-30).
 		const QRegularExpression on(
-		  QStringLiteral("class\\s*=\\s*[\"'][^\"']*(?<![\\w-])%1(?![\\w-])")
+		  QStringLiteral("class\\s*=\\s*(?:[\"'][^\"']*(?<![\\w-])%1(?![\\w-])|%1(?![\\w-]))")
 		    .arg(QRegularExpression::escape(m.captured(1))));
 		r.paywalled_present = on.match(html).hasMatch();
 	}
@@ -144,6 +147,43 @@ QString describe(const reading &r) {
 	if (!r.opening.isEmpty())
 		s += QString("; opens \"%1\"").arg(r.opening.left(80));
 	return s;
+}
+
+int helps(const reading &tab, const QList<reading> &answers) {
+	int best = -1;
+	for (int i = 0; i < answers.size(); ++i) {
+		const reading &r = answers[i];
+		if (r.status < 200 || r.status >= 300 || r.challenge || !r.error.isEmpty() ||
+		    r.text_chars <= tab.text_chars)
+			continue;
+		const bool rest = r.paywalled_present && !tab.paywalled_present;
+		const bool more = r.text_chars >= tab.text_chars + qMax(1000, tab.text_chars / 2);
+		if ((rest || more) && (best < 0 || r.text_chars > answers[best].text_chars))
+			best = i;
+	}
+	return best;
+}
+
+QString servable(const reading &r) {
+	QString html = QString::fromUtf8(r.body);
+	static const QRegularExpression script(
+	  QStringLiteral("<script\\b(?![^>]*application/ld\\+json)[^>]*>.*?</script\\s*>"),
+	  QRegularExpression::CaseInsensitiveOption | QRegularExpression::DotMatchesEverythingOption);
+	html.remove(script);
+	static const QRegularExpression cls(QStringLiteral("^\\.([A-Za-z0-9_-]+)$"));
+	const QRegularExpressionMatch m = cls.match(r.paywalled_selector.trimmed());
+	if (m.hasMatch()) {
+		const QString style =
+		  QString("<style>.%1{display:block!important;visibility:visible!important;"
+		          "max-height:none!important;overflow:visible!important;"
+		          "opacity:1!important;filter:none!important}</style>").arg(m.captured(1));
+		const int head = html.indexOf(QLatin1String("</head>"), 0, Qt::CaseInsensitive);
+		html.insert(head >= 0 ? head : 0, style);
+	}
+	// The data url is base64: four bytes for every three.
+	if (html.toUtf8().size() / 3 * 4 > 2000 * 1000)
+		return QString();
+	return html;
 }
 
 }  // namespace agent_fetch
@@ -199,7 +239,10 @@ void agent_fetcher::fetch_all(
 				r.agent = name;
 				r.error = reply->errorString();
 			} else {
-				r = agent_fetch::read(name, status, reply->readAll().left(k_max_bytes));
+				const QByteArray body = reply->readAll().left(k_max_bytes);
+				r = agent_fetch::read(name, status, body);
+				r.body = body;
+				r.url = reply->url();
 				// A redirect still standing was refused, not empty: from
 				// https to plain http, or past the limit.
 				// The header, not RedirectionTargetAttribute: Qt leaves that
