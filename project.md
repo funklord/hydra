@@ -28698,6 +28698,32 @@ whatever the freed bytes held. The factory now drops a view from its list
 when the view is destroyed; 598 pass under ASan. The two other drivers
 that keep view lists were read for the same fault and do not have it.
 
+**And "clean under UBSan" was not a claim that sweep could make.** UBSan
+prints a report and carries on, and the runner keeps a suite's output only
+when it fails -- so a report in a passing suite was printed to nobody.
+`test_fuzz` (below) printed its own output and showed one: `parse_call`
+flagged its arguments with `1 << i`, and a rule of 33 arguments shifted an
+int by 32, which is undefined (on x86 it wrapped, judging argument 32 by
+argument 0's flags). Bounded at 31, and `UBSAN_OPTIONS` now carries
+`halt_on_error=1`, so a report fails its suite: with the bound removed,
+`make test-sanitize T=test_fuzz` goes red on that line; with it, all 54
+suites pass.
+
+### The parsers fed mutated input (`test_fuzz`)
+
+Nothing in the tree fed the parsers anything but well-formed fixtures,
+while each reads what other people write: subscription lists, scriptlet
+calls, procedural selectors, HLS and DASH manifests, fetched pages.
+`test_fuzz` mutates seeds for nine of them -- truncation, a flipped byte, a
+span deleted or repeated, a token of the grammar spliced in, a long run of
+one character -- from a fixed seed, so a failure is a reproduction, and
+fails if any input takes over 200 ms. Run alone it is a moment of
+`make test`; `HYDRA_FUZZ_SECONDS` and `HYDRA_FUZZ_CORPUS` make it a hunt.
+**Measured 2026-10-30**: a minute per parser under ASan and UBSan, seeded
+with the holder's seven lists (5.2 MB) -- between 6,494 and 7.8 million
+inputs each, nothing slower than 109 ms, no memory error, and the one shift
+above.
+
 ### The first sweep, and the one suite its own guard killed
 
 Every offline suite under ASan and UBSan, 2026-09-29: **39 clean on the first
