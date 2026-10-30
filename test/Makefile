@@ -394,8 +394,11 @@ $(BUILD_DIR)/%.o: live/%.cpp $(TMOC_INC) | $(BUILD_DIR)
 # being linked and `$*` is not available in a prerequisite list on the first
 # pass. `$$(OBJS_$$*)` is evaluated on the second, by which point it is.
 .SECONDEXPANSION:
-$(BUILD_DIR)/%: $(BUILD_DIR)/%.o $$(OBJS_$$*)
-	$(CXX) $(LDFLAGS) $< $(OBJS_$*) $(EXTRA_OBJS) $(LDLIBS) -o $@
+# **Every test binary carries its own deadline** (`watchdog.cpp`), so one run
+# directly rather than through a target is bounded too.
+WATCHDOG_OBJ = $(BUILD_DIR)/watchdog.o
+$(BUILD_DIR)/%: $(BUILD_DIR)/%.o $$(OBJS_$$*) $(WATCHDOG_OBJ)
+	$(CXX) $(LDFLAGS) $< $(OBJS_$*) $(EXTRA_OBJS) $(WATCHDOG_OBJ) $(LDLIBS) -o $@
 
 $(BUILD_DIR) $(BUILD_DIR)/app $(BUILD_DIR)/moc $(BUILD_DIR)/tmoc:
 	@mkdir -p $@
