@@ -132,8 +132,9 @@ public:
 	// the same terms as the lists: skipped for a site whose `ads` setting is
 	// allow.
 	void set_network_rules(const QList<network_rule> &rules) { m_rules.replace(rules); }
-	// **A page's address with the lists' `$removeparam` removals made**, or
-	// an empty url when nothing is taken out. Asked by each backend about a
+	// **Where a navigation should really go**: past a tracking redirect a
+	// `$urlskip` rule reads the destination out of, and with the lists'
+	// `$removeparam` removals made -- or an empty url when neither applies. Asked by each backend about a
 	// navigation before it happens: the desktop's interceptor redirects the
 	// page or frame request, Android's navigation hook loads the clean one
 	// instead. Answers to the shield as `decide` does -- a site whose ads are

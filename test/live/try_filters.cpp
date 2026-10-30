@@ -311,6 +311,29 @@ int main(int argc, char *argv[]) {
 		filter.set_network_rules({});
 	}
 
+	section("a list's $urlskip goes past a tracking redirect to where it leads");
+	{
+		QList<network_rule> rules;
+		network_rule r;
+		parse_network_rule("||127.0.0.1^*/out?$doc,urlskip=?to", &r, nullptr);
+		rules << r;
+		filter.set_network_rules(rules);
+		server.asked.clear();
+		const QString dest = QString("http://127.0.0.1:%1/pageS?id=9").arg(server.port);
+		bar->setText(QString("http://127.0.0.1:%1/out?to=%2").arg(server.port)
+		               .arg(QString::fromLatin1(QUrl::toPercentEncoding(dest))));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		spin(2500);
+		bool went = false, visited = false;
+		for (const QString &a : std::as_const(server.asked)) {
+			went = went || a == "/pageS?id=9";
+			visited = visited || a.startsWith("/out");
+		}
+		check(went && !visited, QString("the destination was asked for, the redirect never (%1)")
+		                          .arg(server.asked.join(" ")));
+		filter.set_network_rules({});
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

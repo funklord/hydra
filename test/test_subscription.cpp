@@ -1595,6 +1595,67 @@ int main(int argc, char **argv) {
 		      "and the site's own script is first-party, which the rule does not name");
 	}
 
+	section("$urlskip: a tracking redirect is gone past, to where it leads");
+	{
+		network_rule r;
+		QString why;
+		check(parse_network_rule("||out.example/st?$doc,urlskip=?url", &r, &why) == parsed::option &&
+		        r.act == network_rule::action::urlskip && r.steps == "?url",
+		      QString("read with its steps (%1)").arg(why));
+		check(parse_network_rule("||x.example^$urlskip=?u -rot13", &r, &why) == parsed::refused,
+		      QString("a step this reader does not know is refused (%1)").arg(why));
+		QList<network_rule> rules;
+		for (const char *line : { "||out.example/st?$doc,urlskip=?url",
+		                          "||b64.example/go?$urlskip=?t -base64",
+		                          "||path.example/dl/$doc,urlskip=/\\/dl\\/(.+)/ -base64",
+		                          "||bare.example/r/$urlskip=/\\/r\\/(.+)/ +https",
+		                          "||media.example^$media,urlskip=?u",
+		                          "||out.example/st?$doc,urlskip=?url",
+		                          "@@||out.example/st?keep$urlskip=?url",
+		                          "$removeparam=utm_source" }) {
+			if (parse_network_rule(QString::fromLatin1(line), &r, nullptr) == parsed::option)
+				rules << r;
+		}
+		network_rule_set set;
+		set.replace(rules);
+		auto skip = [&](const QString &url) {
+			network_rule_set::request q;
+			q.url = url;
+			q.lower = url.toLower();
+			q.host = QUrl(url).host();
+			q.site = q.host;
+			q.type = request_type::other;
+			return set.skip(q);
+		};
+		check(skip("https://out.example/st?url=https%3A%2F%2Fdest.example%2Fa%3Fb%3D1") ==
+		        "https://dest.example/a?b=1",
+		      "a parameter's value, decoded: " +
+		        skip("https://out.example/st?url=https%3A%2F%2Fdest.example%2Fa%3Fb%3D1"));
+		const QString b64 = QString::fromLatin1(QByteArray("https://dest.example/x").toBase64());
+		check(skip("https://b64.example/go?t=" + b64) == "https://dest.example/x",
+		      "and one in base64");
+		check(skip("https://path.example/dl/" + b64) == "https://dest.example/x",
+		      "a regex on the path, then base64");
+		check(skip("https://bare.example/r/dest.example/y") == "https://dest.example/y",
+		      "+https gives a bare host its scheme");
+		check(skip("https://out.example/st?url=javascript:alert(1)").isEmpty() &&
+		        skip("https://out.example/st?url=file:///etc/passwd").isEmpty() &&
+		        skip("https://out.example/st?nothing=1").isEmpty(),
+		      "and nothing but an http(s) address it found is gone to");
+		check(skip("https://media.example/?u=https://dest.example/").isEmpty(),
+		      "a skip for another type ($media) does not touch a navigation");
+		check(skip("https://out.example/st?keep=1&url=https://dest.example/").isEmpty(),
+		      "an exception lifts it");
+
+		policy_engine pol;
+		request_filter f(&pol);
+		f.set_network_rules(rules);
+		check(f.clean_navigation(QUrl("https://out.example/st?url=https%3A%2F%2Fdest.example%2F%3Futm_source%3Dx%26id%3D3")) ==
+		        QUrl("https://dest.example/?id=3"),
+		      "the filter skips, then removes on the destination: " +
+		        f.clean_navigation(QUrl("https://out.example/st?url=https%3A%2F%2Fdest.example%2F%3Futm_source%3Dx%26id%3D3")).toString());
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

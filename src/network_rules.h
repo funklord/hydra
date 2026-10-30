@@ -92,20 +92,30 @@ enum : unsigned {
 //    uBlock's default when no type is named -- since a request a page makes
 //    for itself was built with its parameters on purpose, and Android can
 //    change only where a navigation goes. A rule naming another type is
-//    kept and not applied.
+//    kept and not applied;
+//  * **urlskip**: `||ay.live/st/*^url=http$doc,urlskip=?url` goes straight
+//    to the destination a tracking redirect carries in its own address,
+//    without visiting it. The steps read it out: `?name` a parameter's
+//    value, `&N` the Nth's, `/regex/` the first group, `-base64`,
+//    `-safebase64`, `-uri` and `-uricomponent` decode, `+https` (`+http`)
+//    adds the scheme where none is. `-blocked`, a skip only where the page
+//    would be blocked, is refused. Nothing comes from the list itself, and a result that is not an
+//    http or https address is no skip. 222 lines of the default lists,
+//    2026-10-30. Navigations only, as removeparam.
 //
 // `$badfilter` cancels the rule it repeats and is applied across every list
 // by whoever assembles them (`apply_badfilters`), since the rule it cancels
 // is usually in another list.
 struct network_rule {
-	enum class action { block, allow, redirect, removeparam };
+	enum class action { block, allow, redirect, removeparam, urlskip };
 	action      act = action::block;
 	QString     text;        // the line, for $badfilter to name it by
 	QString     pattern;     // the network half, as the list wrote it
 	QString     host;        // for `||host...` patterns, the index key
 	QString     resource;    // for a redirect: the canonical name
 	QString     param;       // for removeparam: name, /regex/, ~name, or empty for all
-	bool        exception = false;   // removeparam: an `@@` line, lifting one
+	bool        exception = false;   // removeparam, urlskip: an `@@` line, lifting one
+	QString     steps;       // for urlskip: how the destination is read from the address
 	int         priority = 0;
 	bool        rule_only = false;   // `redirect-rule=`: only where blocked anyway
 	bool        important = false;   // a block no exception reaches
@@ -181,6 +191,8 @@ public:
 	// The address with what `removeparam` rules take out of it removed, or
 	// empty when they take nothing. For a navigation: see the action.
 	QString clean(const request &r) const;
+	// Where a `urlskip` rule says this navigation is really going, or empty.
+	QString skip(const request &r) const;
 	// Whether a `$document` exception exempts this page whole.
 	bool site_allowed(const QString &site) const;
 

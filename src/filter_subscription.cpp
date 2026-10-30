@@ -24,6 +24,8 @@ QString subscription_read::summary() const {
 		s += QString(", %1 with options").arg(option_blocks);
 	if (removeparams > 0)
 		s += QString(", %1 parameter removals").arg(removeparams);
+	if (urlskips > 0)
+		s += QString(", %1 redirect skips").arg(urlskips);
 	if (exceptions > 0)
 		s += QString(", %1 exception(s)").arg(exceptions);
 	if (redirects > 0)
@@ -514,6 +516,8 @@ subscription_read read(const QString &text, int previous_rules,
 					++rep.exceptions;
 				else if (option.act == network_rule::action::removeparam)
 					++rep.removeparams;
+				else if (option.act == network_rule::action::urlskip)
+					++rep.urlskips;
 				else
 					++rep.option_blocks;
 				rep.option_rules.push_back(option);

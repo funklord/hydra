@@ -38695,6 +38695,21 @@ load them from hosts nobody could list in advance; 259 now read. A
 narrowing like the others, checked in `applies`. `test_subscription`
 holds the spared host, a subdomain of one, and the site's own script.
 
+**And `$urlskip`, the same day**: `||ay.live/st/*^url=http$doc,urlskip=?url`
+goes straight to the destination a tracking redirect carries in its own
+address, without visiting the redirect. The steps read it out -- `?name`,
+`&N`, `/regex/` (first group), `-base64`, `-safebase64`, `-uri`,
+`-uricomponent`, `+https`, `+http` -- and **nothing comes from the list
+itself**: the destination is always read out of the address, and a result
+that is not an http or https address is no skip. `-blocked` (a skip only
+where the page would be blocked) is refused. Navigations only, in the
+same list as the removals; `clean_navigation` skips first and removes on
+the destination, since Android loads the answer without asking again.
+215 of the lists' 243 lines read, the rest a `to=` option, a regex rule or
+a step not read. `test_subscription` holds the steps and the refusals
+(`javascript:`, `file:`, nothing found); `try_filters` goes past a
+redirect through the real interceptor, the redirect never asked for.
+
 ### `$popup`: a window the lists name is refused, clicked or not
 
 **What the lists still could not say, counted 2026-10-29** over the holder's

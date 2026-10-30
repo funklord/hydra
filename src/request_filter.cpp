@@ -95,7 +95,7 @@ bool request_filter::blocks_popup(const QUrl &url, const QString &opener_host) c
 
 QUrl request_filter::clean_navigation(const QUrl &url) const {
 	const QString host = url.host();
-	if (!m_engine || !url.hasQuery() || m_rules.size() == 0 ||
+	if (!m_engine || m_rules.size() == 0 ||
 	    m_engine->is_allowed(feature::ads, host) || m_rules.site_allowed(host))
 		return QUrl();
 	network_rule_set::request q;
@@ -104,8 +104,21 @@ QUrl request_filter::clean_navigation(const QUrl &url) const {
 	q.host = host;
 	q.site = host;
 	q.type = request_type::other;
+	// A skip first, then the removals on wherever it leads -- Android loads
+	// the answer without asking again, so it has to be finished.
+	const QString skipped = m_rules.skip(q);
+	if (!skipped.isEmpty()) {
+		const QUrl to(skipped, QUrl::StrictMode);
+		if (m_engine->is_allowed(feature::ads, to.host()) || m_rules.site_allowed(to.host()))
+			return to;
+		q.url = skipped;
+		q.lower = q.url.toLower();
+		q.host = q.site = to.host();
+	}
 	const QString clean = m_rules.clean(q);
-	return clean.isEmpty() ? QUrl() : QUrl(clean, QUrl::StrictMode);
+	if (clean.isEmpty())
+		return skipped.isEmpty() ? QUrl() : QUrl(skipped, QUrl::StrictMode);
+	return QUrl(clean, QUrl::StrictMode);
 }
 
 request_decision request_filter::decide(const request_context &ctx) const {

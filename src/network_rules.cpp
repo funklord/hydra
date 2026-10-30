@@ -5,6 +5,7 @@
 
 #include <QRegularExpression>
 #include <QUrl>
+#include <QUrlQuery>
 
 namespace {
 
@@ -155,11 +156,18 @@ parsed parse_network_rule(const QString &line, network_rule *out, QString *why,
 		if (!h.endsWith(QLatin1Char('.')))
 			r.host = h.toLower();
 	}
-	bool badfilter = false, match_case = false, removes = false;
+	bool badfilter = false, match_case = false, removes = false, skips = false;
 	for (const QString &raw : options.split(QLatin1Char(','))) {
 		const QString o = raw.trimmed();
 		if (o.isEmpty())
 			continue;
+		if (o.startsWith(QLatin1String("urlskip="))) {
+			r.steps = o.mid(8).trimmed();
+			if (r.steps.isEmpty())
+				return refuse(QStringLiteral("an urlskip with no steps"));
+			skips = true;
+			continue;
+		}
 		if (o == QLatin1String("removeparam") || o == QLatin1String("queryprune") ||
 		    o.startsWith(QLatin1String("removeparam=")) ||
 		    o.startsWith(QLatin1String("queryprune="))) {
@@ -238,9 +246,10 @@ parsed parse_network_rule(const QString &line, network_rule *out, QString *why,
 		// whole, which is what the Unbreak list uses it for. As a block it
 		// would refuse the page itself, which this engine does not do.
 		if (o == QLatin1String("document") || o == QLatin1String("doc")) {
-			// A removal for the page is what a removal does anyway.
+			// A removal or a skip for the page is what either does anyway.
 			if (options.contains(QLatin1String("removeparam")) ||
-			    options.contains(QLatin1String("queryprune")))
+			    options.contains(QLatin1String("queryprune")) ||
+			    options.contains(QLatin1String("urlskip=")))
 				continue;
 			if (!allow)
 				return refuse(QStringLiteral("blocks a page itself ($document), "
@@ -272,6 +281,25 @@ parsed parse_network_rule(const QString &line, network_rule *out, QString *why,
 			          (kept.isEmpty() ? QString() : QLatin1Char('$') + kept.join(QLatin1Char(',')));
 		}
 		return parsed::badfilter;
+	}
+	if (skips) {
+		if (removes || r.act == network_rule::action::redirect)
+			return refuse(QStringLiteral("urlskip with another action"));
+		r.exception = allow;
+		r.act = network_rule::action::urlskip;
+		for (const QString &step : r.steps.split(QLatin1Char(' '), Qt::SkipEmptyParts)) {
+			const bool known = step.startsWith(QLatin1Char('?')) ||
+			  step.startsWith(QLatin1Char('&')) ||
+			  (step.startsWith(QLatin1Char('/')) && step.size() > 2 && step.endsWith(QLatin1Char('/'))) ||
+			  step == QLatin1String("-base64") || step == QLatin1String("-safebase64") ||
+			  step == QLatin1String("-uri") || step == QLatin1String("-uricomponent") ||
+			  step == QLatin1String("+https") || step == QLatin1String("+http");
+			if (!known)
+				return refuse(QString("an urlskip step this reader does not know (%1)").arg(step));
+			if (step.startsWith(QLatin1Char('/')) &&
+			    !QRegularExpression(step.mid(1, step.size() - 2)).isValid())
+				return refuse(QStringLiteral("an urlskip pattern that does not compile"));
+		}
 	}
 	if (removes) {
 		if (r.act == network_rule::action::redirect)
@@ -328,7 +356,8 @@ void network_rule_set::replace(const QList<network_rule> &rules) {
 	m_documents_by_host.clear();
 	for (int i = 0; i < m_rules.size(); ++i) {
 		const network_rule &r = m_rules[i];
-		if (r.act == network_rule::action::removeparam) {
+		if (r.act == network_rule::action::removeparam ||
+		    r.act == network_rule::action::urlskip) {
 			m_params << i;
 			continue;
 		}
@@ -512,6 +541,10 @@ network_rule_set::verdict network_rule_set::evaluate(const request &r) const {
 				if (!v.allow && applies(rule, r, same))
 					v.allow = true;
 				return false;
+			case network_rule::action::removeparam:
+			case network_rule::action::urlskip:
+				// Kept apart (`m_params`) and asked about navigations only.
+				return false;
 		}
 		return false;
 	});
@@ -591,7 +624,7 @@ QString network_rule_set::clean(const request &r) const {
 	bool all_lifted = false;
 	for (int i : m_params) {
 		const network_rule &rule = m_rules[i];
-		if (!applies_here(rule))
+		if (rule.act != network_rule::action::removeparam || !applies_here(rule))
 			continue;
 		if (rule.exception) {
 			if (rule.param.isEmpty())
@@ -644,6 +677,91 @@ QString network_rule_set::clean(const request &r) const {
 		return QString();
 	return r.url.left(q) + (kept.isEmpty() ? QString() : QLatin1Char('?') + kept.join(QLatin1Char('&'))) +
 	       fragment;
+}
+
+namespace {
+
+// One urlskip's steps, applied to the address. Empty when a step finds
+// nothing or the end is not an http or https address.
+QString run_steps(const QString &steps, const QString &url) {
+	QString v = url;
+	for (const QString &step : steps.split(QLatin1Char(' '), Qt::SkipEmptyParts)) {
+		if (step.startsWith(QLatin1Char('?')) || step.startsWith(QLatin1Char('&'))) {
+			const QUrl u(v);
+			if (!u.hasQuery())
+				return QString();
+			const QUrlQuery q(u);
+			const auto items = q.queryItems(QUrl::FullyDecoded);
+			QString found;
+			bool have = false;
+			if (step.startsWith(QLatin1Char('?'))) {
+				const QString name = step.mid(1);
+				for (const auto &it : items)
+					if (it.first == name) { found = it.second; have = true; break; }
+			} else {
+				const int n = step.mid(1).toInt() - 1;
+				if (n >= 0 && n < items.size()) { found = items[n].second; have = true; }
+			}
+			if (!have)
+				return QString();
+			v = found;
+		} else if (step.startsWith(QLatin1Char('/'))) {
+			const QRegularExpressionMatch m =
+			  QRegularExpression(step.mid(1, step.size() - 2)).match(v);
+			if (!m.hasMatch() || m.lastCapturedIndex() < 1)
+				return QString();
+			v = m.captured(1);
+		} else if (step == QLatin1String("-base64") || step == QLatin1String("-safebase64")) {
+			const QByteArray d = QByteArray::fromBase64(
+			  v.toLatin1(), step == QLatin1String("-safebase64")
+			                  ? QByteArray::Base64UrlEncoding : QByteArray::Base64Encoding);
+			v = QString::fromUtf8(d);
+		} else if (step == QLatin1String("-uri") || step == QLatin1String("-uricomponent")) {
+			v = QUrl::fromPercentEncoding(v.toUtf8());
+		} else if (step == QLatin1String("+https") || step == QLatin1String("+http")) {
+			if (!v.contains(QLatin1String("://")))
+				v = step.mid(1) + QStringLiteral("://") + v;
+		}
+	}
+	const QUrl out(v, QUrl::StrictMode);
+	if (!out.isValid() || out.host().isEmpty() ||
+	    (out.scheme() != QLatin1String("http") && out.scheme() != QLatin1String("https")))
+		return QString();
+	return out.toString(QUrl::FullyEncoded);
+}
+
+}  // namespace
+
+QString network_rule_set::skip(const request &r) const {
+	QReadLocker guard(&m_lock);
+	if (m_params.isEmpty())
+		return QString();
+	const bool same = same_party_of(r);
+	const unsigned nav = request_type::subdocument | request_type::other;
+	bool lifted = false;
+	QList<const network_rule *> skips;
+	for (int i : m_params) {
+		const network_rule &rule = m_rules[i];
+		if (rule.act != network_rule::action::urlskip ||
+		    (rule.types && !(rule.types & nav)))
+			continue;
+		network_rule plain = rule;
+		plain.types = 0;
+		if (!applies(plain, r, same))
+			continue;
+		if (rule.exception)
+			lifted = true;
+		else
+			skips << &rule;
+	}
+	if (lifted)
+		return QString();
+	for (const network_rule *rule : skips) {
+		const QString to = run_steps(rule->steps, r.url);
+		if (!to.isEmpty() && to != r.url)
+			return to;
+	}
+	return QString();
 }
 
 bool network_rule_set::site_allowed(const QString &site) const {
