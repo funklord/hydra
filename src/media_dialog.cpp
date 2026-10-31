@@ -634,8 +634,14 @@ void media_dialog::save(const media_item &item, bool separate) {
 	// HLS and DASH are saveable: fetch the segments and concatenate them
 	// (sec 11.2). Same engine, same refusal for an MPD whose audio is separate.
 	if (is_assemblable(item)) {
-		if (m_assembly)
-			m_assembly->save(item, m_ctx);
+		if (m_assembly) {
+			// Named for what it is (`stream_save_name`): the page's title
+			// where the playlist is only `index.m3u8`.
+			media_item named = item;
+			if (named.file_name.isEmpty())
+				named.file_name = stream_save_name(item, m_page_title) + ".ts";
+			m_assembly->save(named, m_ctx);
+		}
 		else
 			m_status->setText("<b>Nothing can assemble this stream.</b>");
 		return;

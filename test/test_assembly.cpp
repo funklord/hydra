@@ -495,6 +495,29 @@ int main(int argc, char **argv) {
 
 	// **One pattern for every row**, whatever found it -- the holder,
 	// 2026-10-23, finding names, addresses and descriptions side by side.
+	// **A saved stream is named for what it is.** Most sites call the
+	// playlist index.m3u8, so every save was index.ts -- and the second
+	// overwrote the first.
+	section("a saved stream is named for what it is");
+	{
+		media_item m;
+		m.kind = media_kind::hls;
+		m.url = QUrl("https://cdn.invalid/v/123/index.m3u8");
+		check(stream_save_name(m, "Rivers rise: a report / part 2") == "Rivers rise a report part 2",
+		      QString("index.m3u8 takes the page's title, made safe (%1)")
+		        .arg(stream_save_name(m, "Rivers rise: a report / part 2")));
+		m.url = QUrl("https://cdn.invalid/v/123/chunklist_w1234.m3u8");
+		check(stream_save_name(m, "News at six") == "News at six", "and so does a chunklist");
+		m.url = QUrl("https://cdn.invalid/v/eurovision-final-2026.m3u8");
+		check(stream_save_name(m, "Some page") == "eurovision-final-2026",
+		      "a playlist with a real name keeps it");
+		m.url = QUrl("https://cdn.invalid/v/master.m3u8");
+		check(stream_save_name(m, QString()) == "master", "with no title, the file's own name");
+		m.file_name = "20240101_Artist_-_Track_[x].mp4";
+		check(stream_save_name(m, "Some page") == "20240101_Artist_-_Track_[x]",
+		      "and the metadata's name wins over both");
+	}
+
 	section("every row is named in one pattern");
 	{
 		media_item seen;

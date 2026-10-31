@@ -146,6 +146,7 @@ class files(http.server.BaseHTTPRequestHandler):
 	seen = []
 	name = "held.bin"
 	torrent = b""   # a .torrent the BitTorrent check serves as a site would
+	hls = ""        # a directory of HLS files the media check serves
 
 	def do_GET(self):
 		files.seen.append((self.path, dict(self.headers)))
@@ -175,6 +176,18 @@ class files(http.server.BaseHTTPRequestHandler):
 			        + rest).encode()
 			self.send_response(200)
 			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/vpage"):
+			body = ("<!doctype html><meta name=viewport content='width=device-width'>"
+			        "<title>A video</title><h1>A video</h1><video controls autoplay muted "
+			        "playsinline width=320 src='/hls/index.m3u8'></video>").encode()
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/hls/") and files.hls:
+			f = os.path.join(files.hls, os.path.basename(self.path.split("?")[0]))
+			body = open(f, "rb").read() if os.path.isfile(f) else b""
+			self.send_response(200 if body else 404)
+			self.send_header("Content-Type", "application/vnd.apple.mpegurl"
+			                 if f.endswith(".m3u8") else "video/mp2t")
 		elif self.path.startswith("/desk"):
 			body = ("<!doctype html><title>Desk</title><p>A site this browser asks "
 			        "for as a desktop.</p>").encode()
@@ -646,6 +659,66 @@ def main():
 					               input=saved_policy, capture_output=True, timeout=30)
 				else:
 					adb("shell", "run-as", APP, "rm", "-f", policy)
+
+			print("\n== a video on a page is found and downloaded, its stream assembled ==")
+			# Media is one of the aims, and nothing on Android checked it. Four
+			# seconds of ffmpeg's test pattern cut into two HLS segments; the
+			# page plays it, the Media button counts it, and Download fetches
+			# the playlist and both segments and writes them as one file.
+			import shutil, tempfile
+			if not shutil.which("ffmpeg"):
+				print("  --    not checked: no ffmpeg on this machine to make a stream with")
+			else:
+				with tempfile.TemporaryDirectory() as hls_dir:
+					encoded = subprocess.run(
+					  ["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+					   "testsrc=size=320x240:rate=25", "-f", "lavfi", "-i", "sine=frequency=440",
+					   "-t", "4", "-c:v", "libx264", "-preset", "veryfast", "-g", "50", "-c:a", "aac",
+					   "-shortest", "-f", "hls", "-hls_time", "2", "-hls_playlist_type", "vod",
+					   "-hls_segment_filename", os.path.join(hls_dir, "seg%d.ts"),
+					   os.path.join(hls_dir, "index.m3u8")], capture_output=True, timeout=120)
+					check(encoded.returncode == 0, "a two-segment HLS stream to serve")
+					files.hls = hls_dir
+					folder = f"/sdcard/Android/data/{APP}/files/Download"
+					# Named after the page, since the playlist is index.m3u8
+					# (`stream_save_name`); a second save is numbered rather
+					# than written over the first.
+					saved, again = f"{folder}/A video.ts", f"{folder}/A video (2).ts"
+					adb("shell", "rm", "-f", f"'{saved}'", f"'{again}'")
+					files.seen.clear()
+					open_url(f"http://127.0.0.1:{port}/vpage", wait=15)
+					check(tap("Media (1)", limit=30), "the Media button counts the stream, and opens")
+					time.sleep(3)
+					adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+					tree = et.fromstring(adb("shell", "cat", "/sdcard/ui.xml") or "<x/>")
+					row = [n for n in tree.iter("node")
+					       if (n.get("content-desc") or "").startswith("index.m3u8")]
+					check(bool(row), "the dialog lists the playlist")
+					if row:
+						# The row's buttons are not in the accessibility tree:
+						# Download is the right-hand one, near the window's edge.
+						y1, y2 = map(int, re.findall(r"\d+", row[0].get("bounds"))[1::2])
+						def size_of(path):
+							return adb("shell", "stat", "-c", "%s", f"'{path}'").strip()
+						adb("shell", "input", "tap", "949", str((y1 + y2) // 2))
+						got = wait_for("the assembled file", lambda: size_of(saved) != "", 60, step=3)
+						same = False
+						joined = b"".join(open(os.path.join(hls_dir, f"seg{i}.ts"), "rb").read()
+						                  for i in range(2))
+						if got:
+							time.sleep(2)
+							local = os.path.join(hls_dir, "got.ts")
+							adb("pull", saved, local)
+							same = open(local, "rb").read() == joined
+						check(got and same,
+						      "Download wrote both segments as one stream, byte for byte, "
+						      "named after the page")
+						adb("shell", "input", "tap", "949", str((y1 + y2) // 2))
+						second = wait_for("the second save", lambda: size_of(again) != "", 60, step=3)
+						check(second and size_of(saved) == str(len(joined)),
+						      "a second save is numbered, and the first is left as it was")
+					files.hls = ""
+					adb("shell", "input", "keyevent", "KEYCODE_BACK")
 
 			print("\n== a paywalled page is shown as a crawler is sent it ==")
 			# hydra's own fetch, from the phone: through `adb reverse` like the

@@ -5,8 +5,30 @@
 #include "media_remux.h"
 #include "player_launcher.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
+
+namespace {
+
+// `path`, or the first "name (n).ext" beside it that does not exist yet.
+QString unused_path(const QString &path) {
+	if (!QFileInfo::exists(path))
+		return path;
+	const QFileInfo info(path);
+	const QString dir = info.absolutePath();
+	const QString base = info.completeBaseName();
+	const QString tail = info.suffix().isEmpty() ? QString() : "." + info.suffix();
+	for (int n = 2; n < 1000; ++n) {
+		const QString next = QDir(dir).filePath(QString("%1 (%2)%3").arg(base).arg(n).arg(tail));
+		if (!QFileInfo::exists(next))
+			return next;
+	}
+	return QDir(dir).filePath(base + "-" + QString::number(QDateTime::currentMSecsSinceEpoch()) + tail);
+}
+
+}  // namespace
+
 
 stream_assembly::stream_assembly(player_launcher *players,
                                   download_manager *downloads,
@@ -65,6 +87,12 @@ void stream_assembly::assemble(const media_item &item,
 		return;
 	}
 
+	const QString saved_as = play_it ? QString() : QDir(m_downloads->directory()).filePath(
+	        // The metadata's name where there is one, as a transport stream,
+	        // which is what this writes; the list label's otherwise.
+	        (item.file_name.isEmpty()
+	           ? item.label.section('/', -1).section('.', 0, 0)
+	           : QFileInfo(item.file_name).completeBaseName()) + ".ts");
 	const QString out = play_it
 	  // **A name of its own, not a shared one.** This was `stream.ts` for every
 	  // assembly, and `hls_assembler::start` opens the output with Truncate --
@@ -72,12 +100,12 @@ void stream_assembly::assemble(const media_item &item,
 	  // open, and then wrote over it. The player does not notice; it simply
 	  // stops making sense.
 	  ? m_scratch.filePath(QStringLiteral("stream-%1.ts").arg(++m_stream_seq))
-	  : QDir(m_downloads->directory()).filePath(
-	        // The metadata's name where there is one, as a transport stream,
-	        // which is what this writes; the list label's otherwise.
-	        (item.file_name.isEmpty()
-	           ? item.label.section('/', -1).section('.', 0, 0)
-	           : QFileInfo(item.file_name).completeBaseName()) + ".ts");
+	  // **Never over an earlier download.** The assembler opens its output
+	  // with Truncate, and two videos whose playlists share a name -- most
+	  // sites call theirs index.m3u8 -- were saved to one file, the second
+	  // destroying the first (emulator, 2026-10-31). A taken name gets
+	  // " (2)", " (3)", as a file manager does.
+	  : unused_path(saved_as);
 
 	connect(m_assembler, &hls_assembler::progress, this,
 	         [this, out, play_it, item](qint64 bytes, int done, int total) {
@@ -174,6 +202,7 @@ void stream_assembly::assemble(const media_item &item,
 		         [this, remux, note](bool ok, const QString &path,
 		                              const QString &why) {
 			emit status(ok ? QString("Saved %1.%2").arg(path, note)
+			                : why.isEmpty() ? QString("Saved %1.%2").arg(path, note)
 			                : QString("Saved %1 — %2%3").arg(path, why, note));
 			remux->deleteLater();
 		});

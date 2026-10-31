@@ -106,6 +106,13 @@ struct media_item {
 //     Page title / recorded by Capture / 12 MB
 QString media_row_name(const media_item &m, const QString &page_title, bool folded);
 
+// **The name a saved stream is given, without its extension.** The metadata's
+// name where there is one; otherwise the playlist's -- unless that is one of
+// the names every site uses (`index`, `master`, `playlist`, `manifest`,
+// `chunklist`...), which says nothing and made every saved stream
+// `index.ts`; then the page's title, made safe for a file name.
+QString stream_save_name(const media_item &m, const QString &page_title);
+
 // The media type to hand a system player along with the URL.
 //
 // Android's `ACTION_VIEW` needs one: with no type, the chooser offers whatever

@@ -350,6 +350,33 @@ bool media_saving_allowed_on(bool android, const QString &site_host,
 	return false;
 }
 
+QString stream_save_name(const media_item &m, const QString &page_title) {
+	if (!m.file_name.isEmpty())
+		return QFileInfo(m.file_name).completeBaseName();
+	const QString base = QFileInfo(m.url.path()).completeBaseName();
+	static const QStringList generic = {
+		"index", "master", "playlist", "manifest", "chunklist", "prog_index",
+		"main", "media", "video", "stream", "mono", "stereo", "dash", "hls", "",
+	};
+	const QString lower = base.toLower();
+	const bool says_nothing = generic.contains(lower) ||
+	  lower.startsWith(QLatin1String("chunklist")) ||
+	  lower.startsWith(QLatin1String("playlist")) || lower.startsWith(QLatin1String("index_"));
+	if (!says_nothing || page_title.trimmed().isEmpty())
+		return base.isEmpty() ? QStringLiteral("stream") : base;
+	QString safe;
+	for (const QChar c : page_title.simplified()) {
+		if (c.unicode() < 0x20 || QStringLiteral("/\\:*?\"<>|").contains(c))
+			safe += QLatin1Char(' ');
+		else
+			safe += c;
+	}
+	safe = safe.simplified();
+	if (safe.size() > 120)
+		safe = safe.left(120).trimmed();
+	return safe.isEmpty() ? base : safe;
+}
+
 QString media_row_name(const media_item &m, const QString &page_title, bool folded) {
 	QStringList parts;
 	// **A row seen in the page's requests is named by its file**, not by the

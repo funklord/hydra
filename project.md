@@ -40870,6 +40870,29 @@ that did not say what they were.
   them or leaving them at the top. With no lookup there is nothing to set
   them apart from, and they stay at the top.
 
+## Android: a video on a page is found, saved, and named for what it is (2026-10-31)
+
+Media is one of the aims and nothing on Android checked it. Now
+`tool/emulator_checks.py` does: four seconds of ffmpeg's test pattern cut
+into two HLS segments, a page that plays it, the Media button counting it
+("Media (1)"), and Download writing the two segments as one stream, byte
+for byte (H.264 and AAC, 4.02 s by ffprobe). Detection and assembly
+worked; two things around them did not:
+
+- **A second save overwrote the first.** The file was named after the
+  playlist, and most sites call theirs `index.m3u8`, so every save was
+  `index.ts` and the assembler's Truncate destroyed whatever was there.
+  `stream_assembly` now never writes over a file -- "name (2).ts", as a
+  file manager does -- and `stream_save_name` names a stream whose
+  playlist says nothing (`index`, `master`, `playlist`, `chunklist`...)
+  after the page's title. yt-dlp's names, where there are any, still win.
+- **"ffmpeg is not installed, so the stream was kept as-is"** ended every
+  save on Android, where there is no ffmpeg to install. Not said there now.
+
+`test_assembly` holds the naming; the emulator check saves twice and
+requires `A video.ts` byte for byte, then `A video (2).ts` with the first
+left as it was.
+
 ## Android: OpenSSL is bundled, so hydra's own requests work there
 
 The holder saw YouTube ads on the phone, 2026-10-23. The phone had

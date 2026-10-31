@@ -12,9 +12,15 @@ void media_remux::start(const QString &assembled) {
 		// The documented degradation, said out loud. Not an error: the file
 		// that exists plays, and the only thing missing is the container the
 		// optional dependency would have given it.
+		// On Android there is no ffmpeg to install, so saying it was not
+		// installed is noise on every save: the stream simply is the file.
+#ifdef Q_OS_ANDROID
+		emit finished(false, assembled, QString());
+#else
 		emit finished(false, assembled,
 		               QStringLiteral("ffmpeg is not installed, so the stream was "
 		                               "kept as-is."));
+#endif
 		return;
 	}
 	const QString out = target_for(assembled);
