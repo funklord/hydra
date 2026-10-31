@@ -1,5 +1,11 @@
 #pragma once
 
+// On Android whether libtorrent is linked is decided in a header qmake
+// writes (hydra.pro says why it is not a define); elsewhere by -D.
+#if defined(__ANDROID__) && __has_include("hydra_android_torrent.h")
+#include "hydra_android_torrent.h"
+#endif
+
 #include "download_source.h"
 
 #include <QByteArray>

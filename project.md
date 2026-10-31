@@ -40819,6 +40819,59 @@ each request through Android's own HTTPS from Java:
 - The holder then watched YouTube on the phone and saw no ads, where
   before every video had them.
 
+## Android: BitTorrent is embedded, as on the desktop (2026-10-31)
+
+**Until this, a magnet link on Android answered "This build has no
+BitTorrent support."** The aims list torrents and make Android first-class,
+and architecture sec 19.6 states the rule: "Build Android with the engine
+embedded", with a companion app only if store policy forces it. Nothing
+had been built toward it -- `hydra.pro` looked for libtorrent with the
+host's pkg-config inside a `!android` block, and no entry here mentioned the
+gap. Play does not forbid torrent clients, so this was not the holder's to
+decide.
+
+- **`tool/build-libtorrent-android.sh`** cross-compiles libtorrent-rasterbar
+  from `apt-get source` -- 2.0.11, the version the desktop links, so both
+  platforms run one engine -- with the NDK's CMake toolchain, static, against
+  the OpenSSL above. Boost is headers only (Boost.System has been
+  header-only since 1.69), taken from the host; the script writes a Boost
+  package of its own whose one include directory holds a `boost` link,
+  because the host's package names `/usr/include` and would put glibc's
+  headers on an Android compile line. It checks the archive's machine type
+  after building.
+- **`hydra.pro` links it when present**, and the decision is a header
+  (`hydra_android_torrent.h`) rewritten only when it changes rather than a
+  define. qmake does not recompile when DEFINES changes, so the first build
+  linked cleanly with a torrent-less object and produced a package 14 KB
+  larger instead of 2 MB, with no error; with the header, the arm64 build's
+  stale object (16 KB) rebuilt by itself to 258 KB.
+- **A magnet from another app is a download**: the manifest registers the
+  scheme, and `open_handed_url` sends anything that is not a page to
+  `open_external_url`, as a click in a page is. It used to become a blank tab
+  with the magnet in its address bar.
+- **libtorrent's route-table alert is not a listen failure on Android.**
+  From API 24 it answers route enumeration with "not supported" on purpose
+  (apps may not read the routing table since Android 11) and posts that as
+  `listen_failed_alert`, then listens anyway: port 6881 was open on both
+  families while hydra warned that "incoming peers cannot arrive". That one
+  operation is no longer reported, and the warning now names the operation
+  that failed.
+
+**Proved on the emulator**: `tool/torrent_seeder.cpp`, built against the
+host's libtorrent, seeds 4 MiB of known bytes on a fixed port with no
+tracker or DHT and prints a magnet naming itself as the peer (`x.pe`).
+Through `adb reverse`, hydra on the emulator took the magnet from an intent,
+asked consent, and wrote the file to its download folder byte for byte
+(same SHA-1). `tool/emulator_checks.py` now does exactly that, and says
+"not checked" on a machine without libtorrent or g++ to seed with.
+
+**Not yet**: seeding or a long download in the background needs a foreground
+service on Android, which this does not add (sec 19.6 names it); and the
+downloads list was seen drawn stale after the consent dialog closed, on the
+emulator's software graphics, which also crashed once in `eglSwapBuffers`
+on returning to the app -- the emulator's renderer, not this code, but the
+stale list wants looking at on the phone.
+
 ## The shared store emulator, first runs (2026-10-23)
 
 `make android-store-screenshots` now captures on one shared emulator, the

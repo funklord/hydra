@@ -6455,8 +6455,17 @@ void main_window::open_handed_url() {
 	if (handed.isEmpty())
 		return;
 	const QUrl url = QUrl::fromUserInput(handed);
-	if (url.isValid())
-		open_url(url);
+	if (!url.isValid())
+		return;
+	// **A link that is not a page is answered as one clicked in a page is**
+	// (`open_external_url`): a magnet becomes a download. Opened as a page, a
+	// magnet handed over by another app gave a blank tab with the link in its
+	// address bar (emulator, 2026-10-31).
+	if (!renders_as_page(url)) {
+		open_external_url(url);
+		return;
+	}
+	open_url(url);
 }
 #endif
 

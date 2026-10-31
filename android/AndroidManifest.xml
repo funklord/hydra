@@ -125,6 +125,17 @@
                 <data android:scheme="http"/>
                 <data android:scheme="https"/>
             </intent-filter>
+            <!-- And magnet links, which are downloads: BitTorrent is embedded
+                 on Android as on the desktop, so a magnet tapped in another
+                 app can come here and start, rather than needing a second
+                 app. main_window::open_handed_url sends it to the download
+                 manager, not to a tab. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="magnet"/>
+            </intent-filter>
             <meta-data android:name="android.app.lib_name" android:value="hydra"/>
         </activity>
         <!-- **There was an activity-alias here and it could not work.** It

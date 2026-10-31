@@ -26,6 +26,7 @@
 #include <libtorrent/alert_types.hpp>
 #include <libtorrent/load_torrent.hpp>
 #include <libtorrent/magnet_uri.hpp>
+#include <libtorrent/operations.hpp>
 #include <libtorrent/read_resume_data.hpp>
 #include <libtorrent/session.hpp>
 #include <libtorrent/session_params.hpp>
@@ -825,6 +826,16 @@ void torrent_download_source::poll_alerts() {
 		}
 
 		if (auto *lf = lt::alert_cast<lt::listen_failed_alert>(a)) {
+			// **Reading the routing table is not listening.** On Android from
+			// API 24 libtorrent answers route enumeration with "not
+			// supported" on purpose -- apps may not read the routing table
+			// there since Android 11 -- and posts it as this alert, then
+			// listens on the interfaces it did find. Measured on the emulator
+			// 2026-10-31: the alert arrived and port 6881 was listening on
+			// both families, so reporting it said "incoming peers cannot
+			// arrive" about a session they could reach.
+			if (lf->op == lt::operation_t::enum_route)
+				continue;
 			// **What a refused listen costs, which is why it is said.**
 			// `listen_interfaces` is a setting somebody typed, and libtorrent
 			// reports a refusal through this alert and through nothing else --
@@ -875,12 +886,16 @@ void torrent_download_source::poll_alerts() {
 				// time in different words when the two spellings differ --
 				// `127.0.0.1:22 on lo` against `127.0.0.1:22`.
 				m_d->listen_failed.insert(m_listen_interfaces);
-				qWarning("torrent: could not listen on %s (%s); incoming peers "
-				          "cannot arrive, so this will seed nothing and may "
+				// The operation, because the error alone does not say which
+				// step refused: "operation not supported" on Android came with
+				// no address, no port and no device to go on.
+				qWarning("torrent: could not listen on %s (%s, at %s); incoming "
+				          "peers cannot arrive, so this will seed nothing and may "
 				          "download slowly",
 				          qUtf8Printable(where),
 				          qUtf8Printable(QString::fromStdString(
-				            lf->error.message())));
+				            lf->error.message())),
+				          lt::operation_name(lf->op));
 			}
 			continue;
 		}

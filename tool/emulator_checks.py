@@ -593,6 +593,55 @@ def main():
 			asked = sum(1 for p, _ in files.seen if p == "/story")
 			check(asked >= 7, f"the page, and once per client ({asked} requests)")
 
+			print("\n== a magnet link from another app is downloaded by BitTorrent ==")
+			# libtorrent is embedded on Android as on the desktop
+			# (tool/build-libtorrent-android.sh). A seeder on this machine,
+			# built from tool/torrent_seeder.cpp against the host's libtorrent,
+			# serves 4 MiB of known bytes through `adb reverse`, and the magnet
+			# names it as its peer -- no tracker, no DHT, no internet. The
+			# magnet arrives the way a tap in another app sends it.
+			import shutil, tempfile
+			seeder_src = os.path.join(HERE, "torrent_seeder.cpp")
+			flags = subprocess.run(["pkg-config", "--cflags", "--libs", "libtorrent-rasterbar"],
+			                       capture_output=True, text=True)
+			if flags.returncode != 0 or not shutil.which("g++"):
+				print("  --    not checked: no libtorrent-rasterbar or g++ on this machine to seed with")
+			else:
+				with tempfile.TemporaryDirectory() as seed_dir:
+					seeder = os.path.join(seed_dir, "torrent_seeder")
+					built = subprocess.run(["g++", "-Os", "-std=c++17", seeder_src, "-o", seeder]
+					                       + flags.stdout.split(), capture_output=True, text=True,
+					                       timeout=300)
+					check(built.returncode == 0, "the seeder builds: " + built.stderr[-200:])
+					seed_port = 18744
+					adb("reverse", f"tcp:{seed_port}", f"tcp:{seed_port}")
+					done_file = f"/sdcard/Android/data/{APP}/files/Download/hydra-check.bin"
+					adb("shell", "rm", "-f", done_file)
+					proc = subprocess.Popen([seeder, seed_dir, str(seed_port), "180"],
+					                        stdout=subprocess.PIPE, text=True)
+					try:
+						magnet = proc.stdout.readline().strip()
+						check(magnet.startswith("magnet:?xt="), f"the seeder offers {magnet[:60]}")
+						adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
+						    "-d", f"'{magnet}'", "-n", f"{APP}/.HydraActivity")
+						# The consent BitTorrent asks for, once a session.
+						check(tap("Yes", limit=40, exact=True),
+						      "it is taken as a download, and asks consent for BitTorrent")
+						def landed():
+							return "4194304" in adb("shell", "stat", "-c", "%s", done_file)
+						got = wait_for("the torrent's file", landed, 90, step=3)
+						same = False
+						if got:
+							local = os.path.join(seed_dir, "got.bin")
+							adb("pull", done_file, local)
+							with open(local, "rb") as a, open(os.path.join(seed_dir, "hydra-check.bin"), "rb") as b:
+								same = a.read() == b.read()
+						check(got and same, "the 4 MiB arrived, byte for byte what was seeded")
+					finally:
+						proc.terminate()
+						proc.wait(timeout=10)
+						adb("reverse", "--remove", f"tcp:{seed_port}")
+
 			# **Checks of the lists against real sites**, last: each moves the
 			# tab somewhere else, and the lists have been in force since the
 			# ad_status check above.

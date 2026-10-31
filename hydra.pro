@@ -186,6 +186,44 @@ android {
 		warning("openssl: $$HYDRA_SSL_LIB/libssl_3.so is missing -- the package " \
 		        "will have no TLS. Run tool/build-openssl-android.sh.")
 	}
+	# **libtorrent, embedded as on the desktop** (architecture sec 19.6: "Build
+	# Android with the engine embedded"). Static, built by
+	# tool/build-libtorrent-android.sh from the same Debian source the desktop
+	# links, against the OpenSSL above. The definitions are the ones its
+	# CMake package exports and must match what it was compiled with; Boost is
+	# headers only, through the script's own link to them.
+	#
+	# **The decision is a header, not a define**, because qmake does not
+	# recompile when DEFINES changes: built once before the library existed,
+	# the object stayed torrent-less after it did, linked cleanly, and the
+	# package had no BitTorrent and no error (measured 2026-10-31: 14 KB
+	# larger instead of 2 MB). `hydra_android_torrent.h` is rewritten only
+	# when the answer changes, so its timestamp moves exactly then and the
+	# dependency tracking rebuilds the one file that reads it.
+	HYDRA_LT_LIB = $$HYDRA_SSL_LIB/libtorrent-rasterbar.a
+	HYDRA_LT_CONFIG = $$OUT_PWD/hydra_android_torrent.h
+	exists($$HYDRA_LT_LIB):exists($$HYDRA_SSL_LIB/libssl_3.so) {
+		INCLUDEPATH += $$PWD/deps/android/$$ANDROID_TARGET_ARCH/include \
+		               $$PWD/deps/build/libtorrent-$$ANDROID_TARGET_ARCH/boost-include
+		LIBS        += $$HYDRA_LT_LIB $$HYDRA_SSL_LIB/libssl_3.so $$HYDRA_SSL_LIB/libcrypto_3.so
+		QMAKE_CXXFLAGS += -fexceptions
+		# What its CMake package exports, which its headers must be compiled
+		# with too: two of them change Asio's own declarations.
+		HYDRA_LT_LINES = "$${LITERAL_HASH}define HYDRA_HAVE_LIBTORRENT 1" \
+		                 "$${LITERAL_HASH}define BOOST_ASIO_ENABLE_CANCELIO" \
+		                 "$${LITERAL_HASH}define BOOST_ASIO_NO_DEPRECATED" \
+		                 "$${LITERAL_HASH}define TORRENT_USE_OPENSSL" \
+		                 "$${LITERAL_HASH}define TORRENT_USE_LIBCRYPTO" \
+		                 "$${LITERAL_HASH}define TORRENT_SSL_PEERS" \
+		                 "$${LITERAL_HASH}define OPENSSL_NO_SSL2"
+		message("libtorrent: linking $$HYDRA_LT_LIB")
+	} else {
+		HYDRA_LT_LINES = "/* no libtorrent for this ABI: tool/build-libtorrent-android.sh */"
+		warning("libtorrent: $$HYDRA_LT_LIB is missing -- the package will have no " \
+		        "BitTorrent. Run tool/build-libtorrent-android.sh.")
+	}
+	HYDRA_LT_OLD = $$cat($$HYDRA_LT_CONFIG, lines)
+	!equals(HYDRA_LT_OLD, $$HYDRA_LT_LINES): write_file($$HYDRA_LT_CONFIG, HYDRA_LT_LINES)
 	# **Pinned, not left to Qt.** Google Play has accepted only apps
 	# targeting API 36 or later since 2026-08-31. Unset, this came from
 	# Qt 6.12's default, measured as 36 in the built apk with aapt2 -- correct
