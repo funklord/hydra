@@ -2216,10 +2216,23 @@ var json_path = function (query) {
 //
 // The global object, which in a page is `window` itself. Looked up on
 // `window` first and then here, so `fetch` and `JSON` resolve wherever the
-// engine keeps them. Through `Function` because the runner is strict, where
-// a plain function's `this` is undefined.
+// engine keeps them. `globalThis` because the runner is strict, where a
+// plain function's `this` is undefined.
+//
+// **Not `Function('return this')`**, which this was. On a page requiring
+// Trusted Types the `Function` constructor is a script sink: it threw, and
+// every throw was a CSP violation the page can collect -- YouTube's policy
+// reports to `csp.withgoogle.com`, so each watch page sent YouTube a
+// report naming code that was not theirs (2026-11-01).
+//
+// `Function` stays as the fallback for an engine with no `globalThis` --
+// QJSEngine, which the suite runs in. Every browser engine has it, so the
+// fallback never runs in a page.
 var global_object = null;
-try { global_object = Function('return this')(); } catch (e) {}
+try {
+	global_object = typeof globalThis !== 'undefined' ? globalThis
+	              : Function('return this')();
+} catch (e) {}
 var wrap_method = function (path, handler) {
 	var parts = String(path || '').split('.');
 	var key = parts.pop();

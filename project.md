@@ -38762,6 +38762,23 @@ Whether this clears the wall is for the holder's session to show. The
 anonymous session here never got the wall, before or after. What is now
 true is that the rule uBlock relies on runs here as it runs there.
 
+**And the catalog was reporting itself to YouTube (2026-11-01).** Two
+*requires 'TrustedScript'* lines were still logged on every watch page.
+With `QT_MESSAGE_PATTERN` showing the source, they came from line 2203 of
+the injected script, not from YouTube. That line was `Function('return
+this')()`, which the catalog used to find the global object. Under
+Trusted Types the `Function` constructor is a script sink, so it threw.
+Each throw is also a CSP violation, and YouTube's policy sends its
+violations to `csp.withgoogle.com`. So every watch page told Google that
+code it had not written tried to evaluate a string. `globalThis` is used
+now. `Function` stays only as the fallback for QJSEngine, which has no
+`globalThis`; every browser engine has it. The YouTube probe now logs no
+Trusted Types violation. The `try_scriptlets` page sends its reports to
+the test server, and the check asserts none arrive (30 passed). With the
+old line in place, the report arrives and the check fails. The server
+had only been parsing GET requests, which is why the first version of
+this check passed against the bug.
+
 ### Exceptions and rules with options are read now, and what that costs
 
 **15 thousand lines of the holder's lists carried options and were

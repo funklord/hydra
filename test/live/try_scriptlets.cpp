@@ -79,8 +79,10 @@ public:
 		s->setSocketDescriptor(fd);
 		connect(s, &QTcpSocket::readyRead, this, [this, s] {
 			const QByteArray head = s->readAll();
-			const int sp = head.indexOf(' ', 4);
-			const QByteArray target = sp > 4 ? head.mid(4, sp - 4) : QByteArray();
+			// Any method: a CSP report is a POST.
+			const int from = head.indexOf(' ') + 1;
+			const int sp = from > 0 ? head.indexOf(' ', from) : -1;
+			const QByteArray target = sp > from ? head.mid(from, sp - from) : QByteArray();
 			asked << QString::fromUtf8(target);
 
 			QByteArray body, type = "text/html", csp;
@@ -172,7 +174,9 @@ public:
 				// rewrite is the first thing in the head, so a rewrite that
 				// waits for the body lands after it has run. `contract` says
 				// which code ran, `text` which code the element now holds.
-				csp = "require-trusted-types-for 'script'";
+				// Violations are reported here, as YouTube's go to Google:
+				// a page learns of one only by its report.
+				csp = "require-trusted-types-for 'script'; report-uri /csp-report";
 				body = "<!doctype html><html><head>"
 				        "<script>window.__mark_a = 1;</script>"
 				        "</head><body>contract<script>"
@@ -573,6 +577,12 @@ int main(int argc, char *argv[]) {
 		              "(%1)").arg(said));
 		check(said.contains("contract=rewritten"),
 		      QString("and the rewritten code is what ran (%1)").arg(said));
+		spin(1500);   // a report is sent after the fact
+		bool reported = false;
+		for (const QString &a : server.asked)
+			reported |= a.startsWith("/csp-report");
+		check(!reported, "and nothing the scriptlets did was reported to the page's "
+		                 "policy -- no Function constructor, no plain script text");
 	}
 
 	// --- what the real list says, reported rather than asserted -----------
