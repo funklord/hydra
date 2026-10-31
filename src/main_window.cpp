@@ -6850,7 +6850,7 @@ QString main_window::address_of(const node *n) const {
 		return QString();
 	if (web_view_backend *v = m_views_by_id.value(n->id, nullptr)) {
 		const QString live = v->url().toString();
-		if (!live.isEmpty() && live != QLatin1String("about:blank"))
+		if (!shown_address(live).isEmpty())
 			return live;
 	}
 	return n->url;
@@ -7205,10 +7205,12 @@ void main_window::track_node_url(web_view_backend *view, const QUrl &u) {
 	// Recording it would put the transient blank into the node in place of the
 	// page that is about to load; skipping it leaves the node at its previous
 	// address, which is what the properties dialog and the tree should show.
+	// And not Android's name for the same page, `chrome://blank`, which this
+	// let through to be saved as the tab's address (`shown_address`).
 	if (!u.isValid() || u.scheme() == QLatin1String("about"))
 		return;
 	const QString text = u.toString();
-	if (text.isEmpty())
+	if (shown_address(text).isEmpty())
 		return;
 
 	const QString id = m_views_by_id.key(view);
@@ -8940,7 +8942,9 @@ bool scheme_is_insecure(const QUrl &url) {
 	return url.scheme().compare(QLatin1String("http"), Qt::CaseInsensitive) == 0;
 }
 
-void main_window::update_address(const QString &url, bool force) {
+void main_window::update_address(const QString &page_url, bool force) {
+	// A blank page shows an empty bar (`shown_address` says why).
+	const QString url = shown_address(page_url);
 	// **And not over somebody's typing.** A page that moves on its own -- a
 	// meta refresh, a script redirect, a slow load that commits late -- emits
 	// `url_changed` whenever it gets there, which is not a moment anybody

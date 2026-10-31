@@ -409,6 +409,7 @@ OBJS_test_model = \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/tree_diff.o
@@ -522,6 +523,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/moc/moc_autofill_controller.o \
+	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/theme.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
@@ -538,6 +540,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
+	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
 	$(BUILD_DIR)/app/keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
@@ -551,6 +554,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
@@ -568,9 +572,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/filter_subscription.o \
 	$(BUILD_DIR)/moc/moc_subscription_updater.o \
 	$(BUILD_DIR)/app/subscription_updater.o \
-	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
-	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/procedural_cosmetic.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
@@ -581,7 +583,6 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -776,6 +777,7 @@ OBJS_test_theme = \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/app/theme.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
@@ -805,6 +807,7 @@ OBJS_test_tree_scale = \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/tree_diff.o
 
@@ -1209,6 +1212,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/credential_store.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
@@ -1239,7 +1243,6 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
@@ -1367,6 +1370,7 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
@@ -1397,7 +1401,6 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
@@ -2045,6 +2048,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
@@ -2074,7 +2078,6 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
@@ -2695,10 +2698,10 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
@@ -4351,11 +4354,11 @@ OBJS_try_import = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
@@ -4674,6 +4677,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/theme.o \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
@@ -4719,7 +4723,6 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
@@ -4864,6 +4867,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
@@ -4897,7 +4901,6 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
@@ -5515,13 +5518,13 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/tab_tree_model.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
@@ -5681,6 +5684,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
@@ -5710,7 +5714,6 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
@@ -5999,6 +6002,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/app/theme.o \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
@@ -6040,7 +6044,6 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
@@ -6384,6 +6387,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/tree_outline.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/app/site_extractor.o \
@@ -6418,7 +6422,6 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
@@ -6579,12 +6582,12 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
@@ -7782,6 +7785,7 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
@@ -7811,7 +7815,6 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
-	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/app/agent_fetch.o \

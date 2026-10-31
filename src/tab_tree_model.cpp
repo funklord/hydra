@@ -1,4 +1,6 @@
 #include "tab_tree_model.h"
+
+#include "address_input.h"
 #include "tree_invariants.h"
 #include "node.h"
 #include "tree_outline.h"
@@ -1116,7 +1118,8 @@ bool tab_tree_model::set_page_title(node *n, const QString &title) {
 	// address as the title, which is correct of Chromium and useless on a row.
 	// The label a person is looking at should say what `add_tab` called it
 	// until a real page says otherwise.
-	if (title == QLatin1String("about:blank"))
+	// Nor Android's `chrome://blank` for the same page (`shown_address`).
+	if (shown_address(title).isEmpty())
 		return false;
 	n->title = title;
 	refresh_node(n);

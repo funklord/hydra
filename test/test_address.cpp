@@ -186,6 +186,20 @@ int main(int argc, char **argv) {
 			      QString("%1 -> '%2' (got '%3')").arg(c.text, c.host, host_to_ask(c.text)));
 	}
 
+	// **A blank page has no address to show.** Left in the field, Android's
+	// `chrome://blank` became the front of whatever was pasted next.
+	section("a blank page shows an empty bar");
+	{
+		for (const char *blank : { "about:blank", "about:blank#top", "about:blank?x=1",
+		                           "chrome://blank", "chrome://blank/", "chrome://newtab/",
+		                           "chrome-native://newtab/", "ABOUT:BLANK", "about:newtab", "" })
+			check(shown_address(blank).isEmpty(), QString("'%1' shows nothing").arg(blank));
+		for (const char *page : { "https://example.com/", "about:config", "chrome://settings",
+		                          "https://blank.example/", "file:///tmp/blank" })
+			check(shown_address(page) == QLatin1String(page),
+			      QString("'%1' shows itself").arg(page));
+	}
+
 	section("building the search url");
 	{
 		const QString tmpl = "https://duckduckgo.com/?q=%1";

@@ -302,6 +302,15 @@ bool looks_like_address(const QString &text);
 // 0.0.0.24.
 QString host_to_ask(const QString &text);
 
+// What the address bar shows for a page's address: the address, except for
+// a blank page, which has none to show. `about:blank` is what a new tab
+// holds, and Android's WebView reports it on some devices as
+// `chrome://blank`; either one left in the field became the start of
+// whatever was typed or pasted next -- "chrome://blankhttps://..." -- and
+// was then searched for or loaded as nonsense (reported from the phone,
+// 2026-10-31). Every browser shows an empty bar there.
+QString shown_address(const QString &url);
+
 // The search url for `terms` under `tmpl`, where `tmpl` carries a single `%1`
 // standing for the encoded terms. Returns an invalid QUrl if the template has
 // no `%1`, so a mistyped setting fails visibly rather than searching for

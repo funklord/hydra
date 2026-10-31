@@ -854,6 +854,21 @@ int main(int argc, char **argv) {
 			         .arg(warm->url));
 		}
 
+		// **Nor Android's name for the same page.** Some WebViews report the
+		// blank page as `chrome://blank`; recorded, it was the tab's address
+		// on restart, and shown, it became the front of the next address
+		// pasted into the bar -- "chrome://blankhttps://..." (from the phone).
+		node *android_blank = w3.m_model->add_tab(nullptr, "another new tab", QString());
+		if (fake_view *v = android_blank ? show(android_blank) : nullptr) {
+			v->navigated_to(QUrl("chrome://blank"));
+			spin(150);
+			check(android_blank->url.isEmpty(),
+			      QString("chrome://blank is not recorded either (%1)").arg(android_blank->url));
+			check(w3.m_address && w3.m_address->text().isEmpty(),
+			      QString("and the bar shows nothing for it (%1)")
+			        .arg(w3.m_address ? w3.m_address->text() : QString()));
+		}
+
 		// **Editing the address in properties loads it.** The other half of
 		// the mismatch: the stored url follows the page, so changing it by hand
 		// must move the page rather than leave the view where it was and the

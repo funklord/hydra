@@ -27417,6 +27417,16 @@ check is judged by where its tap leads instead. Fixing the bridge is
 accessibility work, deferred until the software is finished; a screen
 reader cannot reach these rows until then.
 
+- **A blank page left its name in the field** (holder, 2026-10-31: "it still
+  keeps putting a chrome://blank in front of a url, that should never
+  happen"). A new tab is `about:blank`, and some WebViews -- the phone's --
+  report it as `chrome://blank`; the bar showed it, and the editor opened
+  holding it, so a tap that placed the cursor and a paste made
+  `chrome://blankhttps://...`. `shown_address` maps a blank page to an empty
+  field, as every browser shows it, and the same rule now keeps
+  `chrome://blank` out of a tab's recorded address and its title, where only
+  `about:blank` had been caught. On the emulator a new tab opens an empty
+  editor; `test_address` and `test_rotation` hold both spellings.
 - **Paste could not be tapped.** Qt's paste bubble is drawn over the menu
   bar and does not take the touch: it lands in the View menu under it.
   Now the editor offers what is on the clipboard as rows of its own --

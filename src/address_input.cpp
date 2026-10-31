@@ -158,6 +158,20 @@ QString host_to_ask(const QString &text) {
 	return QString();
 }
 
+QString shown_address(const QString &url) {
+	const QUrl u(url.trimmed());
+	const QString scheme = u.scheme().toLower();
+	const QString path = u.path().toLower();
+	const bool blank =
+	  url.trimmed().isEmpty() ||
+	  (scheme == QLatin1String("about") && (path == QLatin1String("blank") ||
+	                                        path == QLatin1String("newtab"))) ||
+	  ((scheme == QLatin1String("chrome") || scheme == QLatin1String("chrome-native")) &&
+	   (u.host().toLower() == QLatin1String("blank") ||
+	    u.host().toLower() == QLatin1String("newtab")));
+	return blank ? QString() : url;
+}
+
 QUrl search_url(const QString &terms, const QString &tmpl) {
 	// A template with no placeholder would otherwise search for nothing, every
 	// time, with no sign that the setting is wrong -- the request would go out
