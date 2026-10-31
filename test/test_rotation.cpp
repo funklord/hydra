@@ -178,6 +178,9 @@ public:
 		m_widget = new QLabel("page", parent);
 		setParent(m_widget);
 	}
+	// Whether the page has somewhere to go back to; the base says always.
+	bool history = true;
+	bool can_go_back() const override { return history; }
 
 	QWidget *widget() override { return m_widget; }
 	QUrl url() const override { return m_url; }
@@ -6171,6 +6174,45 @@ int main(int argc, char **argv) {
 			qputenv("XDG_DATA_HOME", xdg_was);
 	}
 
+
+	// == Back walks up the tree before it leaves ==
+	//
+	// Architecture sec 19.4: web history, then the drawer, then up the tree,
+	// never straight out. A child tab with no history left goes back to the
+	// tab it was opened from; only a top-level tab with none lets Android have
+	// the key. And the address editor, a panel rather than a dialog, closes
+	// first.
+	{
+		std::printf("\n== Back walks up the tree before it leaves ==\n");
+		fake_factory factory;
+		policy_engine policy;
+		request_filter filter(&policy);
+		main_window w(&factory, &policy, &filter);
+		node *parent = w.open_child_tab(w.m_model->root(), QUrl("https://parent.test/"));
+		node *child = parent ? w.open_child_tab(parent, QUrl("https://child.test/")) : nullptr;
+		check(parent && child && child->parent == parent, "a tab opened under another");
+		if (parent && child) {
+			auto showing = [&](node *n) {
+				web_view_backend *v = w.m_views_by_id.value(n->id, nullptr);
+				return v && w.m_stack->currentWidget() == v->widget();
+			};
+			emit w.m_tree->activated(w.m_proxy->mapFromSource(w.m_model->index_for_node(child)));
+			auto *cv = static_cast<fake_view *>(w.m_views_by_id.value(child->id, nullptr));
+			check(cv && showing(child), "the child is in front, opened from the tree");
+			if (cv) {
+				cv->history = true;
+				check(w.handle_back() && showing(child),
+				      "with history, Back stays in the tab (it goes back in it)");
+				cv->history = false;
+				check(w.handle_back() && showing(parent),
+				      "with none left, Back goes up to the tab it came from");
+				auto *pv = static_cast<fake_view *>(w.m_views_by_id.value(parent->id, nullptr));
+				if (pv)
+					pv->history = false;
+				check(pv && !w.handle_back(), "and at a top-level tab with none, Android has it");
+			}
+		}
+	}
 
 	// == the subscription reload is deferred, and debounced ==
 	//

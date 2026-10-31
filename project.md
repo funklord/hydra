@@ -14599,6 +14599,20 @@ transition and is the one to key on -- which matters for anything that checks
 what is frontmost before capturing a screenshot, since the alternative is a
 capture of whatever else was on screen.
 
+### Back now goes up the tree, and closes the address editor (2026-10-31)
+
+Architecture sec 19.4 orders Back as "web history, then close the drawer,
+then go up the tree -- never insta-quit", and the third step was not built:
+a child tab with no history left the app, seen while testing BitTorrent on
+the emulator. `handle_back` now goes to the tab a tab was opened from when
+it has nothing to go back to, and only a top-level tab with no history lets
+Android have the key. And the address editor (`address_editor`, a panel of
+the window rather than a dialog, so neither the popup nor the modal step
+saw it) closes on Back before anything else -- on the emulator the first
+Back puts the keyboard away and the second closes the editor, with hydra
+still in front. `test_rotation` drives the tree half: Back stays in a tab
+with history, goes up from one without, and is not consumed at the top.
+
 ## The standing answer: request desktop site as a site rule
 
 The View menu's toggle is per tab and forgotten, which is right for a one-off

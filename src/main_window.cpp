@@ -4213,6 +4213,13 @@ bool main_window::handle_back() {
 			modal->close();
 		return true;
 	}
+	// The address editor, which covers the window while somebody types: a
+	// panel of this window rather than a dialog, so neither test above sees
+	// it, and Back went past it to the page or out of the app.
+	if (m_editor_panel && m_editor_panel->isVisible()) {
+		close_address_editor();
+		return true;
+	}
 	// The tab drawer, which is over the page in the same sense.
 	if (m_drawer_open) {
 		set_drawer_open(false);
@@ -4223,6 +4230,18 @@ bool main_window::handle_back() {
 	if (web_view_backend *v = current_view()) {
 		if (v->can_go_back()) {
 			go_back();
+			return true;
+		}
+	}
+	// **Then up the tree** (architecture sec 19.4: "web history, then close
+	// the drawer, then go up the tree -- never insta-quit"). A tab opened from
+	// another is filed under it, so a tab with no history left goes back to
+	// the tab it came from, as Back does in every phone browser. This step was
+	// missing: Back on a fresh child tab left the app.
+	if (web_view_backend *v = current_view()) {
+		node *n = m_model->node_by_id(m_views_by_id.key(v));
+		if (n && n->parent && !n->parent->is_folder() && !n->parent->url.isEmpty()) {
+			open_node(n->parent);
 			return true;
 		}
 	}

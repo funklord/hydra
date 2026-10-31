@@ -583,6 +583,7 @@ private:
 	// three paths share, rather than a third copy of the same two lines.
 	void set_drawer_cover(bool covered);
 
+public:
 	// Android's Back button, answered the way a browser has to answer it.
 	//
 	// **Nothing handled it, and Qt's default is to finish the activity** -- so
@@ -593,7 +594,8 @@ private:
 	// Returns true when it was consumed. The order is the one every mobile
 	// browser uses and each step is the least destructive thing still available:
 	// close what is in front of the page, then close the drawer, then go back in
-	// history, and only then let Android have it.
+	// history, then up the tree to the tab this one was opened from, and only
+	// then let Android have it. Public so the order can be tested.
 	bool handle_back();
 
 protected:
