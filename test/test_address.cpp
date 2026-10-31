@@ -200,6 +200,31 @@ int main(int argc, char **argv) {
 			      QString("'%1' shows itself").arg(page));
 	}
 
+	// **A typed domain goes to https first** (`typed_url`), and only that.
+	section("a typed address with no scheme is tried over https");
+	{
+		const struct { const char *typed, *url; bool up; } cases[] = {
+			{ "example.org", "https://example.org", true },
+			{ "teams.microsoft.com/meet/1", "https://teams.microsoft.com/meet/1", true },
+			{ "www.svt.se", "https://www.svt.se", true },
+			{ "http://example.org", "http://example.org", false },     // asked for
+			{ "https://example.org", "https://example.org", false },
+			{ "example.org:8080/x", "", false },                        // a port: as before
+			{ "localhost", "http://localhost", false },
+			{ "localhost:3000", "", false },
+			{ "192.168.1.1/admin", "http://192.168.1.1/admin", false },
+			{ "nas", "http://nas", false },                            // a single label
+		};
+		for (const auto &c : cases) {
+			bool up = true;
+			const QUrl u = typed_url(c.typed, &up);
+			const bool url_ok = !*c.url || u == QUrl(c.url);
+			check(url_ok && up == c.up,
+			      QString("%1 -> %2%3 (got %4, %5)").arg(c.typed, c.url, c.up ? ", upgraded" : "",
+			                                            u.toString(), up ? "upgraded" : "as typed"));
+		}
+	}
+
 	section("building the search url");
 	{
 		const QString tmpl = "https://duckduckgo.com/?q=%1";

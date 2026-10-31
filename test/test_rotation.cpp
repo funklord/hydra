@@ -6210,6 +6210,48 @@ int main(int argc, char **argv) {
 	}
 
 
+	// == A typed domain goes over https, and over http only if that fails ==
+	//
+	// `typed_url` sends `example.org` to https first; a site with nothing
+	// there fails the load, and the window tries http once and says so. Driven
+	// through the bar as typed, against the fake engine.
+	{
+		std::printf("\n== a typed domain is tried over https first ==\n");
+		fake_factory factory;
+		policy_engine policy;
+		request_filter filter(&policy);
+		main_window w(&factory, &policy, &filter);
+		node *tab = w.open_child_tab(w.m_model->root(), QUrl("https://start.example/"));
+		emit w.m_tree->activated(w.m_proxy->mapFromSource(w.m_model->index_for_node(tab)));
+		auto *v = tab ? static_cast<fake_view *>(w.m_views_by_id.value(tab->id, nullptr)) : nullptr;
+		check(v != nullptr, "a tab to type into");
+		if (v) {
+			w.m_address->setText("plain.example");
+			emit w.m_address->returnPressed();
+			check(v->url() == QUrl("https://plain.example"),
+			      QString("the typed domain goes to https (%1)").arg(v->url().toString()));
+			v->finished_loading(false);
+			check(v->url() == QUrl("http://plain.example"),
+			      QString("a failed https load is tried over http (%1)").arg(v->url().toString()));
+			check(w.m_status->currentMessage().contains("did not answer over HTTPS"),
+			      QString("and the status line says so (%1)").arg(w.m_status->currentMessage()));
+			v->finished_loading(false);
+			check(v->url() == QUrl("http://plain.example"),
+			      "only once: an http failure is not retried again");
+
+			w.m_address->setText("secure.example");
+			emit w.m_address->returnPressed();
+			v->finished_loading(true);
+			check(v->url() == QUrl("https://secure.example"),
+			      QString("a site that answers over https stays there (%1)").arg(v->url().toString()));
+
+			w.m_address->setText("http://asked.example");
+			emit w.m_address->returnPressed();
+			check(v->url() == QUrl("http://asked.example"),
+			      "and an address typed with http:// is left as asked");
+		}
+	}
+
 	// == Back walks up the tree before it leaves ==
 	//
 	// Architecture sec 19.4: web history, then the drawer, then up the tree,

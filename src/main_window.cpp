@@ -5013,6 +5013,7 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 		m_reader.remove(view);
 		m_crawler_copy.remove(view);
 		m_crawler_pending.remove(view);
+		m_https_tries.remove(view);
 		connect(view, &web_view_backend::load_finished, this, [this, view](bool ok) {
 			// A tab in reader mode leaves it on the load after the reader
 			// document's own: a link followed, Back, a reload.
@@ -5020,6 +5021,25 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 				m_reader.erase(it);
 				if (view == current_view())
 					refresh_reader_action();
+			}
+			// **A typed address that had no https is tried over http, once.**
+			// `typed_url` sends a bare domain to https first, as every current
+			// browser does; a site with nothing on 443 fails the load, and the
+			// person typed an address rather than asked for a scheme. Said in
+			// the status line, and the bar's not-secure mark says the rest.
+			if (auto it = m_https_tries.find(view); it != m_https_tries.end()) {
+				const QUrl tried = it.value();
+				m_https_tries.erase(it);
+				if (!ok && view->url().host() == tried.host()) {
+					QUrl plain = tried;
+					plain.setScheme(QStringLiteral("http"));
+					view->load(plain);
+					if (view == current_view())
+						m_status->showMessage(
+						  QString("%1 did not answer over HTTPS, so it was opened over "
+						          "plain HTTP.").arg(tried.host()), 8000);
+					return;
+				}
 			}
 			if (ok)
 				try_crawler_copy(view);
@@ -7794,9 +7814,10 @@ void main_window::navigate_to_address() {
 	// than a parsing one -- see its header for why a bare hostname must never
 	// end up in a search box.
 	const bool searching = !looks_like_address(text);
+	bool upgraded = false;
 	const QUrl target = searching
 	                      ? search_url(text, settings_store::search_engine())
-	                      : QUrl::fromUserInput(text);
+	                      : typed_url(text, &upgraded);
 	if (searching && !target.isValid()) {
 		m_status->showMessage("The search engine setting has no %1 in it, so "
 		                       "there is nowhere to put the search terms.",
@@ -7828,11 +7849,17 @@ void main_window::navigate_to_address() {
 		QTimer::singleShot(3000, pending, [go] { go(false); });
 		return;
 	}
-	open_typed(text, target);
+	open_typed(text, target, upgraded);
 }
 
-void main_window::open_typed(const QString &text, const QUrl &target) {
+void main_window::open_typed(const QString &text, const QUrl &target, bool upgraded) {
 	if (web_view_backend *v = current_view()) {
+		// Remembered so a site with no https is tried once over http
+		// (`typed_url`, and the fallback in the load-finished handler).
+		if (upgraded)
+			m_https_tries.insert(v, target);
+		else
+			m_https_tries.remove(v);
 		v->load(target);
 		// **The page has the keyboard next, as in every browser.** Left in
 		// the bar, the next tap on it only moved the cursor -- no select-all,

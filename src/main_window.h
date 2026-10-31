@@ -699,7 +699,10 @@ public:
 	void try_crawler_copy(web_view_backend *view);
 	// The end of a navigation from the bar, once what was typed has become a
 	// url: into the tab in front, or a new one when there is none.
-	void open_typed(const QString &text, const QUrl &target);
+	void open_typed(const QString &text, const QUrl &target, bool upgraded = false);
+	// Typed addresses sent to https first (`typed_url`), per view, until the
+	// load ends: a failure is retried once over http.
+	QHash<web_view_backend *, QUrl> m_https_tries;
 	void refresh_reader_action();
 
 	// Save a copy of the current page to the downloads folder (Ctrl+Shift+S).

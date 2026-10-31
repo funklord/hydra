@@ -544,7 +544,8 @@ def main():
 			type_keys("example.net")
 			adb("shell", "input", "tap", "993", "2120")   # the keyboard's Go key
 			time.sleep(8)
-			check(href() == "http://example.net/", f"the keyboard's Go key goes there ({href()})")
+			# Over https: a typed domain is tried there first (`typed_url`).
+			check(href() == "https://example.net/", f"the keyboard's Go key goes there, over https ({href()})")
 
 			tap_bar()
 			type_keys("wikipedia")

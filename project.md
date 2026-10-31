@@ -27427,6 +27427,26 @@ reader cannot reach these rows until then.
   `chrome://blank` out of a tab's recorded address and its title, where only
   `about:blank` had been caught. On the emulator a new tab opens an empty
   editor; `test_address` and `test_rotation` hold both spellings.
+- **Tested on the phone with Samsung's keyboard (2026-10-31)**, the one
+  piece the emulator cannot have, with the holder's leave: typed by tapping
+  HoneyBoard's own keys on the cover screen. Fast and slow typing over the
+  selected address, the keyboard's Go, and teams.microsoft.com from the bar
+  (it loaded as a desktop and went on to the signed-in app) all worked. A
+  first run that lost the text was the script's: the keyboard's first
+  appearance took longer than the wait, so the first taps hit the page,
+  which closes the editor. Wait for `mInputShown=true`, as the emulator
+  check does.
+- **A typed domain goes over https first** (`typed_url`). That run showed
+  `example.org` opening as `http://example.org` -- `QUrl::fromUserInput`'s
+  answer -- so a typed address went out in the clear. Every current browser
+  tries https first; hydra now does, for a domain typed with no scheme and
+  no port, and tries http once if that load fails, saying so. An explicit
+  `http://`, a port, an IP literal, `localhost` and a single label (an
+  intranet name) are left as typed. Like the browsers' own upgrade it falls
+  back silently on failure, which an attacker who blocks 443 can provoke;
+  the status line and the bar's not-secure mark are what show it.
+  `test_address` holds the rule, `test_rotation` the fallback through the
+  real bar (once, and not for an address typed with `http://`).
 - **The bar could not reach a site with a desktop-site rule** (holder,
   2026-10-31: "it is still impossible to go to a url through the url bar, it
   just reloads the same page"). The phone's log showed it for

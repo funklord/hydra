@@ -172,6 +172,25 @@ QString shown_address(const QString &url) {
 	return blank ? QString() : url;
 }
 
+QUrl typed_url(const QString &text, bool *upgraded) {
+	if (upgraded)
+		*upgraded = false;
+	const QString t = text.trimmed();
+	QUrl u = QUrl::fromUserInput(t);
+	if (!u.isValid() || carries_scheme(t) || is_path(t) ||
+	    u.scheme() != QLatin1String("http") || u.port() != -1)
+		return u;
+	const QString host = u.host();
+	if (host.isEmpty() || is_ip_literal(host) ||
+	    host.compare(QLatin1String("localhost"), Qt::CaseInsensitive) == 0 ||
+	    !host.contains(QLatin1Char('.')))
+		return u;
+	u.setScheme(QStringLiteral("https"));
+	if (upgraded)
+		*upgraded = true;
+	return u;
+}
+
 QUrl search_url(const QString &terms, const QString &tmpl) {
 	// A template with no placeholder would otherwise search for nothing, every
 	// time, with no sign that the setting is wrong -- the request would go out

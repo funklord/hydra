@@ -331,6 +331,16 @@ QString host_to_ask(const QString &text);
 // 2026-10-31). Every browser shows an empty bar there.
 QString shown_address(const QString &url);
 
+// **The url an address typed without a scheme goes to: https first.**
+// `QUrl::fromUserInput` makes `example.org` into `http://example.org`, so a
+// typed address went out in the clear and was redirected only if the site
+// chose to -- measured on the phone, 2026-10-31. Every current browser tries
+// https first. `upgraded` says when this chose https, so the caller can fall
+// back to http once if the site has none. Left as fromUserInput has it: an
+// explicit scheme, an explicit port (a service on a port is rarely https),
+// an IP literal, `localhost`, and a single label (an intranet name).
+QUrl typed_url(const QString &text, bool *upgraded = nullptr);
+
 // The search url for `terms` under `tmpl`, where `tmpl` carries a single `%1`
 // standing for the encoded terms. Returns an invalid QUrl if the template has
 // no `%1`, so a mistyped setting fails visibly rather than searching for
