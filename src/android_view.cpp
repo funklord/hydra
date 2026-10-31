@@ -1488,16 +1488,20 @@ bool android_view::eventFilter(QObject *o, QEvent *e) {
 	// was written for, found again one window type along.
 	if (m_native && (e->type() == QEvent::Show || e->type() == QEvent::Hide) &&
 	    covers_the_page(o)) {
+		// **Everything else that covers the page, and then this one by its
+		// event.** This used to count all visible windows and add or take one
+		// for this event, which assumes the hiding window is still counted:
+		// a Hide for a window already invisible took away one that was not,
+		// and the page came back over the downloads window while it was still
+		// open -- seen when the BitTorrent consent box closed over it
+		// (emulator, 2026-10-31). Leaving `o` out of the count makes the
+		// answer independent of when Qt flips the flag.
 		int open = 0;
 		for (QWidget *w : QApplication::topLevelWidgets())
-			if (w->isVisible() && covers_the_page(w))
+			if (w != o && w->isVisible() && covers_the_page(w))
 				++open;
-		// The event arrives *before* the widget's visibility changes, so a dialog
-		// being shown is not yet in that count and one being hidden still is.
 		if (e->type() == QEvent::Show)
 			++open;
-		else
-			--open;
 		m_blocked = open > 0;
 		sync_geometry();
 	}
