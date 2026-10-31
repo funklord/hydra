@@ -19575,10 +19575,11 @@ picked elements must not be reachable from a third-party iframe. Porting this
 means moving exactly the scripts the desktop already marks, and leaving
 autofill, the picker, cosmetic and the MSE relay where they are.
 
-**Not built.** It cannot be exercised here -- no device is attached -- and it
-widens where a script runs, which is not a change to ship blind on top of two
-Android features from this session that are themselves still unrun. The design
-is here so that whoever has the handset can do it in an afternoon.
+**Built since**, through the document-start bundle: `android_view::inject_script`
+honours `subframes` with `WebViewCompat.addDocumentStartJavaScript` for every
+origin (see *On Android every page can see the bridge, and call it*), so the
+consent script reaches a CMP's iframe as on the desktop. This entry said
+"not built" until 2026-10-31, after it no longer was.
 
 ## A handset came back, and what an hour on it did and did not establish
 
@@ -39396,6 +39397,16 @@ with nothing to switch on:
 - **A site that sends nobody more** is said so once ("keeps the rest of
   this article from crawlers too") and not asked again this session,
   rather than costing six fetches per article.
+
+**AMP was looked at as another source and rejected on a measurement
+(2026-10-31).** A page's `<link rel="amphtml">` names the publisher's own
+alternate copy, so fetching it would disclose nothing new, and some
+publishers once put whole articles there. Sampled the same day: three
+articles each from the Guardian, Expressen, SvD, the BBC and Aftonbladet
+carried no AMP link at all -- AMP has lost its search ranking and these
+sites have dropped it. archive.today is the other copy somebody suggested;
+it would send every paywalled address the person opens to a third party, so
+it is not something to do without asking each time, and is not built.
 
 **Measured against real sites the same day, with curl**: Dagens Nyheter
 declares its articles not free and sends every client the same teaser,
