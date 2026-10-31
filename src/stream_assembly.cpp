@@ -11,9 +11,17 @@
 
 namespace {
 
-// `path`, or the first "name (n).ext" beside it that does not exist yet.
+// Whether a save to `path` could land on an existing file: the path itself,
+// or the `.mp4` the rewrap turns it into (`media_remux::target_for`), which
+// ffmpeg writes with `-y`. The `.ts` is removed after a rewrap, so checking
+// it alone let the next save of the same title overwrite the earlier `.mp4`.
+bool taken(const QString &path) {
+	return QFileInfo::exists(path) || QFileInfo::exists(media_remux::target_for(path));
+}
+
+// `path`, or the first "name (n).ext" beside it that is not taken.
 QString unused_path(const QString &path) {
-	if (!QFileInfo::exists(path))
+	if (!taken(path))
 		return path;
 	const QFileInfo info(path);
 	const QString dir = info.absolutePath();
@@ -21,7 +29,7 @@ QString unused_path(const QString &path) {
 	const QString tail = info.suffix().isEmpty() ? QString() : "." + info.suffix();
 	for (int n = 2; n < 1000; ++n) {
 		const QString next = QDir(dir).filePath(QString("%1 (%2)%3").arg(base).arg(n).arg(tail));
-		if (!QFileInfo::exists(next))
+		if (!taken(next))
 			return next;
 	}
 	return QDir(dir).filePath(base + "-" + QString::number(QDateTime::currentMSecsSinceEpoch()) + tail);

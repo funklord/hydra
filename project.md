@@ -40886,6 +40886,12 @@ worked; two things around them did not:
   file manager does -- and `stream_save_name` names a stream whose
   playlist says nothing (`index`, `master`, `playlist`, `chunklist`...)
   after the page's title. yt-dlp's names, where there are any, still win.
+  **And a name counts as taken by the `.mp4` its rewrap becomes**: on the
+  desktop the `.ts` is rewrapped with ffmpeg's `-y` and then removed, so a
+  name free as `.ts` would still have been written over as `.mp4`. Plain
+  http downloads keep their own, decided answer -- an existing name is
+  refused ("Already saved"), after a second save of one video corrupted the
+  first on 2026-10-25 -- which also loses nothing.
 - **"ffmpeg is not installed, so the stream was kept as-is"** ended every
   save on Android, where there is no ffmpeg to install. Not said there now.
 

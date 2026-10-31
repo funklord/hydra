@@ -516,6 +516,35 @@ int main(int argc, char **argv) {
 		m.file_name = "20240101_Artist_-_Track_[x].mp4";
 		check(stream_save_name(m, "Some page") == "20240101_Artist_-_Track_[x]",
 		      "and the metadata's name wins over both");
+
+		// **And never over an earlier save**, including the .mp4 a rewrap
+		// made of it: the .ts goes after a rewrap, so a name free as .ts was
+		// written over as .mp4 with ffmpeg's -y.
+		auto write = [&](const QString &name) {
+			QFile f(QDir(downloads_dir.path()).filePath(name));
+			f.open(QIODevice::WriteOnly);
+			f.write("an earlier save");
+		};
+		write("Taken.ts");
+		write("Rewrapped.mp4");
+		{
+			stream_assembly naming(&players, &downloads, &proxy, nullptr);
+			media_item one = item;
+			one.file_name = "Taken.ts";
+			naming.save(one, stream_context{});
+			check(QFileInfo(naming.output_path()).fileName() == "Taken (2).ts",
+			      QString("a name already saved gets a number (%1)")
+			        .arg(QFileInfo(naming.output_path()).fileName()));
+		}
+		{
+			stream_assembly naming(&players, &downloads, &proxy, nullptr);
+			media_item two = item;
+			two.file_name = "Rewrapped.ts";
+			naming.save(two, stream_context{});
+			check(QFileInfo(naming.output_path()).fileName() == "Rewrapped (2).ts",
+			      QString("and so does one whose rewrap is already there (%1)")
+			        .arg(QFileInfo(naming.output_path()).fileName()));
+		}
 	}
 
 	section("every row is named in one pattern");
