@@ -40899,6 +40899,23 @@ worked; two things around them did not:
 requires `A video.ts` byte for byte, then `A video (2).ts` with the first
 left as it was.
 
+## Android: consent banners and popups checked on the device (2026-10-31)
+
+Two of the aims had no check on a phone. `tool/emulator_checks.py` now
+serves three of `try_consent`'s banners -- one with a reject to press, the
+same inside a cross-origin iframe, and one whose only button accepts -- and
+a page that opens a window by itself beside a link a person taps. All
+passed on the first run, so this adds evidence rather than fixes: Reject
+all is pressed and nothing else, including inside the iframe, which on
+Android depends on the document-start bundle reaching every frame; the
+accept-only banner is set aside (`display: none`) with nothing pressed; the
+page's own window is never even fetched; and the tapped link opens its tab
+and lands in the tree.
+
+The script's `main()` is guarded now, so its request handler can be
+imported to serve these pages to a device by hand while a check is being
+written -- which is how these were tried before the full run.
+
 ## Android: OpenSSL is bundled, so hydra's own requests work there
 
 The holder saw YouTube ads on the phone, 2026-10-23. The phone had

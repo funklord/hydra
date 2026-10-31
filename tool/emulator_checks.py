@@ -176,6 +176,50 @@ class files(http.server.BaseHTTPRequestHandler):
 			        + rest).encode()
 			self.send_response(200)
 			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/consent-"):
+			# The consent driver's fixtures (test/live/try_consent.cpp): each
+			# button reports what was clicked as a request, then the banner
+			# goes, as a real one does once answered.
+			common = ("<script>function say(w){fetch('/clicked?what='+encodeURIComponent(w));}"
+			          "function wire(id){var box=document.getElementById(id);"
+			          "Array.prototype.forEach.call(box.querySelectorAll('button'),function(b){"
+			          "b.addEventListener('click',function(){say(b.textContent.trim());box.remove();"
+			          "document.documentElement.style.overflow='auto';document.body.style.overflow='auto';});});}"
+			          "</script>")
+			reject = ("<div id=cc style='position:fixed;bottom:0;width:100%;height:120px;background:#eee'>"
+			          "<p>We use cookies and similar technologies. Manage your privacy choices.</p>"
+			          "<button>Accept all</button><button>Reject all</button>"
+			          "<button>Manage settings</button></div><script>wire('cc');</script>")
+			accept_only = ("<div id=cc style='position:fixed;bottom:0;width:100%;height:120px;background:#eee'>"
+			               "<p>This site uses cookies to function.</p><button>OK</button></div>"
+			               "<script>wire('cc');</script>")
+			port = self.server.server_address[1]
+			inner = {"/consent-reject": reject, "/consent-accept": accept_only,
+			         "/consent-framed": f"<p>article text</p><iframe src='http://localhost:{port}"
+			                            "/consent-reject' width=700 height=200></iframe>"}
+			key = next((k for k in inner if self.path.startswith(k)), "/consent-reject")
+			body = ("<!doctype html><meta name=viewport content='width=device-width'><body>"
+			        + common + "<p>A page with a consent banner.</p>" + inner[key]).encode()
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/popper"):
+			# A page that opens a window by itself as it loads -- the popup
+			# the aims say is blocked -- and a link a person taps, which opens
+			# a tab of its own because they asked for one.
+			body = ("<!doctype html><meta name=viewport content='width=device-width'>"
+			        "<title>Popper</title><script>window.open('/popped-unasked');</script>"
+			        "<a href='/popped-tapped' target=_blank style='position:fixed;inset:0;"
+			        "display:block;background:#cfc;font-size:40px'>OPEN</a>").encode()
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/popped"):
+			body = b"<!doctype html><title>Popped</title><p>popped</p>"
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/clicked"):
+			body = b"ok"
+			self.send_response(200)
+			self.send_header("Content-Type", "text/plain")
 		elif self.path.startswith("/vpage"):
 			body = ("<!doctype html><meta name=viewport content='width=device-width'>"
 			        "<title>A video</title><h1>A video</h1><video controls autoplay muted "
@@ -660,6 +704,42 @@ def main():
 				else:
 					adb("shell", "run-as", APP, "rm", "-f", policy)
 
+			print("\n== consent banners are refused, or set aside, never accepted ==")
+			# The aim says consent walls are set aside and never accepted, and
+			# nothing checked it on a phone. Three of the desktop driver's
+			# banners: one with a reject to press, the same inside a
+			# cross-origin iframe -- where a consent platform ships it, and
+			# which Android reaches only through the document-start bundle --
+			# and one whose only button accepts, which must not be pressed.
+			def clicked():
+				return [p.split("what=", 1)[1] for p, _ in files.seen
+				        if p.startswith("/clicked") and "what=" in p]
+			for path, want in (("/consent-reject", "Reject+all"),
+			                   ("/consent-framed", "Reject+all")):
+				files.seen.clear()
+				open_url(f"http://127.0.0.1:{port}{path}", wait=12)
+				got = wait_for("an answer", lambda: bool(clicked()), 20, step=2)
+				said = [c.replace("%20", "+") for c in clicked()]
+				check(got and said == [want],
+				      f"{path}: Reject all pressed, and nothing else ({said})")
+			files.seen.clear()
+			open_url(f"http://127.0.0.1:{port}/consent-accept", wait=15)
+			shown = probe("(function(){var e=document.getElementById('cc');"
+			              "return e?getComputedStyle(e).display+'/'+getComputedStyle(e).visibility:'gone'})()").strip()
+			check(not clicked() and (shown.startswith("none") or shown.endswith("hidden") or shown == "gone"),
+			      f"an accept-only banner is set aside, nothing pressed ({shown}, clicked {clicked()})")
+
+			print("\n== a page's own popup is stopped, a tapped one opens ==")
+			files.seen.clear()
+			open_url(f"http://127.0.0.1:{port}/popper", wait=15)
+			asked = lambda: [p for p, _ in files.seen if p.startswith("/popped")]
+			check(not asked(), f"the window the page opened by itself was never fetched ({asked()})")
+			adb("shell", "input", "tap", "540", "1300")
+			check(wait_for("the tapped link's tab", lambda: "/popped-tapped" in asked(), 20, step=2),
+			      "a link the person taps opens its tab")
+			check("popped-tapped" in adb("shell", "run-as", APP, "cat", "files/tree.txt"),
+			      "and the tree has it")
+
 			print("\n== a video on a page is found and downloaded, its stream assembled ==")
 			# Media is one of the aims, and nothing on Android checked it. Four
 			# seconds of ffmpeg's test pattern cut into two HLS segments; the
@@ -947,4 +1027,7 @@ def main():
 	print(f"\n{len(failures)} failed" + (": " + "; ".join(failures) if failures else ""))
 	return 1 if failures else 0
 
-sys.exit(main())
+# Guarded, so the request handler can be imported to serve these pages to a
+# device by hand while a check is being written.
+if __name__ == "__main__":
+	sys.exit(main())
