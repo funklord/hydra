@@ -48,4 +48,7 @@ private:
 
 	download_manager *m_downloads = nullptr;
 	QSet<int>         m_running;   // job ids this session has seen unfinished
+	// What TransferService was last told, so a progress tick that changes
+	// nothing does not cross JNI.
+	QString           m_service_text;
 };

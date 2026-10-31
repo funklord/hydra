@@ -64,6 +64,27 @@ void android_downloads::poll() {
 		else
 			emit published(j.path, uri);
 	}
+
+	// **The download keeps going when the browser leaves the screen**
+	// (`TransferService`): up while a job is moving -- queued, resolving or
+	// running -- and down when none is. Seeding does not count; see the
+	// service for why. Told again only when what it says would change.
+	int moving = 0;
+	for (const download_job &j : m_downloads->jobs())
+		if (j.status == download_state::queued || j.status == download_state::resolving ||
+		    j.status == download_state::running)
+			++moving;
+	const QString text = moving == 0 ? QString()
+	                   : moving == 1 ? QStringLiteral("1 download in progress. Tap to see it.")
+	                   : QString("%1 downloads in progress. Tap to see them.").arg(moving);
+	if (text == m_service_text)
+		return;
+	m_service_text = text;
+	QJniObject::callStaticMethod<void>(
+	  k_cls, "transferService", "(Landroid/app/Activity;ZLjava/lang/String;)V",
+	  QNativeInterface::QAndroidApplication::context().object(),
+	  jboolean(moving > 0), QJniObject::fromString(text).object<jstring>());
+	QJniEnvironment().checkAndClearExceptions();
 }
 
 QString android_downloads::publish(const QString &path, const QString &mime,

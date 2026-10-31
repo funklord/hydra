@@ -83,4 +83,26 @@ public class HydraDownloads {
             return null;
         }
     }
+
+    /**
+     * Start or stop TransferService, from android_downloads as jobs move.
+     * A start the platform refuses (the app already in the background)
+     * throws; that costs the download its background time, not the browser.
+     */
+    public static void transferService(final Activity a, final boolean on, final String text) {
+        if (a == null)
+            return;
+        final android.content.Intent i = new android.content.Intent(a, TransferService.class);
+        i.putExtra("text", text);
+        try {
+            if (!on)
+                a.stopService(i);
+            else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)
+                a.startForegroundService(i);
+            else
+                a.startService(i);
+        } catch (RuntimeException e) {
+            android.util.Log.w("hydra", "transfer service: " + e);
+        }
+    }
 }

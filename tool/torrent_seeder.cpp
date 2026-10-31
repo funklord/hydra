@@ -1,14 +1,16 @@
 // A one-file swarm for testing BitTorrent where no test can reach a real one:
 // the Android emulator, through `adb reverse`.
 //
-//     torrent_seeder <dir> <port> <seconds>
+//     torrent_seeder <dir> <port> <seconds> [bytes-per-second]
 //
 // Writes a 4 MiB payload of known bytes into <dir>, seeds it on 127.0.0.1:<port>
 // with no tracker, DHT, LSD or port mapping, and prints one line -- a magnet
 // link that names this seeder as its peer (`x.pe`, BEP 9), so a client
 // needs nothing else to find it. Exits by itself after <seconds>, so a check
-// that dies cannot leave it running. Built by tool/emulator_checks.py with
-// the host's libtorrent-rasterbar, the engine the desktop build links.
+// that dies cannot leave it running. A rate, when given, caps the upload, so
+// a check can leave the app while a download is still moving. Built by
+// tool/emulator_checks.py with the host's libtorrent-rasterbar, the engine
+// the desktop build links.
 #include <libtorrent/create_torrent.hpp>
 #include <libtorrent/magnet_uri.hpp>
 #include <libtorrent/session.hpp>
@@ -26,13 +28,14 @@
 namespace lt = libtorrent;
 
 int main(int argc, char **argv) {
-	if (argc != 4) {
-		std::fprintf(stderr, "usage: torrent_seeder <dir> <port> <seconds>\n");
+	if (argc != 4 && argc != 5) {
+		std::fprintf(stderr, "usage: torrent_seeder <dir> <port> <seconds> [bytes-per-second]\n");
 		return 2;
 	}
 	const std::string dir = argv[1];
 	const int port = std::atoi(argv[2]);
 	const int seconds = std::atoi(argv[3]);
+	const int rate = argc == 5 ? std::atoi(argv[4]) : 0;
 	if (port <= 0 || port > 65535 || seconds <= 0 || seconds > 3600) {
 		std::fprintf(stderr, "port 1-65535, seconds 1-3600\n");
 		return 2;
@@ -69,6 +72,8 @@ int main(int argc, char **argv) {
 	// fast and leave TCP to succeed.
 	sp.set_bool(lt::settings_pack::enable_incoming_utp, false);
 	sp.set_bool(lt::settings_pack::enable_outgoing_utp, false);
+	if (rate > 0)
+		sp.set_int(lt::settings_pack::upload_rate_limit, rate);
 	lt::session ses(lt::session_params{ sp });
 
 	lt::add_torrent_params atp;

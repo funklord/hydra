@@ -617,7 +617,9 @@ def main():
 					adb("reverse", f"tcp:{seed_port}", f"tcp:{seed_port}")
 					done_file = f"/sdcard/Android/data/{APP}/files/Download/hydra-check.bin"
 					adb("shell", "rm", "-f", done_file)
-					proc = subprocess.Popen([seeder, seed_dir, str(seed_port), "180"],
+					# 256 KiB/s: sixteen seconds for the 4 MiB, long enough to
+					# leave the app while it is still moving.
+					proc = subprocess.Popen([seeder, seed_dir, str(seed_port), "180", "262144"],
 					                        stdout=subprocess.PIPE, text=True)
 					try:
 						magnet = proc.stdout.readline().strip()
@@ -627,9 +629,22 @@ def main():
 						# The consent BitTorrent asks for, once a session.
 						check(tap("Yes", limit=40, exact=True),
 						      "it is taken as a download, and asks consent for BitTorrent")
+						# **Then the app leaves the screen**, as it does on a
+						# phone most of the time a download takes. The transfer
+						# service holds the process in the foreground while it
+						# moves (`TransferService`).
+						def serving():
+							return "TransferService" in adb("shell", "dumpsys", "activity",
+							                                 "services", APP)
+						check(wait_for("the transfer service", serving, 15, step=1),
+						      "a foreground service holds the download while it moves")
+						adb("shell", "input", "keyevent", "KEYCODE_HOME")
 						def landed():
 							return "4194304" in adb("shell", "stat", "-c", "%s", done_file)
 						got = wait_for("the torrent's file", landed, 90, step=3)
+						check(got, "and it finishes with the browser in the background")
+						check(wait_for("the service to stop", lambda: not serving(), 15, step=1),
+						      "the service goes when nothing is moving")
 						same = False
 						if got:
 							local = os.path.join(seed_dir, "got.bin")

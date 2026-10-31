@@ -40865,12 +40865,33 @@ asked consent, and wrote the file to its download folder byte for byte
 (same SHA-1). `tool/emulator_checks.py` now does exactly that, and says
 "not checked" on a machine without libtorrent or g++ to seed with.
 
-**Not yet**: seeding or a long download in the background needs a foreground
-service on Android, which this does not add (sec 19.6 names it); and the
-downloads list was seen drawn stale after the consent dialog closed, on the
-emulator's software graphics, which also crashed once in `eglSwapBuffers`
-on returning to the app -- the emulator's renderer, not this code, but the
-stale list wants looking at on the phone.
+**A download carries on in the background.** Two things were needed, and
+the second was found by the first's check failing:
+
+- **`TransferService`**, a `dataSync` foreground service beside the
+  playback one, up while any job is queued, resolving or running and down
+  when none is (`android_downloads` drives it, re-telling it only when its
+  text would change). Seeding does not hold it: uploading in the background
+  with a notification is a cost nobody asked for by downloading. It must
+  start while the app is in front, which a download always does; Android 15's
+  six-hour daily `dataSync` budget ends in `onTimeout`, where it stops itself.
+- **`android.app.background_running`.** Unset, Qt pauses its event loop when
+  the app leaves the screen: the torrent still finished on libtorrent's own
+  threads, but nothing of hydra's ran -- the alert saying so, the service's
+  stop, and any http download, which Qt's network stack carries. The check
+  "the service goes when nothing is moving" failed on exactly that. With it
+  set, the emulator shows the service up during the transfer, the file
+  finishing after the app went home, and the service gone after.
+
+What the emulator cannot show is the case the service exists for: a long
+download on a phone that would otherwise freeze or kill the app. On the
+emulator the four seconds of transfer would likely have finished either way,
+so that half rests on the platform's documented behaviour, and on the phone.
+
+**Still open**: the downloads list was seen drawn stale after the consent
+dialog closed, on the emulator's software graphics, which also crashed once
+in `eglSwapBuffers` on returning to the app -- the emulator's renderer, not
+this code, but the stale list wants looking at on the phone.
 
 ## The shared store emulator, first runs (2026-10-23)
 

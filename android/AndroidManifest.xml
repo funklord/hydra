@@ -41,6 +41,9 @@
          sound keeps playing and only the label for it is missing. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <!-- A download carries on while the browser is not in front: see
+         TransferService, which runs only while a transfer is moving. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Camera and microphone, for a page that calls getUserMedia: a video
          call in the browser is the case, and Teams web is the one asked for.
@@ -137,6 +140,17 @@
                 <data android:scheme="magnet"/>
             </intent-filter>
             <meta-data android:name="android.app.lib_name" android:value="hydra"/>
+            <!-- **Qt's event loop keeps running when the browser is not in
+                 front.** Unset, Qt pauses it there, and everything hydra does
+                 itself stops with it: a download's progress, the http
+                 transfers Qt's network stack carries, the torrent alerts that
+                 say a job finished. Measured 2026-10-31: a torrent finished in
+                 the background on libtorrent's own threads, and the
+                 TransferService it held stayed up because the event loop that
+                 would have stopped it was paused. It costs nothing while no
+                 foreground service runs, since Android freezes a cached app
+                 regardless. -->
+            <meta-data android:name="android.app.background_running" android:value="true"/>
         </activity>
         <!-- **There was an activity-alias here and it could not work.** It
              existed so the shared `tool/android.mk`, which launches this app
@@ -161,5 +175,9 @@
         <service android:name="se.vibes.hydra.PlaybackService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback"/>
+        <!-- Not exported, for the same reason. -->
+        <service android:name="se.vibes.hydra.TransferService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"/>
     </application>
 </manifest>
