@@ -165,6 +165,23 @@ public:
 				        "new Image().src = '/report?status=' + String(window.google_ad_status)"
 				        "  + '&error=' + (window.__err ? 1 : 0);"
 				        "</script></body></html>";
+			} else if (target.startsWith("/contract")) {
+				// **YouTube's `serverContract` rewrite, in miniature.** The
+				// page requires Trusted Types, as YouTube does, so a plain
+				// string assigned to a script throws; and the script to
+				// rewrite is the first thing in the head, so a rewrite that
+				// waits for the body lands after it has run. `contract` says
+				// which code ran, `text` which code the element now holds.
+				csp = "require-trusted-types-for 'script'";
+				body = "<!doctype html><html><head>"
+				        "<script>window.__mark_a = 1;</script>"
+				        "</head><body>contract<script>"
+				        "var k = '__mark_';"
+				        "new Image().src = '/report?contract=' + (window[k + 'b'] ? 'rewritten'"
+				        "  : window[k + 'a'] ? 'original' : 'none')"
+				        "  + '&text=' + (document.scripts[0].textContent.indexOf(k + 'b') >= 0"
+				        "                ? 'b' : 'a');"
+				        "</script></body></html>";
 			} else if (target.startsWith("/inbound")) {
 				// **uBlock's YouTube answer, in a real engine.** A request
 				// marked the way the `rpnt` marks one, and one that is not,
@@ -299,6 +316,9 @@ int main(int argc, char *argv[]) {
 			// nothing there.
 			body.write("/instream/ad_status.js^$script,xhr,"
 			           "redirect=doubleclick_instream_ad_status.js:5,domain=127.0.0.1\n");
+			// quick-fixes' `rpnt` shape: a pattern, a count and a condition.
+			body.write("127.0.0.1##+js(rpnt, script, /__mark_a/, __mark_b, "
+			           "sedCount, 1, condition, /__mark/)\n");
 			// And the video-ad SDK's, by AdGuard's name for the stand-in.
 			body.write("/js/sdkloader/ima3.js^$script,redirect=google-ima3,domain=127.0.0.1\n");
 		}
@@ -538,6 +558,21 @@ int main(int argc, char *argv[]) {
 		check(said.contains("frame=patched"),
 		      QString("and a fresh frame hands out the patched one, not a "
 		              "clean copy (%1)").arg(said));
+	}
+
+	section("a script is rewritten before it runs, on a page requiring Trusted Types");
+	{
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/contract").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		const bool answered = server.wait_for_report();
+		const QString said = server.report();
+		check(answered, QString("the page reported back (%1)").arg(said));
+		check(said.contains("text=b"),
+		      QString("the element holds the rewritten code, through a policy "
+		              "(%1)").arg(said));
+		check(said.contains("contract=rewritten"),
+		      QString("and the rewritten code is what ran (%1)").arg(said));
 	}
 
 	// --- what the real list says, reported rather than asserted -----------

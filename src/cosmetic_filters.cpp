@@ -349,7 +349,13 @@ QString cosmetic_filters::script_source() {
     return re ? function (n) { return re.test(n); } : function (n) { return n === arg; };
   };
   var act = function (rule, e, hidden) {
-    if (rule.action === 'remove') { e.remove(); e.textContent = ''; return; }
+    // Emptying a removed script throws on a page that requires Trusted
+    // Types; it is gone either way.
+    if (rule.action === 'remove') {
+      e.remove();
+      try { e.textContent = ''; } catch (x) {}
+      return;
+    }
     if (rule.action === 'remove-attr' || rule.action === 'remove-class') {
       var match = name_test(rule.arg);
       if (rule.action === 'remove-attr') {

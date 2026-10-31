@@ -683,14 +683,20 @@ var watch_dom = function (sweep, stay, want_attrs) {
 	try {
 		document.addEventListener('DOMContentLoaded', sweep, true);
 	} catch (e) {}
-	if (!window.MutationObserver || !document.documentElement) return;
+	// **The document, not its element.** A scriptlet runs at document
+	// start, where `documentElement` may not exist yet; giving up there left
+	// only the DOMContentLoaded sweep, after every inline script had run --
+	// so a rewrite of one landed and was never executed (YouTube's
+	// `serverContract`, 2026-10-31). An observer on the document sees the
+	// element arrive and everything under it, as uBlock's does.
+	if (!window.MutationObserver) return;
 	var passes = 0;
 	var obs = new window.MutationObserver(function () {
 		if (!stay && ++passes > 64) { obs.disconnect(); return; }
 		sweep();
 	});
 	try {
-		obs.observe(document.documentElement, {
+		obs.observe(document, {
 			childList: true, subtree: true, attributes: !!want_attrs
 		});
 	} catch (e) { return; }
@@ -1057,6 +1063,29 @@ C['disable-newtab-links'] = function () {
 //
 // Extra arguments arrive as `key, value` pairs, which is uBlock's varargs
 // convention: `includes` (or `condition`), `excludes` and `sedCount`.
+//
+// **A `<script>`'s text goes through a Trusted Types policy** on a page that
+// requires one, as YouTube does: there a plain string assigned to a script
+// throws, and before this the throw was caught and the rewrite dropped --
+// so quick-fixes' `serverContract` rule, uBlock's whole answer to YouTube's
+// enforcement, ran on every watch page and changed nothing (holder's report,
+// 2026-10-31). uBlock does the same. The policy is made only when a script
+// is actually rewritten, under a random name, and passes the text through.
+var script_policy;
+var as_script = function (text) {
+	if (script_policy === undefined) {
+		script_policy = null;
+		try {
+			var tt = window.trustedTypes;
+			if (tt && typeof tt.createPolicy === 'function')
+				script_policy = tt.createPolicy(
+				  Math.random().toString(36).slice(2),
+				  { createScript: function (t) { return t; } });
+		} catch (e) {}
+	}
+	return script_policy ? script_policy.createScript(text) : text;
+};
+
 var node_text = function (node_name, pattern, replacement, extras) {
 	var want_name = re_of(node_name, 'i', true);
 	if (!want_name) return;
@@ -1086,9 +1115,9 @@ var node_text = function (node_name, pattern, replacement, extras) {
 			if (!re_pattern.test(before)) return;
 			re_pattern.lastIndex = 0;
 		}
+		var after = re_pattern ? before.replace(re_pattern, after_text) : after_text;
 		try {
-			node.textContent = re_pattern
-			  ? before.replace(re_pattern, after_text) : after_text;
+			node.textContent = node.nodeName === 'SCRIPT' ? as_script(after) : after;
 		} catch (e) { return; }
 		if (left > 0) left -= 1;
 	};

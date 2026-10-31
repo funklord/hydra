@@ -38717,6 +38717,51 @@ own privacy list's plain rule; the page plays and the wall is absent.
 `test_bundle` covers path, subdomain, a different host, a separator, a
 wildcard host, and `matches()` agreeing (136 passed).
 
+### The `serverContract` rewrite never ran: Trusted Types, and too late
+
+The holder recorded the wall again 2026-10-31, on the desktop, signed in,
+1.5 hours into a radio playlist. The report showed no tells, nothing
+refused that uBlock does not refuse too (`log_event` is uBlock's own
+privacy list; `pagead/id` and `ad_status.js` were given stand-ins), and
+the player's `userAgent` with no marker in it. So the stall-and-reload
+loop had never fired once.
+
+`try_youtube_wall` now asks the page whether quick-fixes' `rpnt` landed.
+It had not. The `serverContract` script was there, the pattern and the
+condition both matched, and nothing in the page had been rewritten. There
+were two reasons, and either one alone is enough to defeat the rule:
+
+- **YouTube requires Trusted Types** (`require-trusted-types-for
+  'script'`). Assigning a plain string to a `<script>`'s text throws.
+  `node_text` caught the throw and dropped the rewrite without a word. The
+  only trace was the engine's console line, *This document requires
+  'TrustedScript' assignment*. A script's text now goes through a policy,
+  `as_script`, as it does in uBlock. The policy is made under a random
+  name, and only when a script is actually rewritten.
+- **`watch_dom` gave up when `documentElement` did not exist yet.** That
+  is the normal state at document start, so all that was left was the
+  DOMContentLoaded sweep. By then every inline script had already run.
+  The rewrite then landed in a script that would never run again. It now
+  observes `document`, as uBlock's watcher does. This is the shared
+  watcher, so every DOM-watching scriptlet starts at the head now, where
+  before it started at DOMContentLoaded.
+
+After both fixes the probe sees the rewrite land and run.
+`Map.prototype.has` prints as the rule's Proxy (`function () { [native
+code] }`, with no name). Before, it printed as the engine's own `has`.
+`try_scriptlets` serves a page under `require-trusted-types-for 'script'`
+whose first head script a `rpnt` rewrites, and asserts the rewritten code
+ran (29 passed). Each fix reverted alone turns that check red with
+`contract=original`.
+
+`cosmetic_filters`' `remove` action also emptied the removed element. On
+a script, under Trusted Types, that throws as well. It is caught now,
+since the element is gone either way.
+
+Whether this clears the wall is for the holder's session to show. The
+anonymous session here never got the wall, before or after. What is now
+true is that the rule uBlock relies on runs here as it runs there.
+
 ### Exceptions and rules with options are read now, and what that costs
 
 **15 thousand lines of the holder's lists carried options and were

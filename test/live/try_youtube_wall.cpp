@@ -163,6 +163,34 @@ static const char *k_probe = R"JS(
 		});
 		out.qt_object = typeof window.qt;
 	} catch (e) { out.named_globals = 'throws'; }
+	// Whether quick-fixes' `rpnt` landed: the script it rewrites carries
+	// `serverContract` (or opens `if (window.ytcsi`), and once rewritten it
+	// also carries the rule's own `YOUTUBE_PREMIUM_LOGO` check.
+	try {
+		var scripts = Array.prototype.slice.call(document.scripts);
+		var has = function (t) {
+			return scripts.filter(function (s) {
+				return String(s.textContent).indexOf(t) >= 0;
+			}).length;
+		};
+		out.server_contract_scripts = has('serverContract');
+		out.ytcsi_scripts = scripts.filter(function (s) {
+			return /^if \(window\.ytcsi/.test(String(s.textContent));
+		}).length;
+		out.rewritten_scripts = has('YOUTUBE_PREMIUM_LOGO');
+		out.escaped_commas_left = has('\\,');
+		// The rewritten script swaps `Map.prototype.has` for a Proxy, which
+		// prints as a nameless native: proof the rewrite ran, not only landed.
+		out.map_has_printed = String(Map.prototype.has);
+		scripts.forEach(function (s) {
+			var t = String(s.textContent);
+			if (t.indexOf('serverContract') < 0) return;
+			out.contract_has_observer = t.indexOf('MutationObserver') >= 0;
+			out.contract_pattern = /(\(function serverContract\(\)|^if \(window\.ytcsi)/m.test(t);
+			out.contract_head = t.slice(0, 120);
+			out.contract_length = t.length;
+		});
+	} catch (e) { out.server_contract_scripts = 'throws'; }
 	out.url = location.href;
 	return JSON.stringify(out);
 })()
