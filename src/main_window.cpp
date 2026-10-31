@@ -6494,6 +6494,13 @@ void main_window::open_handed_url() {
 		open_external_url(url);
 		return;
 	}
+	// And a .torrent file handed over -- by a file manager, or another app's
+	// download -- is started rather than shown as a page of bytes.
+	if (url.isLocalFile() && url.path().endsWith(".torrent", Qt::CaseInsensitive) &&
+	    m_downloads->source_for(url)) {
+		start_download(url);
+		return;
+	}
 	open_url(url);
 }
 #endif

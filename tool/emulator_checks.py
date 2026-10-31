@@ -698,6 +698,40 @@ def main():
 					finally:
 						proc.terminate()
 						proc.wait(timeout=10)
+
+					# **And one opened from the Downloads collection**, the way a
+					# file manager hands it over: a content: address with a read
+					# grant, which hydra copies before the grant lapses. A third
+					# swarm, for the same reason as the second.
+					file_out = f"/sdcard/Android/data/{APP}/files/Download/hydra-file.bin"
+					adb("shell", "rm", "-f", file_out)
+					proc = subprocess.Popen([seeder, seed_dir, str(seed_port), "180", "0",
+					                         "hydra-file.bin"], stdout=subprocess.PIPE, text=True,
+					                        env=dict(os.environ, HYDRA_SEED_CONNECT="127.0.0.1:16881"))
+					try:
+						proc.stdout.readline()
+						shared = f"/sdcard/Download/hydra-file-{int(time.time())}.torrent"
+						adb("push", os.path.join(seed_dir, "hydra-file.bin.torrent"), shared)
+						adb("shell", "content", "call", "--uri", "content://media", "--method",
+						    "scan_volume", "--arg", "external_primary")
+						rows = adb("shell", "content", "query", "--uri",
+						           "content://media/external/downloads", "--projection",
+						           "_id:_display_name")
+						row = [l for l in rows.splitlines() if os.path.basename(shared) in l]
+						item = re.search(r"_id=(\d+)", row[0]).group(1) if row else ""
+						check(bool(item), f"the .torrent is in the shared Downloads ({item})")
+						adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
+						    "-t", "application/x-bittorrent",
+						    "-d", f"content://media/external/downloads/{item}",
+						    "--grant-read-uri-permission", "-n", f"{APP}/.HydraActivity")
+						def landed_file():
+							return "4194304" in adb("shell", "stat", "-c", "%s", file_out)
+						check(wait_for("the opened torrent's file", landed_file, 90, step=3),
+						      "opened from Downloads, it was started as a torrent, its 4 MiB downloaded")
+						adb("shell", "rm", "-f", shared)
+					finally:
+						proc.terminate()
+						proc.wait(timeout=10)
 						adb("reverse", "--remove", f"tcp:{seed_port}")
 						adb("forward", "--remove", "tcp:16881")
 

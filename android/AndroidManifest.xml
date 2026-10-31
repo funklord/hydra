@@ -139,6 +139,17 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="magnet"/>
             </intent-filter>
+            <!-- And a .torrent file another app offers: a file manager, or a
+                 browser that downloaded one. Shared as content: (or file: by
+                 an older app); HydraIntents copies it where hydra can read it,
+                 and main_window::open_handed_url starts it. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+                <data android:mimeType="application/x-bittorrent"/>
+            </intent-filter>
             <meta-data android:name="android.app.lib_name" android:value="hydra"/>
             <!-- **Qt's event loop keeps running when the browser is not in
                  front.** Unset, Qt pauses it there, and everything hydra does

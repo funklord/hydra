@@ -40933,6 +40933,19 @@ the 4 MiB downloaded byte for byte -- with the seeder dialling hydra through
 `test_torrent` holds the choice of source by address, by name, and for a
 page's own download.
 
+**And a .torrent opened from a file manager** -- or from another browser's
+download -- is started too. The manifest registers `application/x-bittorrent`
+for content: and file: addresses. A content: address is readable only
+through the resolver, with the grant that came with that one intent, so
+`HydraIntents.takeViewUrl` copies it into the cache as
+`handed-<time>.torrent` (refusing anything past 16 MB, which no torrent's
+metadata approaches) and hands C++ that file; `open_handed_url` starts a
+local `.torrent` rather than showing it as a page. On the emulator: a third
+swarm's .torrent pushed into the shared Downloads collection, opened by its
+`content://media/external/downloads/<id>` with a read grant, and the 4 MiB
+downloaded byte for byte; `emulator_checks.py` does the same. The copies
+stay in the cache, which the platform clears, at about a kilobyte each.
+
 ## The shared store emulator, first runs (2026-10-23)
 
 `make android-store-screenshots` now captures on one shared emulator, the

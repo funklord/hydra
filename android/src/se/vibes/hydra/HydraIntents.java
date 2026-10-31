@@ -107,8 +107,39 @@ public class HydraIntents {
         Uri u = i.getData();
         if (u == null)
             return "";
+        final String type = i.getType();
         i.setData(null);
         a.setIntent(i);
+        // **A .torrent shared as content: is readable only through the
+        // resolver**, with the grant that came with this intent, and only
+        // now. Copied into the cache under a .torrent name, and that file's
+        // address is what C++ is handed.
+        if ("content".equals(u.getScheme())) {
+            if (type == null || !type.toLowerCase(java.util.Locale.ROOT)
+                                     .startsWith("application/x-bittorrent"))
+                return "";
+            final java.io.File out = new java.io.File(a.getCacheDir(),
+                "handed-" + System.currentTimeMillis() + ".torrent");
+            try (java.io.InputStream in = a.getContentResolver().openInputStream(u);
+                 java.io.OutputStream o = new java.io.FileOutputStream(out)) {
+                if (in == null)
+                    return "";
+                final byte[] buf = new byte[16384];
+                long total = 0;
+                for (int n; (n = in.read(buf)) > 0; ) {
+                    // A torrent's metadata is kilobytes; anything near this is
+                    // not one, and the copy is not allowed to fill the cache.
+                    total += n;
+                    if (total > 16L * 1024 * 1024)
+                        return "";
+                    o.write(buf, 0, n);
+                }
+            } catch (java.io.IOException | SecurityException e) {
+                android.util.Log.w("hydra", "handed .torrent: " + e);
+                return "";
+            }
+            return Uri.fromFile(out).toString();
+        }
         return u.toString();
     }
 
