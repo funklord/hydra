@@ -27427,6 +27427,26 @@ reader cannot reach these rows until then.
   `chrome://blank` out of a tab's recorded address and its title, where only
   `about:blank` had been caught. On the emulator a new tab opens an empty
   editor; `test_address` and `test_rotation` hold both spellings.
+- **Nothing is appended to an address, and an edit is not thrown away**
+  (holder, 2026-10-31: "I edited the text and removed that part and it keeps
+  being reinserted ... nothing should be appended to a written url"). Two
+  faults, both reproduced on the emulator with the broken address itself:
+  - the Paste rows inserted at the cursor, so a tap that placed the cursor
+    and a paste joined the link onto the page's address -- how
+    `chrome://blankhttps://...` was made in the first place. A paste now
+    replaces the page's address, and goes in at the cursor only into text
+    the person has edited (`address_editor::edited`, the document's
+    modified flag, cleared whenever the editor is filled from the page);
+  - closing the editor without Go -- a tap on the page, Back -- dropped the
+    edit, and the bar showed the page's address again, so a prefix somebody
+    had just deleted came back. The edit is kept in the bar now, as on the
+    desktop, until a navigation or a tab change replaces it.
+
+  Worth knowing about that address: Qt shows `chrome://blankhttps://x` as
+  `chrome://blankhttps//x` -- it reads `blankhttps:` as a host with an empty
+  port and drops the colon -- so deleting the prefix by hand leaves
+  `https//x`, which is not an address at all. Not worked around: the fix is
+  that the joined address is no longer made.
 - **Paste could not be tapped.** Qt's paste bubble is drawn over the menu
   bar and does not take the touch: it lands in the View menu under it.
   Now the editor offers what is on the clipboard as rows of its own --

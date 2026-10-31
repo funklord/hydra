@@ -1057,9 +1057,13 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 			return;
 		}
 		if (kind == QLatin1String("paste")) {
-			// Into the field at the cursor, over whatever is selected -- which
-			// after the first tap is the whole old address.
-			m_address->insert(url);
+			// The page's address is replaced, never appended to; text the
+			// person has edited takes the paste at their cursor
+			// (`address_editor::paste_text` says why).
+			if (m_address->isModified())
+				m_address->insert(url);
+			else
+				m_address->setText(url);
 			m_address->setModified(true);
 			m_address->setFocus(Qt::OtherFocusReason);
 			return;
@@ -7621,6 +7625,8 @@ void main_window::open_address_editor() {
 		// 2026-10-30).
 		const QSignalBlocker quiet(m_address_editor);
 		m_address_editor->set_text(m_address->text());
+		// A kept edit is still an edit: a paste goes into it at the cursor.
+		m_address_editor->document()->setModified(edited);
 	}
 	if (m_suggest_timer)
 		m_suggest_timer->stop();
@@ -7638,6 +7644,14 @@ void main_window::open_address_editor() {
 void main_window::close_address_editor() {
 	if (!m_editor_panel || !m_editor_panel->isVisible())
 		return;
+	// **An edit is kept when the editor closes**, as the desktop bar keeps
+	// one until the person goes somewhere or changes tab. Dropped, the bar
+	// went back to the page's address and the part somebody had just
+	// removed reappeared -- reported as the prefix "being reinserted".
+	if (m_address_editor && m_address_editor->edited()) {
+		m_address->setText(m_address_editor->text());
+		m_address->setModified(true);
+	}
 	if (m_suggest_timer)
 		m_suggest_timer->stop();
 	m_editor_panel->hide();

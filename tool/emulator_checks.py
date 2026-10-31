@@ -585,10 +585,16 @@ def main():
 			open_url("https://example.com/", wait=12)
 			tap_bar()
 			time.sleep(2)
-			check(tap_row(1, 2), "Paste, on its own")
+			# **With the cursor placed first**: a tap at the end of the text
+			# drops the selection, and Paste used to insert there -- the
+			# page's address with the link appended, which is how
+			# "chrome://blankhttps://..." was made. It replaces it now.
+			adb("shell", "input", "tap", "950", "320")
+			time.sleep(1)
+			check(tap_row(1, 2), "Paste, on its own, after placing the cursor")
 			check(tap("Go to the address being edited", limit=5), "and Go")
 			time.sleep(8)
-			check(href() == clean, f"put the clean address in the editor to go to ({href()})")
+			check(href() == clean, f"replaced the page's address rather than joining it ({href()})")
 
 			print("\n== a paywalled page is shown as a crawler is sent it ==")
 			# hydra's own fetch, from the phone: through `adb reverse` like the

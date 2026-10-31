@@ -169,10 +169,30 @@ public:
 	std::function<QString(const QString &)> cleaner;
 
 	QString text() const { return toPlainText().simplified(); }
-	void set_text(const QString &t) { setPlainText(t); }
+	// Filled with an address the person did not write: not an edit.
+	void set_text(const QString &t) {
+		setPlainText(t);
+		document()->setModified(false);
+	}
+	// Whether the person has changed the text since it was last filled.
+	bool edited() const { return document()->isModified(); }
 
 	// Puts `t` at the cursor, over the selection, cleaned as a paste is.
-	void paste_text(const QString &t) { insertPlainText(clean(t)); }
+	// **A pasted link replaces the page's address; it is never appended to
+	// it.** Inserted at the cursor, a tap that placed the cursor in the
+	// address and a paste made "chrome://blankhttps://..." (holder,
+	// 2026-10-31: "nothing should be appended to a written url"). Into text
+	// the person has edited, it goes where they put the cursor, since that
+	// text is theirs.
+	void paste_text(const QString &t) {
+		if (edited()) {
+			insertPlainText(clean(t));
+		} else {
+			setPlainText(clean(t));
+			moveCursor(QTextCursor::End);
+		}
+		document()->setModified(true);
+	}
 
 	QVariant inputMethodQuery(Qt::InputMethodQuery query) const override {
 		if (query == Qt::ImEnterKeyType)
