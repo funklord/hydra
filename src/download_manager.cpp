@@ -297,8 +297,16 @@ int download_manager::enqueue(const QUrl &url, const QString &node_id,
 	// First source that accepts wins. If none does, report the most specific
 	// reason offered rather than a generic refusal -- the sources know why.
 	download_source *chosen = nullptr;
+	if (!file_name.isEmpty())
+		for (download_source *s : m_sources)
+			if (s->claims_name(url, file_name)) {
+				chosen = s;
+				break;
+			}
 	QString first_reason;
 	for (download_source *s : m_sources) {
+		if (chosen)
+			break;
 		QString why_not;
 		if (hints.known_media ? s->accepts_known_media(url, &why_not)
 		                : s->accepts(url, &why_not)) {

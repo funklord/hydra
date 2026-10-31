@@ -614,6 +614,16 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 				m_status->showMessage(QString("Downloading %1…").arg(name), 6000);
 				return;
 			}
+			// **A .torrent the page handed over is a torrent to start**, not
+			// only a file (architecture sec 11.4: the same box, the same
+			// result as any other download link). The engine fetched it with
+			// the page's own session, so a sign-in it needed was already
+			// there; the saved file is what the torrent is started from, and
+			// stays where it was saved.
+			if (d.ok && m_torrents && name.endsWith(".torrent", Qt::CaseInsensitive)) {
+				start_download(QUrl::fromLocalFile(d.path));
+				return;
+			}
 			if (d.ok) {
 				m_status->showMessage(QString("Saved %1 to %2")
 				                          .arg(name,

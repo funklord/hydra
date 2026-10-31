@@ -38,6 +38,7 @@
 #include <functional>
 #include "cosmetic_filters.h"
 #include "main_window.h"
+#include "torrent_download_source.h"
 #include "session_mirror.h"
 #include "settings_dialog.h"
 #include <QFocusEvent>
@@ -5902,6 +5903,25 @@ int main(int argc, char **argv) {
 		check(p.m_status->currentMessage().startsWith("Saved manual.pdf"),
 		       QString("a success still reads as before (%1)")
 		           .arg(p.m_status->currentMessage()));
+
+		// **A .torrent the engine saved is a torrent to start** (sec 11.4):
+		// the file it fetched with the page's session becomes a torrent job,
+		// rather than a "Saved" line and a file nobody opens.
+		if (torrent_download_source::available()) {
+			// Consent given first, as a person answering the BitTorrent box
+			// does: unasked, the box would wait for a click this suite cannot
+			// make -- it hung here until the watchdog ended it.
+			p.m_downloads->set_consent("torrent", true);
+			factory.note_download(QUrl("https://t.example/download.php?id=1"),
+			                      "/tmp/hydra-test/ubuntu.iso.torrent",
+			                      /*finished=*/true, /*ok=*/true, {});
+			spin(80);
+			bool torrent_job = false;
+			for (const download_job &j : p.m_downloads->jobs())
+				torrent_job = torrent_job || (j.source_id == "torrent" &&
+				  j.url == QUrl::fromLocalFile("/tmp/hydra-test/ubuntu.iso.torrent"));
+			check(torrent_job, "a .torrent the engine saved is started as a torrent");
+		}
 	}
 
 	section("a blob the engine refuses falls back to the row's address");

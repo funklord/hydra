@@ -200,6 +200,18 @@ public:
 		return accepts(url, why_not);
 	}
 
+	// **A claim by the name a download arrived with**, which the manager asks
+	// before anything else -- the server's Content-Disposition, or a name made
+	// from its content type. A torrent served from `/download.php?id=1` is
+	// `ubuntu.iso.torrent` by name and nothing by address, and the http source
+	// would otherwise take it first and save it. False is "no claim", not a
+	// refusal: the ordinary questions follow.
+	virtual bool claims_name(const QUrl &url, const QString &file_name) const {
+		Q_UNUSED(url)
+		Q_UNUSED(file_name)
+		return false;
+	}
+
 	// Begin. Returns false and sets `error` if the job could not be started at
 	// all; anything that fails later is reported through finished().
 	virtual bool start(const download_request &req, QString *error) = 0;

@@ -189,6 +189,12 @@ bool torrent_download_source::accepts(const QUrl &url, QString *why_not) const {
 	return false;
 }
 
+bool torrent_download_source::claims_name(const QUrl &url, const QString &file_name) const {
+	const QString scheme = url.scheme().toLower();
+	return available() && file_name.endsWith(".torrent", Qt::CaseInsensitive) &&
+	       (scheme == "http" || scheme == "https");
+}
+
 // Resume data is keyed by **info-hash**, never by job id. Job ids are handed
 // out by the manager starting from 1 in each session, so a file named after one
 // would be loaded by an unrelated torrent after a restart -- resurrecting some
@@ -391,7 +397,13 @@ bool torrent_download_source::add_params(const download_request &req,
 
 void torrent_download_source::fetch_torrent_file(const download_request &req) {
 #ifdef HYDRA_HAVE_LIBTORRENT
-	QNetworkReply *reply = m_net->get(QNetworkRequest(req.url));
+	// **With what the page's request carried** -- its cookie, referer and
+	// agent -- since a .torrent is as often behind a sign-in as any download;
+	// fetched bare, the sign-in page came back and was "not a torrent".
+	QNetworkRequest get(req.url);
+	for (auto it = req.headers.cbegin(); it != req.headers.cend(); ++it)
+		get.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
+	QNetworkReply *reply = m_net->get(get);
 	const download_request copy = req;
 	connect(reply, &QNetworkReply::finished, this, [this, reply, copy] {
 		reply->deleteLater();

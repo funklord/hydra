@@ -784,9 +784,16 @@ OBJS_test_theme = \
 OBJS_test_torrent = \
 	$(BUILD_DIR)/app/download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
+	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/media_detector.o \
+	$(BUILD_DIR)/moc/moc_http_download_source.o \
+	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/moc/moc_media_detector.o \
+	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o
 

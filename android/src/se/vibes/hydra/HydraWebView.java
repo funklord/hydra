@@ -267,8 +267,16 @@ public class HydraWebView {
         // the address and type -- the platform's rule, the one Chrome uses.
         // A Save from the menu has asked the server nothing yet, so it leaves
         // the name to the download queue, which reads the answer.
-        final String name = disposition == null && mime == null ? ""
+        String name = disposition == null && mime == null ? ""
           : android.webkit.URLUtil.guessFileName(url, disposition, mime);
+        // **The type is what says "torrent"**, and it does not cross to C++:
+        // guessFileName named `/download.php?id=1` served as
+        // application/x-bittorrent "download.php", so it was saved as a file
+        // instead of started (emulator, 2026-10-31). The name carries it.
+        if (name != null && mime != null
+            && mime.toLowerCase(java.util.Locale.ROOT).startsWith("application/x-bittorrent")
+            && !name.toLowerCase(java.util.Locale.ROOT).endsWith(".torrent"))
+            name = name.replaceFirst("\\.[^.]*$", "") + ".torrent";
         onDownload(id, url, cookie == null ? "" : cookie,
                    w.getSettings().getUserAgentString(),
                    w.getUrl() == null ? "" : w.getUrl(), name == null ? "" : name);

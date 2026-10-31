@@ -40902,10 +40902,36 @@ download on a phone that would otherwise freeze or kill the app. On the
 emulator the four seconds of transfer would likely have finished either way,
 so that half rests on the platform's documented behaviour, and on the phone.
 
-**Still open**: the downloads list was seen drawn stale after the consent
-dialog closed, on the emulator's software graphics, which also crashed once
-in `eglSwapBuffers` on returning to the app -- the emulator's renderer, not
-this code, but the stale list wants looking at on the phone.
+**A .torrent linked from a page is started, not saved (2026-10-31).** Sites
+serve them from addresses like `/download.php?id=1` as
+`application/x-bittorrent`, and three things were in the way, each found by
+the emulator check failing:
+
+- The manager asked sources only about the address, and the http source,
+  first in line, either took it and saved the file or refused it outright
+  ("That URL does not look like a saveable file"). A source may now claim a
+  download by the name it arrived with (`download_source::claims_name`,
+  asked before anything else); the torrent source claims `.torrent` over
+  http(s), and its fetch of the file carries the page's cookie, referer and
+  agent, since a .torrent is as often behind a sign-in as any download.
+- Android's `URLUtil.guessFileName` named that address `download.php`: the
+  type that says "torrent" did not cross into C++. `startDownload` now
+  names a download of that type `.torrent`.
+- On the desktop the engine saves the file itself, so a finished engine
+  download ending in `.torrent` is now started as a torrent too.
+
+And the stale downloads list was hydra's, not the emulator's: the page
+under a dialog was un-hidden when the consent box closed although the
+downloads window was still open, because the count of covering windows
+assumed a hiding window is still counted visible. The count now leaves out
+the window whose event it is, and the list stays whole.
+
+The emulator check covers it: a second swarm under another name, its
+.torrent served by type from `/download.php?id=1`, the link tapped, and
+the 4 MiB downloaded byte for byte -- with the seeder dialling hydra through
+`adb forward`, since a .torrent names no peer (`HYDRA_SEED_CONNECT`).
+`test_torrent` holds the choice of source by address, by name, and for a
+page's own download.
 
 ## The shared store emulator, first runs (2026-10-23)
 

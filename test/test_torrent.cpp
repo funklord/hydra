@@ -2,6 +2,7 @@
 // a seeder session inside this process, and the source downloading from it over
 // loopback. No tracker, no DHT -- the seeder connects to us directly.
 #include "download_manager.h"
+#include "http_download_source.h"
 #include "torrent_download_source.h"
 
 #include <QCoreApplication>
@@ -638,6 +639,38 @@ static void test_listen_refused() {
 	qInstallMessageHandler(prev);
 }
 
+// **A torrent is known by the name it arrives with, not only by its path.**
+// Sites serve them from `/download?id=...` as `application/x-bittorrent`; the
+// page's download names it `... .torrent` (Android's URLUtil.guessFileName
+// derives that from the type, the desktop engine from its own guess), and the
+// address alone said nothing -- so it was saved as a file rather than started.
+// Asked in the window's own source order: http before torrent.
+static void test_named_torrent() {
+	section("a torrent is known by the name it arrives with");
+	download_manager m;
+	m.add_source(new http_download_source);
+	m.add_source(new torrent_download_source);
+	QString err;
+	auto source_of = [&](const QString &url, const QString &name, bool vouched = false) {
+		download_hints hints;
+		hints.known_media = vouched;   // what a page's own download is passed as
+		const int id = m.enqueue(QUrl(url), QString(), &err, {}, name, hints);
+		for (const download_job &j : m.jobs())
+			if (j.id == id)
+				return j.source_id;
+		return QStringLiteral("none: ") + err;
+	};
+	check(source_of("https://t.example/files/ubuntu.iso.torrent", QString()) == "torrent",
+	      "a .torrent path is a torrent");
+	check(source_of("https://t.example/download.php?id=1", "ubuntu.iso.torrent") == "torrent",
+	      QString("an address named .torrent by its download is a torrent (%1)")
+	        .arg(source_of("https://t.example/download.php?id=2", "x.torrent")));
+	check(source_of("https://t.example/download.php?id=3", "ubuntu.torrent", true) == "torrent",
+	      "and so is one a page handed over, which http would otherwise take first");
+	check(source_of("https://t.example/files/notes.pdf", "notes.pdf") == "http",
+	      "and a file that is not is still the http source's");
+}
+
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication app(argc, argv);
@@ -684,6 +717,7 @@ int main(int argc, char **argv) {
 	test_magnet_and_errors();
 	test_resume_data();
 	test_listen_refused();
+	test_named_torrent();
 
 	// **Counted, not merely attempted**, and this suite used not to remove its
 	// tree at all: six swarms' worth of seeded data and resume state stayed in

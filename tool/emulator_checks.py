@@ -145,6 +145,7 @@ class files(http.server.BaseHTTPRequestHandler):
 	# the download sent.
 	seen = []
 	name = "held.bin"
+	torrent = b""   # a .torrent the BitTorrent check serves as a site would
 
 	def do_GET(self):
 		files.seen.append((self.path, dict(self.headers)))
@@ -174,6 +175,17 @@ class files(http.server.BaseHTTPRequestHandler):
 			        + rest).encode()
 			self.send_response(200)
 			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/tpage"):
+			body = ("<!doctype html><meta name=viewport content='width=device-width'>"
+			        "<a href='/download.php?id=1' style='position:fixed;inset:0;"
+			        "display:block;background:#fc9;font-size:40px'>TORRENT</a>").encode()
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/download.php"):
+			# As a tracker site serves one: by type alone, no file name.
+			body = files.torrent
+			self.send_response(200)
+			self.send_header("Content-Type", "application/x-bittorrent")
 		elif self.path.startswith("/file"):
 			body = b"hydra download check\n"
 			self.send_response(200)
@@ -655,7 +667,39 @@ def main():
 					finally:
 						proc.terminate()
 						proc.wait(timeout=10)
+
+					# **A .torrent linked from a page**, served by type from an
+					# address that says nothing -- `/download.php?id=1` -- as
+					# tracker sites do. A second swarm (another name, another
+					# info-hash) so the first, still seeding in hydra, is not
+					# the same torrent added twice.
+					page_file = f"/sdcard/Android/data/{APP}/files/Download/hydra-page.bin"
+					adb("shell", "rm", "-f", page_file)
+					# A .torrent names no peer, so the seeder dials hydra: through
+					# `adb forward` to the port libtorrent listens on there.
+					adb("forward", "tcp:16881", "tcp:6881")
+					proc = subprocess.Popen([seeder, seed_dir, str(seed_port), "180", "0",
+					                         "hydra-page.bin"], stdout=subprocess.PIPE, text=True,
+					                        env=dict(os.environ, HYDRA_SEED_CONNECT="127.0.0.1:16881"))
+					try:
+						proc.stdout.readline()
+						with open(os.path.join(seed_dir, "hydra-page.bin.torrent"), "rb") as t:
+							files.torrent = t.read()
+						files.seen.clear()
+						open_url(f"http://127.0.0.1:{port}/tpage", wait=12)
+						adb("shell", "input", "tap", "540", "1200")
+						fetched = wait_for("the .torrent fetched", lambda: any(
+						  p.startswith("/download.php") for p, _ in files.seen), 30, step=2)
+						check(fetched, "tapping the link asked for the .torrent")
+						def landed_page():
+							return "4194304" in adb("shell", "stat", "-c", "%s", page_file)
+						check(wait_for("the linked torrent's file", landed_page, 90, step=3),
+						      "and it was started as a torrent, its 4 MiB downloaded")
+					finally:
+						proc.terminate()
+						proc.wait(timeout=10)
 						adb("reverse", "--remove", f"tcp:{seed_port}")
+						adb("forward", "--remove", "tcp:16881")
 
 			# **Checks of the lists against real sites**, last: each moves the
 			# tab somewhere else, and the lists have been in force since the

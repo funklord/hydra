@@ -69,6 +69,8 @@ public:
 	static QStringList url_schemes();
 
 	QString id() const override { return "torrent"; }
+	// A `.torrent` by name, fetched over http(s), as well as by address.
+	bool claims_name(const QUrl &url, const QString &file_name) const override;
 	QString display_name() const override { return "BitTorrent"; }
 	source_capabilities capabilities() const override;
 
