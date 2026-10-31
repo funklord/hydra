@@ -175,6 +175,11 @@ class files(http.server.BaseHTTPRequestHandler):
 			        + rest).encode()
 			self.send_response(200)
 			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/desk"):
+			body = ("<!doctype html><title>Desk</title><p>A site this browser asks "
+			        "for as a desktop.</p>").encode()
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
 		elif self.path.startswith("/tpage"):
 			body = ("<!doctype html><meta name=viewport content='width=device-width'>"
 			        "<a href='/download.php?id=1' style='position:fixed;inset:0;"
@@ -595,6 +600,51 @@ def main():
 			check(tap("Go to the address being edited", limit=5), "and Go")
 			time.sleep(8)
 			check(href() == clean, f"replaced the page's address rather than joining it ({href()})")
+
+			print("\n== the bar goes to a site whose rule is \"ask as a desktop\" ==")
+			# **The holder could not reach teams.microsoft.com from the bar**:
+			# the page they were on reloaded instead (2026-10-31). Teams has a
+			# desktop-site rule, and the switch it makes on arrival reloaded
+			# the page being left, because the new one had not committed. So:
+			# a rule for `localhost`, a page on `127.0.0.1`, and Paste and go
+			# to the rule's host -- the tab has to end up there, asked for as
+			# a desktop, not back where it started.
+			policy = "files/policy.ini"
+			adb("shell", "am", "force-stop", APP)
+			saved_policy = subprocess.run([ADB, "-s", SERIAL, "shell", "run-as", APP, "cat", policy],
+			                              capture_output=True).stdout
+			had_policy = b"[hydra]" in saved_policy
+			rule = (b"[hydra]\nformat=1\nkind=policy\n\n[sites]\nlocalhost=desktopSite:allow\n")
+			subprocess.run([ADB, "-s", SERIAL, "shell", "run-as", APP, "tee", policy],
+			               input=rule, capture_output=True, timeout=30)
+			try:
+				open_url(f"http://127.0.0.1:{port}/article", wait=15)
+				target = f"http://localhost:{port}/desk"
+				copied = probe("(function(){var t=document.createElement('textarea');"
+				               f"t.value='{target}';document.body.appendChild(t);t.focus();"
+				               "t.select();var ok=document.execCommand('copy');t.remove();"
+				               "return 'copied '+ok})()").strip()
+				files.seen.clear()
+				tap_bar()
+				time.sleep(2)
+				check(copied == "copied true" and tap_row(0, 2),
+				      "Paste and go with the desktop site's address")
+				def arrived():
+					return probe("location.href").strip() == target
+				check(wait_for("the desktop site", arrived, 30, step=3),
+				      f"the tab goes there, rather than reloading the page it left "
+				      f"({probe('location.href').strip()})")
+				desk = [h for p, h in files.seen if p.startswith("/desk")]
+				ua = desk[-1].get("User-Agent", "") if desk else ""
+				check("X11" in ua or "Linux x86_64" in ua,
+				      f"and asks for it as a desktop ({ua[:60]})")
+			finally:
+				adb("shell", "am", "force-stop", APP)
+				if had_policy:
+					subprocess.run([ADB, "-s", SERIAL, "shell", "run-as", APP, "tee", policy],
+					               input=saved_policy, capture_output=True, timeout=30)
+				else:
+					adb("shell", "run-as", APP, "rm", "-f", policy)
 
 			print("\n== a paywalled page is shown as a crawler is sent it ==")
 			# hydra's own fetch, from the phone: through `adb reverse` like the

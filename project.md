@@ -27427,6 +27427,22 @@ reader cannot reach these rows until then.
   `chrome://blank` out of a tab's recorded address and its title, where only
   `about:blank` had been caught. On the emulator a new tab opens an empty
   editor; `test_address` and `test_rotation` hold both spellings.
+- **The bar could not reach a site with a desktop-site rule** (holder,
+  2026-10-31: "it is still impossible to go to a url through the url bar, it
+  just reloads the same page"). The phone's log showed it for
+  teams.microsoft.com, which has that rule: the Teams page started, the
+  rule's switch fired, and a quarter-second later the page being left loaded
+  again. `HydraWebView.setDesktopSite` reloaded `getOriginalUrl()`/`getUrl()`,
+  which mid-navigation still name the page being left, and ignored the
+  address C++ passed it; so the reload cancelled the navigation. It now
+  loads the address it is given. And because any reload triggered by a
+  page's arrival has the same shape on Android, `reload` itself loads the
+  view's own address when it differs from the WebView's committed one.
+  `tool/emulator_checks.py` writes a `localhost=desktopSite:allow` rule,
+  starts on a page at 127.0.0.1 and uses Paste and go to `localhost`: the
+  build before the fix reloaded the starting page as a desktop and never
+  requested the target (run by hand to see it fail); the fix lands there,
+  asked for as a desktop.
 - **Nothing is appended to an address, and an edit is not thrown away**
   (holder, 2026-10-31: "I edited the text and removed that part and it keeps
   being reinserted ... nothing should be appended to a written url"). Two

@@ -2101,10 +2101,19 @@ public class HydraWebView {
             // is empty part-way through a navigation, and `armDocumentStart`
             // gives up on an empty url before it logs anything, so asking
             // here failed silently and left the stale script in place.
-            armDocumentStart(id, w, (url != null && !url.isEmpty()) ? url : target,
-                              startJs);
-            if (target != null && !target.equals(now))
-                w.loadUrl(target);
+            // **And the page to load is the one C++ names**, not the
+            // WebView's own. This runs when a navigation reaches a site whose
+            // rule is "ask as a desktop", and at that moment getUrl() and
+            // getOriginalUrl() still name the page being left: the new one
+            // has not committed. Reloading that page cancelled the
+            // navigation, so going to such a site from the address bar
+            // "just reloaded the same page" -- the holder, 2026-10-31, on
+            // teams.microsoft.com, with the log showing the Teams load start
+            // and the previous page come back a quarter-second later.
+            final String dest = (url != null && !url.isEmpty()) ? url : target;
+            armDocumentStart(id, w, dest, startJs);
+            if (dest != null && !dest.equals(now))
+                w.loadUrl(dest);
             else
                 w.reload();
         } });
@@ -2289,7 +2298,18 @@ public class HydraWebView {
                 if (w == null)
                     return;
                 armDocumentStart(id, w, url, startJs);
-                w.reload();
+                // **A reload means the page hydra is on**, and mid-navigation
+                // that is not the page the WebView has committed: reload()
+                // then brings back the page being left and cancels the one
+                // asked for -- how the desktop-site switch sent the bar's
+                // navigation back where it started (2026-10-31). The same
+                // holds for any reload a page's arrival triggers, so the
+                // address C++ names is loaded when the two disagree.
+                final String now = w.getUrl();
+                if (url != null && !url.isEmpty() && now != null && !url.equals(now))
+                    w.loadUrl(url);
+                else
+                    w.reload();
             }
         });
     }
