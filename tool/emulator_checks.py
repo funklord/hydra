@@ -216,6 +216,16 @@ class files(http.server.BaseHTTPRequestHandler):
 			body = b"<!doctype html><title>Popped</title><p>popped</p>"
 			self.send_response(200)
 			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/styled"):
+			# A page that allows no inline style, with an element a generic
+			# EasyList rule hides, and a report URI for what its policy refused.
+			body = ("<!doctype html><meta name=viewport content='width=device-width'>"
+			        "<title>Styled</title><p>A strict page.</p>"
+			        "<div class=adsbygoogle-box>an ad</div>").encode()
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
+			self.send_header("Content-Security-Policy",
+			                 "style-src 'self'; report-uri /csp-report")
 		elif self.path.startswith("/clicked"):
 			body = b"ok"
 			self.send_response(200)
@@ -264,6 +274,14 @@ class files(http.server.BaseHTTPRequestHandler):
 		self.send_header("Content-Length", str(len(body)))
 		self.end_headers()
 		self.wfile.write(body)
+
+	def do_POST(self):
+		# A CSP report: kept like a request, answered with nothing.
+		size = int(self.headers.get("Content-Length") or 0)
+		self.rfile.read(min(size, 65536))
+		files.seen.append((self.path, dict(self.headers)))
+		self.send_response(204)
+		self.end_headers()
 
 	def log_message(self, *args):
 		pass
@@ -739,6 +757,22 @@ def main():
 			      "a link the person taps opens its tab")
 			check("popped-tapped" in adb("shell", "run-as", APP, "cat", "files/tree.txt"),
 			      "and the tree has it")
+
+			print("\n== an ad is hidden on a page that allows no inline style ==")
+			# Cosmetic hiding inserted a <style>, which such a page refuses --
+			# nothing hidden, and the page told (c2873d8). A generic EasyList
+			# rule names the element, so the lists must have arrived.
+			if not wait_for("the subscribed lists", lists, 240, step=5):
+				check(False, "the subscribed lists fetched, for a generic rule")
+			else:
+				files.seen.clear()
+				open_url(f"http://127.0.0.1:{port}/styled", wait=15)
+				shown = probe("getComputedStyle(document.querySelector('.adsbygoogle-box'))"
+				              ".display").strip()
+				check(shown == "none", f"the element is hidden ({shown})")
+				time.sleep(3)
+				told = [p for p, _ in files.seen if p.startswith("/csp-report")]
+				check(not told, f"and the page's policy was told of nothing ({told})")
 
 			print("\n== a video on a page is found and downloaded, its stream assembled ==")
 			# Media is one of the aims, and nothing on Android checked it. Four
