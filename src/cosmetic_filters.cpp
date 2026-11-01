@@ -198,7 +198,39 @@ QString cosmetic_filters::script_source() {
 (function () {
   // Named, not `arguments.callee`: that is a syntax error under strict mode, and
   // the injected world is not guaranteed to be sloppy.
-  var sheet_el = null;
+  var sheet_own = null;
+
+  // **A constructed stylesheet, adopted, not a `<style>` element.** A page
+  // whose policy allows no inline style (`style-src` without
+  // 'unsafe-inline') refuses an inserted `<style>`: nothing was hidden, and
+  // the page's report URI was told something had tried. A sheet built
+  // through the CSSOM is not inline style and no policy governs it. Where
+  // the engine has no constructable sheets the element is the fallback.
+  //
+  // Handed back as `{ sheet }`. Called again, it puts an adopted sheet back
+  // if the page replaced the document's list, and makes a new one only if
+  // the old one is gone -- so whoever calls it keeps the rules they put in.
+  var own_sheet = function (old) {
+    var d = document;
+    if (old && old.adopted) {
+      try {
+        var have = Array.prototype.slice.call(d.adoptedStyleSheets);
+        if (have.indexOf(old.sheet) < 0)
+          d.adoptedStyleSheets = have.concat([old.sheet]);
+      } catch (e) {}
+      return old;
+    }
+    if (old && old.el && old.el.isConnected) return old;
+    try {
+      var s = new CSSStyleSheet();
+      d.adoptedStyleSheets =
+        Array.prototype.slice.call(d.adoptedStyleSheets).concat([s]);
+      return { sheet: s, adopted: true, fresh: true };
+    } catch (e) {}
+    var el = d.createElement('style');
+    (d.head || d.documentElement).appendChild(el);
+    return { sheet: el.sheet, el: el, fresh: true };
+  };
 
   // **Procedural rules** (`procedural_cosmetic.h`): each is steps -- a CSS
   // selector, or an operator filtering or moving the set -- and an action.
@@ -336,9 +368,9 @@ QString cosmetic_filters::script_source() {
   var marker = 'x' + Math.random().toString(36).slice(2, 10);
   var marker_sheet = null;
   var ensure_sheet = function () {
-    if (marker_sheet && marker_sheet.isConnected) return;
-    marker_sheet = document.createElement('style');
-    (document.head || document.documentElement).appendChild(marker_sheet);
+    marker_sheet = own_sheet(marker_sheet);
+    if (!marker_sheet.fresh) return;
+    marker_sheet.fresh = false;
     try {
       marker_sheet.sheet.insertRule('[' + marker + ']{display:none !important}', 0);
     } catch (e) {}
@@ -436,11 +468,9 @@ QString cosmetic_filters::script_source() {
         // script's world is not. The element is held here instead, which is
         // all "a second run replaces rather than stacks" needed, since the
         // selectors arrive once per document.
-        var el = sheet_el;
-        if (!el || !el.isConnected) {
-          el = sheet_el = document.createElement('style');
-          (document.head || document.documentElement).appendChild(el);
-        }
+        sheet_own = own_sheet(sheet_own);
+        sheet_own.fresh = false;
+        var el = sheet_own;
         // **One rule per selector, through the CSS parser.**
         //
         // This was `sel.join(',\n') + '{display:none !important}'`, and the
@@ -463,6 +493,10 @@ QString cosmetic_filters::script_source() {
         }
       };
       apply();
+      // Once more when the page has loaded: a page that assigns its own
+      // `adoptedStyleSheets` outright drops this one, and `own_sheet` puts
+      // it back.
+      try { window.addEventListener('load', apply); } catch (e) {}
     });
     if (bridge.procedural_json) bridge.procedural_json(function (json) {
       var rules;

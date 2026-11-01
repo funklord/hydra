@@ -167,6 +167,22 @@ public:
 				        "new Image().src = '/report?status=' + String(window.google_ad_status)"
 				        "  + '&error=' + (window.__err ? 1 : 0);"
 				        "</script></body></html>";
+			} else if (target.startsWith("/stylecsp")) {
+				// **A page that allows no inline style.** Cosmetic filtering
+				// hides by inserting a stylesheet; this says whether the
+				// element was hidden, and the report URI says whether the
+				// page was told something tried.
+				csp = "style-src 'self'; report-uri /csp-report";
+				body = "<!doctype html><html><body>styled"
+				        "<div class=\"hide-me\">ad</div>"
+				        "<div class=\"hide-too\">sponsored</div><script>"
+				        "setTimeout(function () {"
+				        "  var d = function (c) {"
+				        "    return getComputedStyle(document.querySelector(c)).display; };"
+				        "  new Image().src = '/report?display=' + d('.hide-me')"
+				        "    + '&procedural=' + d('.hide-too');"
+				        "}, 2500);"
+				        "</script></body></html>";
 			} else if (target.startsWith("/contract")) {
 				// **YouTube's `serverContract` rewrite, in miniature.** The
 				// page requires Trusted Types, as YouTube does, so a plain
@@ -296,6 +312,10 @@ int main(int argc, char *argv[]) {
 			body.write("! Title: a local list\n");
 			// The rule under test, scoped to the host the page is served from.
 			body.write("127.0.0.1##+js(json-prune, adPlacements)\n");
+			// And a cosmetic rule, for the page with a strict style policy.
+			body.write("127.0.0.1##.hide-me\n");
+			// And a procedural one, which hides through the marker's sheet.
+			body.write("127.0.0.1##.hide-too:has-text(sponsored)\n");
 			// A network rule as well, so the list is not scriptlets alone and
 			// `read()` is exercised on a mixed body.
 			body.write("||never-requested.invalid^\n");
@@ -583,6 +603,25 @@ int main(int argc, char *argv[]) {
 			reported |= a.startsWith("/csp-report");
 		check(!reported, "and nothing the scriptlets did was reported to the page's "
 		                 "policy -- no Function constructor, no plain script text");
+	}
+
+	section("a cosmetic rule hides on a page that allows no inline style");
+	{
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/stylecsp").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		const bool answered = server.wait_for_report();
+		const QString said = server.report();
+		check(answered, QString("the page reported back (%1)").arg(said));
+		check(said.contains("display=none"),
+		      QString("the element is hidden (%1)").arg(said));
+		check(said.contains("procedural=none"),
+		      QString("and so is one a procedural rule names (%1)").arg(said));
+		spin(1500);
+		bool reported = false;
+		for (const QString &a : server.asked)
+			reported |= a.startsWith("/csp-report");
+		check(!reported, "and the page's policy was told of nothing");
 	}
 
 	// --- what the real list says, reported rather than asserted -----------

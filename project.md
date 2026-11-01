@@ -38779,6 +38779,24 @@ old line in place, the report arrives and the check fails. The server
 had only been parsing GET requests, which is why the first version of
 this check passed against the bug.
 
+**Cosmetic filtering had the same shape, against `style-src` (2026-11-01).**
+Both cosmetic stylesheets were `<style>` elements inserted into the page:
+the one for plain selectors, and the marker sheet that procedural rules
+hide through. On a page whose policy has no `'unsafe-inline'` for styles,
+the engine refuses an inserted `<style>`. So nothing was hidden, and the
+page's report URI was told something had tried. `try_scriptlets` serves
+such a page with a plain rule and a procedural rule. Before the fix, both
+elements stayed `display: block` and a report arrived. Both sheets are now
+constructed `CSSStyleSheet`s added to `document.adoptedStyleSheets`.
+A sheet built through the CSSOM is not inline style, so no policy governs
+it. A `<style>` element remains the fallback for an engine without
+constructable sheets. A page that replaces its `adoptedStyleSheets`
+outright would drop ours, so the selector sheet is re-adopted at `load`,
+and the marker sheet on every procedural pass. The check passes (34), and
+`try_procedural` (30) and `test_bundle` (144) are unchanged. Android
+injects the same script. That path was not run on the emulator, since
+`emulator_checks.py` has no cosmetic check.
+
 ### Exceptions and rules with options are read now, and what that costs
 
 **15 thousand lines of the holder's lists carried options and were
