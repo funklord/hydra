@@ -246,21 +246,32 @@ QList<tree_change> compute(node *original, node *proposal) {
 		}
 	}
 
-	// Duplicate URLs, offered for merge rather than acted on (sec 9.5).
-	QHash<QString, QString> first_by_url;   // url -> id
+	// Duplicate URLs, offered for merge (sec 9.5).
+	//
+	// **A merge moves the second tab under the first, as a sub-tab (sec
+	// 5.5); it deletes nothing.** Decided 2026-11-02 from sec 9's own words:
+	// the pipeline is non-destructive, and any accepted change is one undo
+	// away. Deleting the duplicate breaks both -- `restore` cannot put back a
+	// node that is gone, and `unused_id` hands its id to the next tab, with
+	// that tab's zoom and history behind it. Re-parenting keeps both and
+	// still takes the duplicate out of the way. Never pre-ticked: it is a
+	// suggestion about two tabs the person may have meant to keep apart.
+	QHash<QString, node *> first_by_url;   // url -> the first leaf with it
 	for (node *n : all_leaves(proposal)) {
 		if (n->url.isEmpty())
 			continue;
-		if (first_by_url.contains(n->url)) {
+		if (node *first = first_by_url.value(n->url, nullptr)) {
 			tree_change c;
-			c.kind     = change_kind::duplicate_url;
-			c.node_id  = n->id;
-			c.accepted = false;   // never pre-selected; merging is destructive
-			c.summary  = QString("Duplicate URL: \"%1\" also at %2")
-			                 .arg(n->url, first_by_url.value(n->url));
+			c.kind          = change_kind::duplicate_url;
+			c.node_id       = n->id;
+			c.new_parent_id = first->id;
+			c.accepted      = false;
+			c.summary       = QString("Same page as \"%1\": move \"%2\" under it")
+			                      .arg(first->title.isEmpty() ? first->url : first->title,
+			                           n->title.isEmpty() ? n->url : n->title);
 			changes << c;
 		} else {
-			first_by_url.insert(n->url, n->id);
+			first_by_url.insert(n->url, n);
 		}
 	}
 
@@ -353,9 +364,30 @@ int apply(node *original, const QList<tree_change> &changes) {
 				++applied;
 				break;
 			case change_kind::folder_new:      // already handled above
-			case change_kind::duplicate_url:   // advisory only
+			case change_kind::duplicate_url:   // after every move, below
 				break;
 		}
+	}
+
+	// **Merges last**, so each lands under its original where the original
+	// ended up. The same refusals as a move: a locked tab stays, and nothing
+	// goes inside its own subtree.
+	for (const tree_change &c : changes) {
+		if (!c.accepted || c.kind != change_kind::duplicate_url)
+			continue;
+		node *n = by_id.value(c.node_id, nullptr);
+		node *first = by_id.value(c.new_parent_id, nullptr);
+		if (!n || !first || n == first || n->locked)
+			continue;
+		bool inside = false;
+		for (node *p = first; p; p = p->parent)
+			if (p == n) { inside = true; break; }
+		if (inside || n->parent == first)
+			continue;
+		detach(n);
+		n->parent = first;
+		first->children.append(n);
+		++applied;
 	}
 
 	renumber(original);

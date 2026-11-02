@@ -830,12 +830,13 @@ int main(int argc, char **argv) {
 		delete prop;
 	}
 
-	section("two tabs on one page are advisory, and never pre-ticked");
+	section("two tabs on one page: offered unticked, merged as a sub-tab if ticked");
 	{
 		// Two leaves sharing a url is legitimate -- the same page open twice --
-		// so a merge is offered rather than done. `accepted = false` is the
-		// whole safety property here: a person who ticks everything and presses
-		// apply must not lose a tab to it.
+		// so the merge is offered rather than done, and `accepted = false` is
+		// what keeps a person who ticks nothing from losing the arrangement.
+		// Ticked, it moves the second under the first and deletes nothing
+		// (2026-11-02), so undo still puts it back.
 		node *orig = root_of();
 		node *w = add(orig, mk("f1", true, "Work"));
 		add(w, mk("a1", false, "One", "https://x.example/same"));
@@ -852,20 +853,33 @@ int main(int argc, char **argv) {
 		      QString("the second one is reported (%1)")
 		          .arg(count_of(ch, change_kind::duplicate_url)));
 		const tree_change *d = change_for(ch, "a2", change_kind::duplicate_url);
-		check(d && !d->accepted,
-		      "unticked, because merging is destructive and this is a suggestion");
-		check(d && !d->summary.isEmpty() && d->summary.contains("a1"),
-		      "and it names the other tab, which is the only way to judge it");
+		check(d && !d->accepted, "unticked: it is a suggestion");
+		check(d && d->summary.contains("One") && d->summary.contains("Two") &&
+		        !d->summary.contains("a1"),
+		      "and it names both tabs by title, not by internal id: " +
+		        (d ? d->summary : QString()));
 
+		const int untouched = tree_diff::apply(orig, ch);
+		check(untouched == 0 && shape(orig) == "root[f1[a1,a2]]",
+		      QString("left unticked, nothing happens (%1)").arg(shape(orig)));
+
+		const tree_snapshot snap = tree_diff::snapshot(orig);
 		QList<tree_change> ticked = ch;
 		for (tree_change &c : ticked)
-			c.accepted = true;   // the person ticks everything, including this
+			c.accepted = true;
 		const int applied = tree_diff::apply(orig, ticked);
-		check(applied == 0,
-		      QString("ticking it applies nothing, since no merge is implemented "
-		               "(%1 applied)").arg(applied));
+		check(applied == 1 && shape(orig) == "root[f1[a1[a2]]]",
+		      QString("ticked, the duplicate becomes a sub-tab of its twin "
+		              "(%1 applied, %2)").arg(applied).arg(shape(orig)));
+		tree_diff::restore(orig, snap);
 		check(shape(orig) == "root[f1[a1,a2]]",
-		      QString("and both tabs are still there (%1)").arg(shape(orig)));
+		      QString("and undo puts it back, since nothing was deleted (%1)")
+		          .arg(shape(orig)));
+
+		find(orig, "a2")->locked = true;
+		tree_diff::apply(orig, ticked);
+		check(shape(orig) == "root[f1[a1,a2]]",
+		      QString("a locked tab is not merged (%1)").arg(shape(orig)));
 		delete orig;
 		delete prop;
 	}

@@ -26900,9 +26900,17 @@ contains them:
   expires -- the thorough one, and the only one that makes `restore` able to
   re-create anything.
 
-Not chosen here. What is new is that the feature has a reason for not
-existing, and the reason is a conflict between two sections of the design
-rather than work nobody got to.
+**Chosen 2026-11-02: re-parent.** §9 decides it in its own words -- the
+pipeline is *non-destructive* and any accepted change is one undo away --
+and re-parenting is the only option of the three that keeps both without
+new machinery. A ticked duplicate now moves under the tab it duplicates as
+a sub-tab, after every other move so it lands where its twin ended up; a
+locked tab stays, and nothing moves into its own subtree. Still never
+pre-ticked. The row names both tabs by title, where it used to print the
+first one's internal id. `test_diff` (123) merges, undoes the merge, and
+refuses a locked tab; the dialog's checkbox, greyed while ticking did
+nothing, is back. If deleting the duplicate is ever wanted, it is the third
+option above -- the snapshot carrying the leaf and reserving its id.
 
 ## A download row named the tab it came from by its internal id
 

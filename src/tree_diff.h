@@ -13,7 +13,7 @@ enum class change_kind {
 	reordered,       // same parent, different position among siblings
 	folder_new,      // a folder the model invented
 	folder_renamed,  // an existing folder with a new title
-	duplicate_url,   // two leaves share a URL -- offered as a merge candidate
+	duplicate_url,   // two leaves share a URL -- merged as a sub-tab if ticked
 };
 
 struct tree_change {
