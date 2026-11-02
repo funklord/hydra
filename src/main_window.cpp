@@ -1600,6 +1600,9 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// Named so a driver can read the live-view count without scanning every
 	// label for one whose text happens to match a pattern.
 	m_tab_counts->setObjectName("tab_counts");
+	m_tab_counts->setToolTip("Tabs with a running page behind them, and how many "
+	                          "are kept before the least recently used is put to "
+	                          "sleep. Settings > Tabs > Tabs kept loaded changes the limit.");
 
 	// **Only on screen while something is loading.** A progress bar that is
 	// always there, empty, is a permanent claim that something is happening;
@@ -3367,7 +3370,11 @@ void main_window::on_about() {
 
 void main_window::update_status() {
 	const int live = m_views_by_id.size();
-	m_tab_counts->setText(QString("%1 / %2 live").arg(live).arg(live_view_cap()));
+	// **In Settings' words.** "7 / 8 live" was this file's own vocabulary
+	// and said nothing on a phone, which cannot show a tooltip; Settings
+	// calls the same number "Tabs kept loaded" (try_look, 2026-11-03). The
+	// "N /" opening stays, since drivers read the count from it.
+	m_tab_counts->setText(QString("%1 / %2 tabs loaded").arg(live).arg(live_view_cap()));
 }
 
 bool main_window::event(QEvent *e) {

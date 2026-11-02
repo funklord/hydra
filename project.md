@@ -41846,3 +41846,19 @@ every menu item. The menu became 282 pixels, Qt moved it left to x=129
 to fit, and the label is drawn whole. Checked on the emulator, and the
 same driver confirmed that Tools has no Passwords entry and the toolbar
 has no Key.
+
+### The status bar's tab count spoke its own vocabulary
+
+The corner of the status bar read "7 / 8 live". That word belongs to
+this code, and a phone shows no tooltip to explain it. Settings calls
+the same number "Tabs kept loaded", so the label now reads "7 / 8 tabs
+loaded". Its tooltip names the setting that changes the limit. The
+drivers read the count from the leading "N /", which is unchanged.
+
+`try_delete` had failed on its first count, "nothing is live before
+anything is opened", since restored trees began warming their most
+recent tabs in the background. It failed the same way on the code
+before this change. The shell was right and the driver's premise had
+moved, so the driver now turns the warm-up off in its own settings
+under `~/.qttest`: every count it makes is of views it opened itself.
+14 passed.
