@@ -17898,6 +17898,17 @@ the page's callback invoked last. The callback is what lets the page restore
 its player, and calling it while the old surface is still attached leaves it
 on screen over the restored layout.
 
+**Back left the app instead of the video (2026-11-02).** `handle_back`
+walks popup, dialog, address editor, drawer, page history, then up the
+tree -- and a page's fullscreen, which on Android goes through the kiosk
+stage, was not on the list, so Back during a fullscreen video fell
+through all of it and closed the browser. Seen on the emulator as the
+status line reading "Saving..." with the video still up. It is the first
+step now: a page's fullscreen is left, kiosk is left where the person may
+leave it, and a locked kiosk keeps the key rather than letting it close
+the app. `test_rotation` (616) has a page take the screen and Back leave
+it with the app kept; with the step removed that check fails.
+
 ### Watched, both directions
 
 A page served over `adb reverse` with a div that calls `requestFullscreen()`

@@ -4209,6 +4209,17 @@ bool main_window::eventFilter(QObject *watched, QEvent *event) {
 }
 
 bool main_window::handle_back() {
+	// **A page's fullscreen, or kiosk, before anything else** -- it is what
+	// covers the screen. A fullscreen video was missing from this list, so
+	// Back fell through every step and left the app, where every phone
+	// player leaves fullscreen (2026-11-02, seen on the emulator). A locked
+	// kiosk keeps Back: not leaving is what locked means, and closing the
+	// app would be the same escape by another door.
+	if (m_kiosk && m_kiosk->active()) {
+		if (m_page_fullscreen || settings_store::kiosk().allow_escape)
+			toggle_kiosk();
+		return true;
+	}
 	// **A popup first, because it is the thing in front of everything else.**
 	// `activePopupWidget` is any `Qt::Popup` -- every menu, every combo-box
 	// drop-down. Closing it is what Back means while one is open, and it was

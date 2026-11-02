@@ -6292,6 +6292,16 @@ int main(int argc, char **argv) {
 				if (pv)
 					pv->history = false;
 				check(pv && !w.handle_back(), "and at a top-level tab with none, Android has it");
+
+				// **A fullscreen video is left first, never the app** -- it
+				// was missing from the list, so Back fell through to leaving.
+				if (pv) {
+					emit pv->fullscreen_requested(true);
+					check(w.m_kiosk && w.m_kiosk->active(),
+					      "a page's fullscreen takes the screen");
+					check(w.handle_back() && !(w.m_kiosk && w.m_kiosk->active()),
+					      "and Back leaves it, keeping the app");
+				}
 			}
 		}
 	}
