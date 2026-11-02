@@ -283,6 +283,15 @@ int main(int argc, char *argv[]) {
 		      "a chooser existed -- now as a decision rather than the only "
 		      "outcome available");
 
+		// **And still nothing once it is on screen.** Everything above was
+		// asked of a dialog never shown, and showing it is what gives the
+		// list focus -- which made the first row current and enabled Send.
+		dlg.show();
+		QApplication::processEvents();
+		check(list && list->currentRow() < 0 && send && !send->isEnabled(),
+		      QString("shown, it still has nothing chosen and Send off "
+		               "(row %1)").arg(list ? list->currentRow() : -2));
+
 		if (list && send) {
 			list->setCurrentRow(1);
 			check(send->isEnabled(), "selecting one makes Send available");

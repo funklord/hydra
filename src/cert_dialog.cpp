@@ -99,6 +99,11 @@ cert_dialog::cert_dialog(const QString &host,
 	// Declining is the default: return answers it, escape answers it, and the
 	// window manager's close button answers it.
 	none->setDefault(true);
+	// **And it holds the focus**, or the row above is undone on show: a list
+	// given focus makes its first row current, `currentRowChanged` enabled
+	// Send, and one click sent the first certificate nobody had picked
+	// (try_look, 2026-11-02). Tab still reaches the list.
+	none->setFocus();
 	send->setEnabled(false);
 	column->addWidget(buttons);
 
