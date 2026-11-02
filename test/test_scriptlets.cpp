@@ -9,6 +9,7 @@
 // answers whether a hostile argument executed.
 #include "scriptlets.h"
 
+#include <QRegularExpression>
 #include <QCoreApplication>
 #include <QJSEngine>
 #include <QJSValue>
@@ -49,10 +50,20 @@ window.open = function (u) {
 	window.__opened.push(String(u));
 	return { real: true };
 };
-window.localStorage = {
-	setItem: function (k, v) { window.__store[k] = String(v); },
-	removeItem: function (k) { delete window.__store[k]; }
+// Storage with the whole surface a removal by pattern walks.
+var mkstore = function (backing) {
+	var s = {
+		setItem: function (k, v) { backing[k] = String(v); },
+		removeItem: function (k) { delete backing[k]; },
+		getItem: function (k) { return backing.hasOwnProperty(k) ? backing[k] : null; },
+		key: function (i) { return Object.keys(backing)[i]; }
+	};
+	Object.defineProperty(s, 'length', { get: function () { return Object.keys(backing).length; } });
+	return s;
 };
+window.localStorage = mkstore(window.__store);
+window.__session = {};
+window.sessionStorage = mkstore(window.__session);
 window.RTCPeerConnection = function () { this.real = true; };
 // An EventTarget with a prototype, because that is where the defuser
 // patches: a listener added to an element has to be reachable too, and
@@ -98,7 +109,16 @@ window.__gone = [];
 var mkel = function (name) {
 	return {
 		name: name,
+		attrs: { 'data-src': name + '.jpg' },
+		onclick: null,   // an event handler property, as an element has
 		removeAttribute: function (a) { window.__gone.push(name + ':attr:' + a); },
+		getAttribute: function (a) {
+			return this.attrs.hasOwnProperty(a) ? this.attrs[a] : null;
+		},
+		setAttribute: function (a, v) {
+			this.attrs[a] = String(v);
+			window.__gone.push(name + ':set:' + a + '=' + v);
+		},
 		classList: {
 			remove: function (c) { window.__gone.push(name + ':class:' + c); }
 		}
@@ -837,9 +857,10 @@ int main(int argc, char **argv) {
 		// The count lives here, once. It moves when the catalog does, which
 		// is the point: a name added without a test is an entry nothing ran.
 		// 54 since `xml-prune` and `m3u-prune`, which need an XML parser
-		// and a network and so are run by `try_prune` in a real engine.
-		check(scriptlets::names().size() == 54,
-		       QString("fifty-four scriptlets in the catalog (%1)")
+		// and a network and so are run by `try_prune` in a real engine; 58
+		// with the session-storage pair and the set-attr pair.
+		check(scriptlets::names().size() == 58,
+		       QString("fifty-eight scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 		// The trusted four, named here rather than counted: the question a
 		// reader has is which scriptlets can act on a page's behalf, and a
@@ -1037,6 +1058,79 @@ int main(int argc, char **argv) {
 		       "a value outside the vocabulary still evaluates");
 		check(ask(&eng3, "String(typeof window.__store.note)") == "undefined",
 		       "and stores nothing");
+		// **uBlock's vocabulary, not set-constant's** (2026-11-02): the
+		// consent words, a quoted form, a number within 32767.
+		run_one(&eng3, "set-local-storage-item", { "consent", "accepted" });
+		run_one(&eng3, "set-local-storage-item", { "seen", "\"1\"" });
+		run_one(&eng3, "set-local-storage-item", { "neg", "-12" });
+		run_one(&eng3, "set-local-storage-item", { "big", "40000" });
+		run_one(&eng3, "set-local-storage-item", { "arr", "emptyArr" });
+		check(ask(&eng3, "[window.__store.consent, window.__store.seen, window.__store.neg,"
+		                 " String(typeof window.__store.big), window.__store.arr].join('|')") ==
+		        "accepted|\"1\"|-12|undefined|[]",
+		      "a consent word, a quoted number and a small one are stored, a big one is not: " +
+		        ask(&eng3, "[window.__store.consent, window.__store.seen, window.__store.neg,"
+		                   " String(typeof window.__store.big), window.__store.arr].join('|')"));
+		eng3.evaluate("window.__store.ad_a = '1'; window.__store.ad_b = '2'; window.__store.keep = '3';");
+		run_one(&eng3, "set-local-storage-item", { "/^ad_/", "$remove$" });
+		check(ask(&eng3, "Object.keys(window.__store).filter(function (k) {"
+		                 " return /^ad_|^keep$/.test(k); }).join(',')") == "keep",
+		      "$remove$ takes every key a /re/ names, and only those");
+		run_one(&eng3, "trusted-set-local-storage-item", { "stamp", "t=$now$" }, true);
+		check(QRegularExpression("^t=\\d{12,}$").match(ask(&eng3, "window.__store.stamp")).hasMatch(),
+		      "trusted, $now$ is filled in: " + ask(&eng3, "window.__store.stamp"));
+
+		// The session-storage pair: the tab's storage, the same vocabulary.
+		QJSEngine eng4;
+		give_page(&eng4);
+		check(run_one(&eng4, "set-session-storage-item", { "seen", "true" }).isEmpty() &&
+		        ask(&eng4, "String(window.__session.seen)") == "true" &&
+		        ask(&eng4, "String(typeof window.__store.seen)") == "undefined",
+		      "set-session-storage-item stores in the session, not the local store");
+		check(run_one(&eng4, "set-session-storage-item", { "note", "anything" }).isEmpty() &&
+		        ask(&eng4, "String(typeof window.__session.note)") == "undefined",
+		      "and only the vocabulary");
+		check(scriptlets::requires_trust("trusted-set-session-storage-item") &&
+		        !scriptlets::requires_trust("set-session-storage-item"),
+		      "its trusted spelling needs trust");
+		check(run_one(&eng4, "trusted-set-session-storage-item", { "note", "anything" }, true)
+		          .isEmpty() &&
+		        ask(&eng4, "String(window.__session.note)") == "anything",
+		      "and takes any value");
+	}
+
+	section("set-attr: an attribute given, and only a value that carries no code");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		check(run_one(&eng, "set-attr", { "video", "autoplay", "false" }).isEmpty(),
+		      "set-attr evaluates");
+		check(ask(&eng, "window.__sel") == "video" &&
+		        ask(&eng, "window.__gone.join(',')") ==
+		          "one:set:autoplay=false,two:set:autoplay=false",
+		      "the attribute, on every element found: " +
+		        ask(&eng, "window.__gone.join(',')"));
+		QJSEngine eng2;
+		give_page(&eng2);
+		run_one(&eng2, "set-attr", { "img", "src", "[data-src]" });
+		check(ask(&eng2, "window.__gone.join(',')") == "one:set:src=one.jpg,two:set:src=two.jpg",
+		      "[name] copies each element's own value: " + ask(&eng2, "window.__gone.join(',')"));
+		QJSEngine eng3;
+		give_page(&eng3);
+		run_one(&eng3, "set-attr", { "a", "href", "https://evil.example/" });
+		run_one(&eng3, "set-attr", { "a", "tabindex", "40000" });
+		check(ask(&eng3, "window.__gone.length") == "0",
+		      "untrusted, a free string or a number past 32767 sets nothing");
+		run_one(&eng3, "trusted-set-attr", { "a", "href", "https://ok.example/" }, true);
+		check(ask(&eng3, "window.__gone.join(',')").contains("one:set:href=https://ok.example/"),
+		      "trusted, any value: " + ask(&eng3, "window.__gone.join(',')"));
+		QJSEngine eng4;
+		give_page(&eng4);
+		run_one(&eng4, "trusted-set-attr", { "a", "onclick", "alert(1)" }, true);
+		run_one(&eng4, "set-attr", { "a", "onclick", "" });
+		check(ask(&eng4, "window.__gone.join(',')") == "one:set:onclick=,two:set:onclick=",
+		      "an event handler the element has is only ever emptied, trusted or not: " +
+		        ask(&eng4, "window.__gone.join(',')"));
 	}
 
 	section("taking an attribute or a class off what a selector names");

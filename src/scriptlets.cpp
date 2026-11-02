@@ -654,8 +654,6 @@ C['prevent-window-open'] = function (needle) {
 	}, real);
 };
 
-// set-local-storage-item: a flag a page reads back from storage. The same
-// vocabulary as set-constant, plus `$remove$` to delete one.
 // remove-attr / remove-class: take an attribute or a class off the elements a
 // selector names. The two differ in one line, so they are one function.
 //
@@ -806,16 +804,6 @@ C['trusted-set-constant'] = function (path, value) {
 		}
 	}
 	trap_chain(path, pin(v));
-};
-
-// trusted-set-local-storage-item: the same without the vocabulary.
-C['trusted-set-local-storage-item'] = function (key, value) {
-	if (!key) return;
-	var raw = String(value == null ? '' : value);
-	try {
-		if (raw === '$remove$') window.localStorage.removeItem(String(key));
-		else window.localStorage.setItem(String(key), raw);
-	} catch (e) {}
 };
 
 // trusted-set-cookie: write one, for a site whose own banner will not take an
@@ -1781,15 +1769,118 @@ C['trusted-replace-argument'] = function (path, position, value) {
 	} catch (e) {}
 };
 
-C['set-local-storage-item'] = function (key, value) {
-	if (!key) return;
-	var chosen = vocabulary(value, true);
-	if (!chosen) return;
-	try {
-		if (chosen.remove) window.localStorage.removeItem(String(key));
-		else window.localStorage.setItem(String(key), String(chosen.v));
-	} catch (e) { /* storage refused, which a page can also see */ }
+// The storage family: set-local-storage-item, set-session-storage-item and
+// their trusted spellings. Ported from uBlock's `setLocalStorageItemFn`
+// (`localstorage.js`, read at uBlock 2be6e29e4a92, 2026-11-02); until then
+// the untrusted pair took `set-constant`'s vocabulary, which is not uBlock's,
+// so a rule storing `accepted`, `dismissed` or `"1"` stored nothing.
+//
+// Untrusted, the value must be one uBlock calls safe: empty, `undefined`,
+// `null`, `{}`, `[]`, `""`, `$remove$`, a word from the consent vocabulary
+// cookies share (`safe_cookie_values`, above), any of those in double quotes, or a
+// whole number within 32767 either way. `emptyArr` and `emptyObj` are
+// AdGuard's spellings of `[]` and `{}`. Trusted, anything, with `$now$`,
+// `$currentDate$` and `$currentISODate$` filled in. `$remove$` takes out
+// every key the key names -- exactly, or by `/re/`. `reload, ms` after the
+// value reloads the page once something actually changed.
+var storage_item = function (which, trusted) {
+	return function (key, value) {
+		var k = String(key == null ? '' : key);
+		if (k === '') return;
+		var v = String(value == null ? '' : value);
+		if (v === 'emptyArr') v = '[]';
+		else if (v === 'emptyObj') v = '{}';
+		if (trusted) {
+			v = v.split('$now$').join(String(Date.now()));
+			v = v.split('$currentDate$').join(String(Date()));
+			v = v.split('$currentISODate$').join(new Date().toISOString());
+		} else {
+			var normal = v.toLowerCase();
+			var m = /^("?)(.+)\1$/.exec(normal);
+			var bare = (m && m[2]) || normal;
+			var allowed = ['', 'undefined', 'null', '{}', '[]', '""', '$remove$']
+			                .concat(safe_cookie_values);
+			if (allowed.indexOf(bare) < 0) {
+				if (!/^-?\d+$/.test(bare)) return;
+				var n = parseInt(bare, 10) || 0;
+				if (n < -32767 || n > 32767) return;
+			}
+		}
+		var opts = {};
+		var extras = Array.prototype.slice.call(arguments, 2);
+		for (var i = 0; i + 1 < extras.length; i += 2)
+			opts[String(extras[i])] = extras[i + 1];
+		var changed = false;
+		try {
+			var store = window[which + 'Storage'];
+			if (v === '$remove$') {
+				var re = re_of(k, '', true);
+				var gone = [];
+				for (var j = 0, len = store.length; j < len; j++) {
+					var name = store.key(j);
+					if (re && re.test(name)) gone.push(name);
+				}
+				changed = gone.length !== 0;
+				for (var g = 0; g < gone.length; g++) store.removeItem(gone[g]);
+			} else if (store.getItem(k) !== v) {
+				store.setItem(k, v);
+				changed = true;
+			}
+		} catch (e) { /* storage refused, which a page can also see */ }
+		var wait = parseInt(opts.reload, 10);
+		if (changed && isFinite(wait) && typeof window.setTimeout === 'function')
+			window.setTimeout(function () { window.location.reload(); }, wait);
+	};
 };
+C['set-local-storage-item']           = storage_item('local', false);
+C['set-session-storage-item']         = storage_item('session', false);
+C['trusted-set-local-storage-item']   = storage_item('local', true);
+C['trusted-set-session-storage-item'] = storage_item('session', true);
+
+// set-attr(selector, attr, value): give the elements a selector names an
+// attribute. Ported from uBlock's `attribute.js` (`setAttrFn`, read at
+// uBlock 2be6e29e4a92, 2026-11-02). The untrusted spelling takes only a
+// value that cannot carry code: empty, `true`, `false`, a whole number
+// under 32768, or `[name]` -- the element's own value of another attribute,
+// which only the untrusted spelling reads that way. A non-empty value is
+// never written to an attribute the element has as an event handler
+// (`onclick` and its like), in either spelling. Swept as the page builds,
+// as uBlock's is; an attribute the page puts back later is not chased.
+var set_attr = function (trusted) {
+	return function (selector, attr, value) {
+		var sel = String(selector || '');
+		var name = String(attr || '');
+		if (!sel || !name) return;
+		var v = String(value == null ? '' : value);
+		if (!trusted && ['', 'false', 'true'].indexOf(v.toLowerCase()) < 0) {
+			if (/^\d+$/.test(v)) {
+				var n = parseInt(v, 10);
+				if (n >= 32768) return;
+				v = String(n);
+			} else if (!/^\[.+\]$/.test(v)) {
+				return;
+			}
+		}
+		var copy = !trusted && /^\[.+\]$/.test(v) ? v.slice(1, -1) : '';
+		var sweep = function () {
+			var found;
+			try { found = document.querySelectorAll(sel); } catch (e) { return; }
+			for (var i = 0; i < found.length; i++) {
+				var el = found[i];
+				var after = copy !== '' ? (el.getAttribute(copy) || '') : v;
+				try {
+					if (el.getAttribute(name) === after) continue;
+					if (after !== '' && /^on/i.test(name) && name.toLowerCase() in el)
+						continue;
+					el.setAttribute(name, after);
+				} catch (e) {}
+			}
+		};
+		watch_dom(sweep, false, false);
+	};
+};
+C['set-attr']         = set_attr(false);
+C['trusted-set-attr'] = set_attr(true);
 
 // --- the JSON query language, and the scriptlets that edit with it -------
 
@@ -2702,6 +2793,8 @@ const catalog_entry k_entries[] = {
 	// Both arguments are patterns: the event type and the handler's source.
 	{ "prevent-addEventListener", (1 << 0) | (1 << 1), 0,      false },
 	{ "set-local-storage-item",          0,      0,      false },
+	{ "set-session-storage-item",        0,      0,      false },
+	{ "set-attr",                        0,      1 << 0, false },
 	// The booster family: the needle is matched against the callback.
 	{ "adjust-setInterval",              1 << 0, 0,      false },
 	{ "adjust-setTimeout",               1 << 0, 0,      false },
@@ -2741,6 +2834,8 @@ const catalog_entry k_entries[] = {
 	// list somebody marked trusted. See `requires_trust` for the argument.
 	{ "trusted-set-constant",            0,      0,      true  },
 	{ "trusted-set-local-storage-item",  0,      0,      true  },
+	{ "trusted-set-session-storage-item", 0,     0,      true  },
+	{ "trusted-set-attr",                0,      1 << 0, true  },
 	{ "trusted-set-cookie",              0,      0,      true  },
 	// Two patterns: what to look for, and which url to look in.
 	{ "trusted-replace-fetch-response",

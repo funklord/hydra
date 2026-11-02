@@ -35665,6 +35665,37 @@ replacement landing in a `<script>` is code the page runs -- so `rpnt` needs
 trust. And `trusted-prevent-fetch` needs it where `no-fetch-if` does not,
 because it chooses the body rather than refusing.
 
+### The storage family follows uBlock's own vocabulary, and set-attr arrives (2026-11-02)
+
+Counted over the holder's lists on 2026-11-02, about 150 scriptlet rules
+still named something the catalog lacked. The largest groups were
+`set-session-storage-item` (24 with its trusted spelling) and `set-attr`
+(18 with its trusted spelling). Both were ported from uBlock's source,
+`localstorage.js` and `attribute.js` at uBlock `2be6e29e4a92`, fetched
+for the purpose; neither was recalled from memory.
+
+**Porting the storage pair exposed the local pair as wrong.**
+`set-local-storage-item` had been written with `set-constant`'s
+vocabulary. uBlock's is different: the consent words cookies share,
+`""`, `{}`, `[]`, `undefined`, `null`, any of those in double quotes,
+and a whole number within 32767 either way. So a rule storing
+`accepted` or `dismissed` stored nothing, and one storing `40000`
+stored it. Of the four checks those cases drive against the old code,
+every one fails. All four storage scriptlets are now one function,
+`storage_item(which, trusted)`. It adds AdGuard's `emptyArr`/`emptyObj`,
+`$remove$` by exact key or `/re/`, the trusted spelling's `$now$`,
+`$currentDate$` and `$currentISODate$`, and `reload, ms` once something
+changed. Together that is 113 rules in the lists.
+
+**`set-attr` takes one attribute**, as uBlock's does. Untrusted, the
+value must be empty, `true`, `false`, a number under 32768, or `[name]`,
+which copies another attribute of the same element. A non-empty value is
+never written to an attribute the element has as an event handler.
+
+The catalog is 58 names. `test_scriptlets` covers each (378 passed); the
+new checks run against the old catalog fail 11 times. `try_scriptlets`
+still passes (39).
+
 ### Two engine limits that were silently disabling whole scriptlets
 
 Both found by a test failing on code that was right, and both are real
