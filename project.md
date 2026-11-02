@@ -41818,6 +41818,17 @@ feature at all would send somebody looking for a KeePassXC to start.
 Both are now absent on Android, the same rule as the settings row
 above.
 
+### Recent Readings cut its own instructions short
+
+With nothing read, the window put its one sentence of help in a disabled
+row in the Title column, which elided it to "Find Media o...". The
+destructive Clear All was first in the button box, so it held the focus
+and was live over an empty list. The help is now an `empty_state` in
+the viewport, as in the downloads and consent dialogs. Clear All is off
+while there is nothing to clear, and Close is the default and holds the
+focus. Readings was also the one dialog `try_look` never opened, so it is
+photographed now.
+
 ### A phone's Tools menu elided its longest entry
 
 On the emulator (1080x2340, 411 logical pixels at a scale of 2.625),

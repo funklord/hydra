@@ -697,6 +697,7 @@ int main(int argc, char *argv[]) {
 		{ "open_media",          "media" },
 		{ "open_site_rules",     "site-rules" },
 		{ "open_reorganizer",    "reorganizer" },
+		{ "open_readings",       "readings" },
 	};
 	for (const auto &m : modals)
 		shoot_modal(&w, m.slot, m.name);

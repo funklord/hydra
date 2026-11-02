@@ -2,6 +2,7 @@
 #include "list_columns.h"
 
 #include "channel_rules.h"
+#include "empty_state.h"
 #include "media_interpretation.h"
 #include "reading_log.h"
 
@@ -31,6 +32,13 @@ readings_dialog::readings_dialog(reading_log *log, channel_rules *rules,
 	                          "Checks" });
 	list_columns::resizable(m_list, 3);   // the title
 	box->addWidget(m_list, 1);
+	// **In the viewport, not as a row.** It was a disabled row in the Title
+	// column, which elided the one sentence that says how to fill the list
+	// to "Find Media o..." (try_look, 2026-11-03). The downloads and consent
+	// dialogs already say theirs this way.
+	m_empty = new empty_state(m_list, this);
+	m_empty->set_text("Nothing has been read yet.\n\nTools > Media > Find "
+	                  "Media on This Page reads a video.");
 
 	auto *bb = new QDialogButtonBox(QDialogButtonBox::Close, this);
 	m_correct = bb->addButton("&Correct…", QDialogButtonBox::ActionRole);
@@ -42,10 +50,18 @@ readings_dialog::readings_dialog(reading_log *log, channel_rules *rules,
 	});
 	connect(m_list, &QTreeWidget::itemDoubleClicked, this, [this] { correct(); });
 	connect(m_correct, &QPushButton::clicked, this, [this] { correct(); });
-	QPushButton *clear = bb->addButton("C&lear All", QDialogButtonBox::ResetRole);
-	clear->setObjectName("clear_readings");
+	m_clear = bb->addButton("C&lear All", QDialogButtonBox::ResetRole);
+	m_clear->setObjectName("clear_readings");
 	connect(bb, &QDialogButtonBox::rejected, this, &QDialog::reject);
-	connect(clear, &QPushButton::clicked, this, [this] {
+	// **Close holds the focus, not Clear All.** The destructive button was
+	// first in the box and so took it, highlighted and live over an empty
+	// list. It asks before clearing, but the button a stray Enter lands on
+	// should be the one that costs nothing.
+	if (QPushButton *close = bb->button(QDialogButtonBox::Close)) {
+		close->setDefault(true);
+		close->setFocus();
+	}
+	connect(m_clear, &QPushButton::clicked, this, [this] {
 		if (!m_log || m_log->size() == 0)
 			return;
 		if (QMessageBox::question(this, "Clear Readings",
@@ -63,16 +79,12 @@ readings_dialog::readings_dialog(reading_log *log, channel_rules *rules,
 
 void readings_dialog::fill() {
 	m_list->clear();
-	if (!m_log)
+	const QList<reading_record> all = m_log ? m_log->all()
+	                                        : QList<reading_record>();
+	// Nothing to clear is nothing to offer.
+	m_clear->setEnabled(!all.isEmpty());
+	if (all.isEmpty())
 		return;
-	const QList<reading_record> all = m_log->all();
-	if (all.isEmpty()) {
-		auto *row = new QTreeWidgetItem(m_list);
-		row->setText(3, "Nothing has been read yet. Tools > Media > Find Media "
-		                "on This Page reads a video.");
-		row->setDisabled(true);
-		return;
-	}
 	for (int i = int(all.size()) - 1; i >= 0; --i) {
 		const reading_record &r = all.at(i);
 		auto *row = new QTreeWidgetItem(m_list);

@@ -5,6 +5,7 @@
 class channel_rules;
 class reading_log;
 class QPushButton;
+class empty_state;
 class QTreeWidget;
 
 // **What was read, after the status line has gone.** The list behind Tools ->
@@ -36,4 +37,6 @@ private:
 	channel_rules *m_rules   = nullptr;
 	QTreeWidget   *m_list    = nullptr;
 	QPushButton   *m_correct = nullptr;
+	QPushButton   *m_clear   = nullptr;
+	empty_state   *m_empty   = nullptr;
 };

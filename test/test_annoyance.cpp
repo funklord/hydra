@@ -20,6 +20,7 @@
 #include <QDir>
 #include <QFile>
 #include <QListWidget>
+#include <QLabel>
 #include <QPushButton>
 #include <QTreeWidget>
 #include <cstdio>
@@ -366,9 +367,14 @@ int main(int argc, char **argv) {
 		reading_log log;
 		readings_dialog empty(&log, nullptr);
 		auto *list = empty.findChild<QTreeWidget *>("readings");
-		check(list && list->topLevelItemCount() == 1 &&
-		          list->topLevelItem(0)->text(3).contains("Find Media"),
-		       "with nothing read, it says how to read something");
+		auto *hint = list ? list->viewport()->findChild<QLabel *>() : nullptr;
+		check(list && list->topLevelItemCount() == 0 && hint &&
+		          hint->text().contains("Find Media"),
+		       "with nothing read, it says how to read something, in the "
+		       "list rather than as a row the Title column elides");
+		auto *clear = empty.findChild<QPushButton *>("clear_readings");
+		check(clear && !clear->isEnabled(),
+		       "and Clear All is off with nothing to clear");
 
 		reading_record a;
 		a.when = QDateTime::currentDateTimeUtc();

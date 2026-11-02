@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build cf26dda7, mtime 2026-10-29 16:52)
+#     /home/claude/src/fmake/fmake  (build 5a425887, mtime 2026-11-02 23:14)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -163,9 +163,11 @@ OBJS_test_annoyance = \
 	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/app/media_interpretation.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/moc/moc_media_interpretation.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
