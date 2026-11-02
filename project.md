@@ -41754,3 +41754,14 @@ absent where nothing could use it. Both save loops skip a missing combo.
 The per-site shield keeps its greyed row, because there the row's place
 in the list is what it says. `try_settings_ui` checks that the platform's
 row is absent and that every other feature has a control.
+
+### An AI dialog that could not send said why only on hover
+
+With the configured Ollama model missing, the reorganizer's banner said
+"not installed" and Send was greyed. What to do about it ("Pull it, or
+pick one it has in Settings") was only in Send's tooltip, and a phone has
+no hover. `provider_note` now adds the provider's not-ready reason under
+the banner in all four AI dialogs. It reads the same snapshot `gate_send`
+does, since both are taken when the dialog is built. `test_send_gate`
+holds the reason present when the provider is not ready and absent once
+it is.

@@ -176,12 +176,16 @@ int main(int argc, char **argv) {
 		check(!send.isEnabled(), "the button is disabled");
 		check(send.toolTip().contains("llama3"),
 		      "and carries the reason, where the question gets asked of it");
+		check(provider_note(&p, "x").contains("Pull it"),
+		      "the banner says what would fix it too, for a phone with no hover");
 
 		server.names = { "llama3" };
 		p.probe_now();
 		gate_send(&send, &p);
 		check(send.isEnabled(), "and comes back when the model does");
 		check(send.toolTip().isEmpty(), "with the stale reason cleared");
+		check(!provider_note(&p, "x").contains("<br>"),
+		      "and a ready backend's banner carries no reason");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

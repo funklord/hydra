@@ -103,13 +103,27 @@ inline QString provider_note(const ai_provider *provider,
 	// Not "on this machine" as a phrase about the backend: `is_external` is
 	// asked of the provider precisely so that a backend which is usually local
 	// can say when it is not.
-	if (!provider->is_external())
-		return name + QStringLiteral(" \u2014 local provider; nothing leaves "
+	QString note;
+	if (!provider->is_external()) {
+		note = name + QStringLiteral(" \u2014 local provider; nothing leaves "
 		                              "this machine.");
-	QString note = name + QStringLiteral(" \u2014 external provider.");
-	if (!what_travels.isEmpty())
-		note += " " + what_travels;
-	return note + QStringLiteral(" Nothing leaves until you press Send.");
+	} else {
+		note = name + QStringLiteral(" \u2014 external provider.");
+		if (!what_travels.isEmpty())
+			note += " " + what_travels;
+		note += QStringLiteral(" Nothing leaves until you press Send.");
+	}
+	// **And what to do when it cannot answer, in the banner as well as on
+	// the button.** `gate_send` puts the reason in Send's tooltip, which is
+	// where the question is asked on a desktop -- but a phone has no hover,
+	// so there the greyed Send explained nothing, and on a desktop the
+	// banner said "not installed" without saying what would fix it
+	// (try_look, 2026-11-02). Same snapshot as `gate_send`, since both are
+	// taken when the dialog is built.
+	QString why;
+	if (!provider->ready(&why) && !why.isEmpty())
+		note += "<br>" + why.toHtmlEscaped();
+	return note;
 }
 
 // Disable a Send button when the provider cannot answer, and say why on it.
