@@ -41806,3 +41806,27 @@ first row was tinted, and that row is a site, which cannot become a
 rule, so it sat beside two dead buttons. Close holds the focus there.
 This is the same shape as the screen picker above. A dialog whose list
 is a choice should not give that list the initial focus.
+
+### KeePassXC was a greyed toolbar key and menu on the phone
+
+On Android every Passwords entry and the toolbar's Key were disabled,
+and the reason was in a status tip and a tooltip, neither of which a
+phone shows. `keepass_bridge::unavailable_reason` says why: there is no
+KeePassXC socket to reach there, and the system autofill service fills
+WebView forms instead. The bridge's own comment says that offering the
+feature at all would send somebody looking for a KeePassXC to start.
+Both are now absent on Android, the same rule as the settings row
+above.
+
+### Open: a phone's Tools menu elides its longest entry
+
+On the emulator (1080x2340, about 411 logical pixels wide), Tools shows
+"Something Go...hrough Here...". The menu runs from below "Tools" to the
+screen's right edge, about 263 logical pixels, and Qt elides the label
+to fit instead of moving the menu left. The label is deliberate: it
+repeats the tooltip's words so people can find it, so the fix is not to
+shorten it. Not yet established: what caps the width, and whether the
+shortcut column ("Ctrl+J", "Ctrl+,") is what pushes it over. Finding out
+takes an Android build per experiment. Photographed 2026-11-03 by an
+emulator driver that also confirmed Tools has no Passwords entry and the
+toolbar has no Key.

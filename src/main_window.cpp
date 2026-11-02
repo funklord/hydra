@@ -1240,6 +1240,13 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// ever enables it. Nothing has to tell a manual click apart from a
 	// detected form, because the disabled state makes the first impossible.
 	reset_key_action();
+#ifdef Q_OS_ANDROID
+	// **Absent on a phone**, where there is no KeePassXC to reach -- see
+	// `keepass_bridge::unavailable_reason`. Disabled, it was a dead key in the
+	// toolbar whose reason sat in a tooltip a touch screen cannot show, and a
+	// login page's script would enable it to fail on the first tap.
+	m_key_action->setVisible(false);
+#endif
 	connect(m_key_action, &QAction::triggered, this, [this] {
 		// Ask again, through the whole gate. Cheaper designs were available --
 		// re-opening the last picker, or caching the entries -- and both mean
@@ -2142,6 +2149,11 @@ QMenuBar *main_window::build_menu_bar() {
 	// Everything KeePassXC in one place, in the order a person meets it: pair,
 	// use, unpair.
 	QMenu *pw_menu = tools_menu->addMenu("&Passwords");
+#ifdef Q_OS_ANDROID
+	// Absent on a phone, as the toolbar key is. Every entry in it was greyed
+	// there, with the reason in a status tip that Android never shows.
+	pw_menu->menuAction()->setVisible(false);
+#endif
 	QAction *kp = pw_menu->addAction("&Connect to KeePassXC…", this,
 	                                  &main_window::toggle_password_manager);
 	kp->setStatusTip(keepass_bridge::supported()
