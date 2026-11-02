@@ -543,28 +543,63 @@ var exception_token = function () {
 // abort-on-property-read: reading it throws, which stops the script doing the
 // reading and nothing else. The usual answer to a page that checks whether an
 // ad object exists before deciding to complain.
+//
+// Ported from uBlock (`scriptlets.js`, `abortOnPropertyRead`, read at
+// 2be6e29e4a92, 2026-11-02): **a parent that does not exist yet is waited
+// for, not made.** Until then a rule naming `adsbygoogle.loaded` created an
+// empty `window.adsbygoogle` the page could see, and a parent the page
+// assigned later left the trap behind on the placeholder. Now the parent
+// holds an accessor that lays the trap on whatever object is assigned to it.
 C['abort-on-property-read'] = function (path) {
-	var at = owner_of(path);
-	if (!at) return;
+	var chain = String(path || '');
+	if (chain === '') return;
 	var stop = function () { throw new ReferenceError(exception_token()); };
-	try {
-		Object.defineProperty(at.o, at.k, {
-			get: stop, set: function () {}, configurable: false
-		});
-	} catch (e) {}
+	var lay = function (owner, rest) {
+		var dot = rest.indexOf('.');
+		if (dot < 0) {
+			try {
+				var d = Object.getOwnPropertyDescriptor(owner, rest);
+				if (!d || d.get !== stop)
+					Object.defineProperty(owner, rest, { get: stop, set: function () {} });
+			} catch (e) {}
+			return;
+		}
+		var prop = rest.slice(0, dot);
+		var tail = rest.slice(dot + 1);
+		var v;
+		try { v = owner[prop]; } catch (e) { return; }
+		if (v) { lay(v, tail); return; }
+		try {
+			var pd = Object.getOwnPropertyDescriptor(owner, prop);
+			if (pd && pd.set !== undefined) return;
+			Object.defineProperty(owner, prop, {
+				get: function () { return v; },
+				set: function (a) {
+					v = a;
+					if (a instanceof Object) lay(a, tail);
+				}
+			});
+		} catch (e) {}
+	};
+	lay(window, chain);
 };
 
-// abort-on-property-write: reading is fine, writing throws. For a page that
-// installs its own detector onto a global.
+// abort-on-property-write: writing throws, and reading answers nothing. For a
+// page that installs its own detector onto a global. As uBlock's: the path is
+// walked as it is now, and a parent that is not there means no rule.
 C['abort-on-property-write'] = function (path) {
-	var at = owner_of(path);
-	if (!at) return;
-	var held;
+	var parts = String(path || '').split('.');
+	var key = parts.pop();
+	if (!key) return;
+	var owner = window;
+	for (var i = 0; i < parts.length; i++) {
+		try { owner = owner[parts[i]]; } catch (e) { return; }
+		if (!(owner instanceof Object)) return;
+	}
 	try {
-		Object.defineProperty(at.o, at.k, {
-			get: function () { return held; },
-			set: function () { throw new ReferenceError(exception_token()); },
-			configurable: false
+		delete owner[key];
+		Object.defineProperty(owner, key, {
+			set: function () { throw new ReferenceError(exception_token()); }
 		});
 	} catch (e) {}
 };

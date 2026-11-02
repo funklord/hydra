@@ -942,11 +942,17 @@ int main(int argc, char **argv) {
 		give_page(&eng);
 		check(run_one(&eng, "abort-on-property-read", { "ads.enabled" })
 		          .isEmpty(), "aopr evaluates");
+		// **As uBlock: the parent is waited for, not made** (2026-11-02).
+		check(ask(&eng, "typeof window.ads") == "undefined",
+		       "no object is made for the page to find");
+		eng.evaluate("window.ads = { enabled: true };");
 		check(ask(&eng, "(function(){try{var x=window.ads.enabled;return 'read';}"
 		                 "catch(e){return 'threw';}})()") == "threw",
-		       "reading it throws");
-		check(ask(&eng, "typeof window.ads") == "object",
-		       "and the path to it was built");
+		       "and once the page makes it, reading the property throws");
+		eng.evaluate("window.ads = { enabled: true, again: 1 };");
+		check(ask(&eng, "(function(){try{var x=window.ads.enabled;return 'read';}"
+		                 "catch(e){return 'threw';}})()") == "threw",
+		       "on a replacement too");
 		// **What a page catching it reads**: a token, nothing named for this
 		// browser and not the property, and an `onerror` that swallows it.
 		const QString message = ask(&eng, "(function(){try{window.ads.enabled;}"
@@ -961,6 +967,8 @@ int main(int argc, char **argv) {
 
 		QJSEngine eng2;
 		give_page(&eng2);
+		// The parent has to be there: uBlock's walks the path as it is.
+		eng2.evaluate("window.detector = {};");
 		check(run_one(&eng2, "aopw", { "detector.installed" }).isEmpty(),
 		       "aopw evaluates, by its alias");
 		check(ask(&eng2, "(function(){try{var x=window.detector.installed;"
@@ -975,6 +983,11 @@ int main(int argc, char **argv) {
 		                  "return 'wrote';}catch(e){return 'threw';}})()")
 		          == "threw",
 		       "and writing throws");
+		QJSEngine eng3;
+		give_page(&eng3);
+		run_one(&eng3, "aopw", { "nothing.here" });
+		check(ask(&eng3, "typeof window.nothing") == "undefined",
+		      "with no parent there, nothing is made");
 	}
 
 	section("aborting only the script that matches");

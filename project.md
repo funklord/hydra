@@ -35793,6 +35793,25 @@ passed) adds a write from an external script with no needle, a context
 naming one address and not another, and a `data:` script; against the
 old code, three of those fail. `try_scriptlets` still passes (39).
 
+### The property aborts wait for a parent instead of making one (2026-11-02)
+
+Compared with uBlock's `abortOnPropertyRead` and `abortOnPropertyWrite`
+at `2be6e29e4a92`. Of the 1,272 `abort-on-property-read` rules in the
+holder's lists, 280 name a nested path (`adsbygoogle.loaded`). For
+those, hydra created the missing parent as an empty object, which a page
+can see. The trap was then defined on that placeholder, so when the page
+assigned its own object the trap stayed behind on the placeholder and
+never fired.
+
+uBlock creates nothing. The parent holds an accessor, and whatever
+object is assigned to it gets the trap. Hydra now does the same.
+`abort-on-property-write` walks the path as it is, and a missing parent
+means no rule, as in uBlock (8 of its 296 rules are nested).
+`test_scriptlets` (396 passed) checks that no object is made, that the
+read throws once the page makes the parent and again after it replaces
+it, and that the write rule makes nothing. Against the old code, five
+checks fail. `try_scriptlets` still passes (39).
+
 ### Two engine limits that were silently disabling whole scriptlets
 
 Both found by a test failing on code that was right, and both are real
