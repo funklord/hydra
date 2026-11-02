@@ -1273,10 +1273,10 @@ int main(int argc, char **argv) {
 	{
 		QJSEngine eng;
 		give_page(&eng);
-		check(run_one(&eng, "trusted-replace-outbound-text",
-		              { "JSON.stringify", "\"clientScreen\":\"WATCH\"",
-		                "\"clientScreen\":\"ADUNIT\"", "condition", "contentPlaybackContext" },
-		              true).isEmpty(),
+		const QStringList args = { "JSON.stringify", "\"clientScreen\":\"WATCH\"",
+		                           "\"clientScreen\":\"ADUNIT\"",
+		                           "condition", "contentPlaybackContext" };
+		check(run_one(&eng, "trusted-replace-outbound-text", args, true).isEmpty(),
 		      "it installs");
 		check(ask(&eng, "JSON.stringify({ clientScreen: 'WATCH', contentPlaybackContext: {} })") ==
 		        "{\"clientScreen\":\"ADUNIT\",\"contentPlaybackContext\":{}}",
