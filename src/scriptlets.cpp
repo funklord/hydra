@@ -1345,17 +1345,60 @@ var node_text = function (node_name, pattern, replacement, extras) {
 		}
 	};
 
-	var sweep = function () {
-		if (left === 0) return;
-		if (document.documentElement) walk(document.documentElement);
+	// **What is there now, then each node as it is added, until the document
+	// is parsed** -- uBlock's `replaceNodeTextFn` (read at 2be6e29e4a92,
+	// 2026-11-02). This used the shared `watch_dom`, which sweeps the whole
+	// document per mutation and gives up after 64 passes: during parsing
+	// every script's end is a pass, so on a page with more than 64 scripts
+	// before the one a rule names, the rule stopped looking before it got
+	// there. `stay` keeps watching after that, and `quitAfter, ms` watches
+	// that much longer.
+	var stay = opts.stay !== undefined && String(opts.stay) !== '' &&
+	           String(opts.stay) !== '0' && String(opts.stay) !== 'false';
+	var quit_after = parseInt(opts.quitAfter, 10) || 0;
+	if (document.documentElement) walk(document.documentElement);
+	if ((left === 0 && !stay) || !window.MutationObserver) return;
+	var obs;
+	var on_added = function (records) {
+		for (var r = 0; r < records.length; r++) {
+			var added = records[r].addedNodes || [];
+			for (var a = 0; a < added.length; a++) {
+				var node = added[a];
+				var name = '';
+				try { name = String(node.nodeName || ''); } catch (e) {}
+				if (want_name.test(name)) handle(node);
+				else if (name === 'TEMPLATE' && node.content) walk(node.content);
+				else continue;
+				if (left === 0) { obs.disconnect(); return; }
+			}
+		}
 	};
-	watch_dom(sweep, String(opts.stay || '') === 'true', false);
+	obs = new window.MutationObserver(on_added);
+	try { obs.observe(document, { childList: true, subtree: true }); }
+	catch (e) { return; }
+	if (stay) return;
+	var stop = function () {
+		var rest = [];
+		try { rest = obs.takeRecords(); } catch (e) {}
+		obs.disconnect();
+		on_added(rest);
+	};
+	var parsed = function () {
+		if (quit_after > 0) window.setTimeout(stop, quit_after);
+		else stop();
+	};
+	if (document.readyState === 'loading')
+		document.addEventListener('DOMContentLoaded', parsed, { once: true });
+	else
+		parsed();
 };
 
 C['remove-node-text'] = function (node_name, includes) {
 	// uBlock's own spelling: the second argument is `includes`, and the text
-	// is cleared rather than rewritten.
-	node_text(node_name, '', '', ['includes', includes]);
+	// is cleared rather than rewritten. What follows is passed on, `stay`
+	// and `quitAfter` included.
+	var extras = ['includes', includes].concat(Array.prototype.slice.call(arguments, 2));
+	node_text(node_name, '', '', extras);
 };
 
 C['trusted-replace-node-text'] = function (node_name, pattern, replacement) {

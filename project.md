@@ -35866,6 +35866,27 @@ passed) covers `null`, `!` and the target name; against the old code
 those three fail. The decoy needs a real DOM, and only its parsing is
 checked, by `try_scriptlets`.
 
+### The node-text family watches until the page is parsed, not for 64 passes (2026-11-02)
+
+`remove-node-text` (810 rules) and `trusted-replace-node-text` (the
+`rpnt` behind YouTube's `serverContract` rule) used the shared
+`watch_dom`. It sweeps the whole document on every mutation and gives up
+after 64 passes. While a page is parsed, every script's end is a pass.
+So on a page with more than 64 scripts before the one a rule names, the
+rule stopped looking before it got there. `try_scriptlets` now serves
+that page: a hundred scripts, then the marked one, under Trusted Types.
+Against the old code the marked script ran unrewritten.
+
+The family now follows uBlock's `replaceNodeTextFn` at `2be6e29e4a92`.
+It walks what is there, handles each node as it is added, and stops once
+the document is parsed. `stay` keeps it watching, and `quitAfter, ms`
+watches that much longer. `stay` was read only as the literal word
+`true` before; lists write `stay, 1`. `remove-node-text` now passes its
+extra arguments on. The other DOM scriptlets keep `watch_dom`: they act
+on attributes and elements that remain in the document, and its
+DOMContentLoaded sweep reaches them. `try_scriptlets` passes 41 and
+`test_scriptlets` 402.
+
 ### Two engine limits that were silently disabling whole scriptlets
 
 Both found by a test failing on code that was right, and both are real

@@ -199,6 +199,21 @@ public:
 				        "    + '&procedural=' + d('.hide-too');"
 				        "}, 2500);"
 				        "</script></body></html>";
+			} else if (target.startsWith("/late-contract")) {
+				// **The script to rewrite comes after a hundred others**, as
+				// YouTube's `serverContract` comes after many: every script's
+				// end is a pass of a document-wide observer, and one that
+				// counted passes gave up before it got here.
+				csp = "require-trusted-types-for 'script'";
+				body = "<!doctype html><html><head>";
+				for (int i = 0; i < 100; ++i)
+					body += "<script>window.__n = (window.__n || 0) + 1;</script>";
+				body += "<script>window.__mark_a = 1;</script>"
+				        "</head><body>late<script>"
+				        "var k = '__mark_';"
+				        "new Image().src = '/report?late=' + (window[k + 'b'] ? 'rewritten'"
+				        "  : window[k + 'a'] ? 'original' : 'none') + '&n=' + window.__n;"
+				        "</script></body></html>";
 			} else if (target.startsWith("/contract")) {
 				// **YouTube's `serverContract` rewrite, in miniature.** The
 				// page requires Trusted Types, as YouTube does, so a plain
@@ -671,6 +686,19 @@ int main(int argc, char *argv[]) {
 		for (const QString &a : server.asked)
 			reported |= a.startsWith("/csp-report");
 		check(!reported, "and the page's policy was told of nothing");
+	}
+
+	section("and so is one that comes after a hundred other scripts");
+	{
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/late-contract").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		const bool answered = server.wait_for_report();
+		const QString said = server.report();
+		check(answered && said.contains("n=100"),
+		      QString("the page ran its hundred scripts (%1)").arg(said));
+		check(said.contains("late=rewritten"),
+		      QString("and the one after them ran rewritten (%1)").arg(said));
 	}
 
 	// --- what the real list says, reported rather than asserted -----------
