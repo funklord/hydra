@@ -10,6 +10,7 @@
 #include "request_filter.h"
 #include "qtwebengine_factory.h"
 #include "session_import.h"
+#include "settings_dialog.h"
 #include "tab_tree_model.h"
 #include "tab_tree_view.h"
 #include "node.h"
@@ -63,6 +64,11 @@ int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
+	// **No warm-up**, as in try_delete: a restored tree's recent tabs are
+	// loaded in the background now, and the mirror check below counts the
+	// views left after closing the one it opened, expecting none. Set in
+	// this run's own settings under ~/.qttest.
+	settings_store::set_preload_background_tabs(false);
 
 	const QString out = qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
 	                        ? qgetenv("HYDRA_TEST_OUT") : QString("/tmp/hydra-import");
