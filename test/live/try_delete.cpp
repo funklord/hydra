@@ -17,6 +17,7 @@
 #include "policy_engine.h"
 #include "qtwebengine_factory.h"
 #include "request_filter.h"
+#include "settings_dialog.h"
 #include "state_store.h"
 #include "tab_tree_model.h"
 
@@ -90,6 +91,12 @@ int main(int argc, char *argv[]) {
 	// Set before the window exists. `live_view_cap()` reads the environment on
 	// every call, so later would work too and would be a worse habit.
 	qputenv("HYDRA_MAX_LIVE_VIEWS", "4");
+	// **And no warm-up.** A restored tree now has its most recent tabs
+	// loaded in the background, so "nothing is live before anything is
+	// opened" stopped being true of the shell and this driver failed on its
+	// first count. Every count here is of views this driver opened itself.
+	// The settings are this run's own, under ~/.qttest.
+	settings_store::set_preload_background_tabs(false);
 
 	const QString out = qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
 	                        ? qgetenv("HYDRA_TEST_OUT") : QString("/tmp/hydra-delete");
