@@ -47,6 +47,13 @@ public slots:
 public:
 	// No Q_INVOKABLE, not a slot: the page must not reach this.
 	void secret() { last_report = "secret ran"; }
+
+signals:
+	// What the shell says to a page: the picker's arming, SponsorBlock's
+	// answer.
+	void pick_requested();
+	void answer(const QString &token, const QString &json);
+	void counted_up(int n, bool done);
 };
 
 int main(int argc, char **argv) {
@@ -127,6 +134,35 @@ int main(int argc, char **argv) {
 			if (m.toObject().value("name").toString() == "report")
 				arity_right = m.toObject().value("args").toInt() == 2;
 		check(arity_right, "arity is published, so the shim can check before calling");
+	}
+
+	section("signals: listed, and carried to whoever listens");
+	{
+		const QJsonObject d = parse(inv.describe("hydraFake"));
+		const QJsonArray ss = d.value("value").toObject().value("signals").toArray();
+		QStringList names;
+		for (const QJsonValue &v : ss)
+			names << v.toObject().value("name").toString() + "/" +
+			         QString::number(v.toObject().value("args").toInt());
+		check(names.contains("pick_requested/0") && names.contains("answer/2") &&
+		        !names.contains("destroyed/1") && !names.contains("objectNameChanged/1"),
+		      "the bridge's own signals are listed with their arity, QObject's are not: " +
+		        names.join(" "));
+		bridge_signal_relay relay;
+		QStringList heard;
+		relay.set_sink([&](const QString &n, const QString &sig, const QString &args) {
+			heard << n + "." + sig + args;
+		});
+		relay.watch("hydraFake", &b);
+		emit b.pick_requested();
+		emit b.answer("t1", "{\"s\":[1]}");
+		emit b.counted_up(3, true);
+		const QStringList want = { "hydraFake.pick_requested[]",
+		                           "hydraFake.answer[\"t1\",\"{\\\"s\\\":[1]}\"]",
+		                           "hydraFake.counted_up[3,true]" };
+		check(heard == want,
+		      "each emission reaches the sink, named, with its arguments as JSON: " +
+		        heard.join(" | "));
 	}
 
 	section("removal");

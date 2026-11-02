@@ -94,9 +94,65 @@ QString bridge_invoker::describe(const QString &name) const {
 		one.insert("args", m.parameterCount());
 		methods.append(one);
 	}
+	// **And the signals**, which a page connects to and the shell emits --
+	// the picker is armed by one, a SponsorBlock answer arrives by one. The
+	// shim had no way to hear them, so on Android a script that waited on a
+	// signal waited for ever (2026-11-02).
+	QJsonArray signal_list;
+	for (int i = QObject::staticMetaObject.methodCount(); i < mo->methodCount(); ++i) {
+		const QMetaMethod m = mo->method(i);
+		if (m.methodType() != QMetaMethod::Signal || m.access() != QMetaMethod::Public)
+			continue;
+		QJsonObject one;
+		one.insert("name", QString::fromUtf8(m.name()));
+		one.insert("args", m.parameterCount());
+		signal_list.append(one);
+	}
 	QJsonObject value;
 	value.insert("methods", methods);
+	value.insert("signals", signal_list);
 	return ok(value);
+}
+
+void bridge_signal_relay::watch(const QString &name, QObject *object) {
+	if (!object || name.isEmpty())
+		return;
+	const QMetaObject *mo = object->metaObject();
+	for (int i = QObject::staticMetaObject.methodCount(); i < mo->methodCount(); ++i) {
+		const QMetaMethod m = mo->method(i);
+		if (m.methodType() != QMetaMethod::Signal || m.access() != QMetaMethod::Public)
+			continue;
+		const int slot = m_watched.size();
+		m_watched.append({ name, QString::fromUtf8(m.name()), m });
+		// A slot number of our own per signal: `qt_metacall` below is told
+		// which one fired, and reads its arguments by the signal's types.
+		QMetaObject::connect(object, i, this,
+		                     staticMetaObject.methodCount() + slot, Qt::DirectConnection);
+	}
+}
+
+int bridge_signal_relay::qt_metacall(QMetaObject::Call call, int id, void **argv) {
+	id = QObject::qt_metacall(call, id, argv);
+	if (id < 0 || call != QMetaObject::InvokeMetaMethod)
+		return id;
+	if (id < m_watched.size()) {
+		const watched &w = m_watched.at(id);
+		QJsonArray args;
+		for (int a = 0; a < w.signal.parameterCount(); ++a) {
+			const QVariant v(w.signal.parameterMetaType(a), argv[a + 1]);
+			switch (v.metaType().id()) {
+				case QMetaType::QString: args.append(v.toString()); break;
+				case QMetaType::Bool:    args.append(v.toBool());   break;
+				case QMetaType::Int:     args.append(v.toInt());    break;
+				case QMetaType::Double:  args.append(v.toDouble()); break;
+				default:                 args.append(QJsonValue());  break;
+			}
+		}
+		if (m_sink)
+			m_sink(w.name, w.signal_name,
+			       QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)));
+	}
+	return -1;
 }
 
 QString bridge_invoker::invoke(const QString &name, const QString &method,

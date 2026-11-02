@@ -12,6 +12,7 @@
 #ifdef Q_OS_ANDROID
 
 #include "android_view.h"
+#include "page_key.h"
 
 #include <QPixmap>
 #include "link_menu.h"
@@ -42,6 +43,12 @@ namespace {
 
 const char *k_cls = "se/vibes/hydra/HydraWebView";
 
+// The page global the shell's signals are delivered through: random per
+// process, from the same stem the frame messages use (`page_key.h`).
+QString signal_key() {
+	return QStringLiteral("_") + page_key::stem() + QStringLiteral("sig");
+}
+
 // The page-side half of the bridge: the same `window.hydraChannel(cb)` the
 // desktop's QWebChannel bootstrap provides, so every injected script runs
 // unmodified on both engines.
@@ -55,6 +62,13 @@ const char *k_bridge_bootstrap = R"JS(
 (function () {
   if (window.hydraChannel || !window.hydraNative) return;
   var objects = {};
+  var listeners = {};
+  try {
+    Object.defineProperty(window, '__H_SIGKEY__', { value: function (n, s, a) {
+      var l = listeners[n + '\n' + s] || [];
+      for (var i = 0; i < l.length; i++) { try { l[i].apply(null, a); } catch (e) {} }
+    } });
+  } catch (e) {}
   var build = function (name) {
     var d;
     try { d = JSON.parse(window.hydraNative.describe(name)); } catch (e) { return null; }
@@ -76,6 +90,11 @@ const char *k_bridge_bootstrap = R"JS(
         if (cb && out && out.ok) { try { cb(out.value); } catch (e) {} }
         return out && out.ok ? out.value : undefined;
       };
+    });
+    (d.value.signals || []).forEach(function (s) {
+      proxy[s.name] = { connect: function (fn) {
+        (listeners[name + '\n' + s.name] = listeners[name + '\n' + s.name] || []).push(fn);
+      } };
     });
     return proxy;
   };
@@ -114,6 +133,16 @@ const char *k_bundle_open = R"JS(
   var __h_top = window.top === window;
   var __h_private = {};
   var __h_objects = {};
+  // **Signals from the shell**, run in by `evaluateJavascript` under a name
+  // made at random per process: nothing a page can read names this browser,
+  // and the listeners themselves stay in this closure.
+  var __h_listeners = {};
+  try {
+    Object.defineProperty(window, '__H_SIGKEY__', { value: function (n, s, a) {
+      var l = __h_listeners[n + '\n' + s] || [];
+      for (var i = 0; i < l.length; i++) { try { l[i].apply(null, a); } catch (e) {} }
+    } });
+  } catch (e) {}
   var hydraChannel = function (cb) {
     try { cb(__h_objects); } catch (e) {}
   };
@@ -135,6 +164,11 @@ const char *k_bundle_open = R"JS(
         if (cb && out && out.ok) { try { cb(out.value); } catch (e) {} }
         return out && out.ok ? out.value : undefined;
       };
+    });
+    (d.value.signals || []).forEach(function (s) {
+      proxy[s.name] = { connect: function (fn) {
+        (__h_listeners[name + '\n' + s.name] = __h_listeners[name + '\n' + s.name] || []).push(fn);
+      } };
     });
     __h_objects[name] = proxy;
   };
@@ -1035,7 +1069,8 @@ QString android_view::injected_scripts(qint64 id) {
 	// the page for anything here to reach.
 	if (document_start_supported())
 		return build_permissions_shim(v, v->url());
-	QString out = QString::fromUtf8(k_bridge_bootstrap);
+	QString out = QString::fromUtf8(k_bridge_bootstrap)
+	                .replace(QLatin1String("__H_SIGKEY__"), signal_key());
 	for (const QString &name : v->m_bridges.names())
 		out += QStringLiteral("\nwindow.hydraRegisterBridge(%1);\n").arg(js_literal(name));
 	// **Everything except what the document-start channel is carrying.**
@@ -1824,7 +1859,9 @@ QString android_view::frame_scripts(qint64 id) {
 		out += bundled(v->m_script_sources[i]) + QStringLiteral("\n})(); } catch (__h_e) {}\n");
 	}
 	out += QString::fromUtf8(k_bundle_media);
-	return QString::fromUtf8(k_bundle_open).replace(QLatin1String("/*BUNDLE*/"), out);
+	return QString::fromUtf8(k_bundle_open)
+	  .replace(QLatin1String("__H_SIGKEY__"), signal_key())
+	  .replace(QLatin1String("/*BUNDLE*/"), out);
 }
 
 void android_view::push_frame_scripts() {
@@ -1838,6 +1875,24 @@ void android_view::push_frame_scripts() {
 
 void android_view::set_script_bridge(QObject *object, const QString &name) {
 	m_bridges.add(name, object);
+	// **Its signals, into the page.** The shim calls methods and had no way
+	// to hear a signal, so the element picker was never armed on Android and
+	// a SponsorBlock answer never arrived (2026-11-02). Watched once per
+	// object: a second watch would deliver everything twice.
+	if (!m_signal_relay) {
+		m_signal_relay = new bridge_signal_relay(this);
+		m_signal_relay->set_sink([this](const QString &n, const QString &sig,
+		                                const QString &args) {
+			run_probe(QString("(function () { var f = window[%1]; "
+			                  "if (typeof f === 'function') f(%2, %3, %4); return ''; })()")
+			            .arg(js_literal(signal_key()), js_literal(n), js_literal(sig), args),
+			          [](const QString &) {});
+		});
+	}
+	if (!m_relayed.contains(object)) {
+		m_relayed.insert(object);
+		m_signal_relay->watch(name, object);
+	}
 	push_frame_scripts();   // the bundle registers it
 }
 

@@ -1,6 +1,10 @@
 #pragma once
 
 #include <QHash>
+#include <functional>
+#include <QList>
+#include <QMetaMethod>
+#include <QObject>
 #include <QString>
 #include <QStringList>
 
@@ -60,4 +64,33 @@ public:
 
 private:
 	QHash<QString, QObject *> m_objects;
+};
+
+// **The other direction: a bridge object's signals, carried to the page.**
+// A backend with no QWebChannel (Android) emulates the page side by calling
+// methods; nothing heard a signal, so a script waiting on one -- the element
+// picker's `pick_requested`, SponsorBlock's `answer` -- waited for ever.
+//
+// Every public signal a watched object declares is connected to a slot of
+// this relay's own, which reads the arguments by the signal's types and hands
+// the sink the object's name, the signal's name and the arguments as a JSON
+// array (strings, booleans, numbers; anything else is null). What the sink
+// does with them -- run them into the page -- is the backend's.
+class bridge_signal_relay : public QObject {
+public:
+	using sink = std::function<void(const QString &name, const QString &signal,
+	                                 const QString &args_json)>;
+	explicit bridge_signal_relay(QObject *parent = nullptr) : QObject(parent) {}
+	void set_sink(sink s) { m_sink = std::move(s); }
+	void watch(const QString &name, QObject *object);
+	int qt_metacall(QMetaObject::Call call, int id, void **argv) override;
+
+private:
+	struct watched {
+		QString     name;
+		QString     signal_name;
+		QMetaMethod signal;
+	};
+	QList<watched> m_watched;
+	sink           m_sink;
 };

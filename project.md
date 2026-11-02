@@ -17951,6 +17951,35 @@ kiosk. `mLockTaskModeState` stays `NONE` until the person answers, which
 the test does not do. `test_kiosk` (80) is unchanged on the desktop, where
 none of this is compiled.
 
+### A bridge's signals reach the page on Android (2026-11-02)
+
+**Zap an Element did nothing on a phone, and SponsorBlock never heard
+back.** Android has no QWebChannel; its shim builds a page-side proxy
+from `bridge_invoker::describe`, and that listed methods only. Two
+scripts wait on a signal the shell emits: the picker's
+`p.pick_requested.connect(start)`, and sponsor skip's
+`bridge.answer.connect(...)`. On Android `pick_requested` was
+undefined, so the `connect` threw. `hydraChannel` swallowed the throw,
+and the picker could never be armed. It had never been tried on a
+phone. Found by a new emulator check, whose witness is the page itself:
+an armed picker takes a tap in the capture phase, so the ad's own
+handler never hears it. Before the fix, both taps reached the ad
+(counts 1, 2).
+
+`describe` now lists signals with their arity. `bridge_signal_relay`
+connects to every public signal a bridge object declares, the
+`QSignalSpy` way: slot numbers of its own past QObject's, read in
+`qt_metacall`. It hands the sink the object's name, the signal's name
+and its arguments as JSON. On Android the sink runs the emission into
+the page through `evaluateJavascript`, to a dispatcher both shims define
+under a name random per process (`page_key::stem`), non-enumerable, with
+the listeners kept in the closure. Each object is watched once. After
+the fix, the picker takes the first tap and lets the next through
+(0, then 1). `test_bridge` (25) checks the listing and that each
+emission reaches the sink with its arguments. SponsorBlock rides the
+same path; it was not exercised on the emulator, which would need
+YouTube.
+
 ### Watched, both directions
 
 A page served over `adb reverse` with a div that calls `requestFullscreen()`

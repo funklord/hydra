@@ -226,6 +226,15 @@ class files(http.server.BaseHTTPRequestHandler):
 			self.send_header("Content-Type", "text/html")
 			self.send_header("Content-Security-Policy",
 			                 "style-src 'self'; report-uri /csp-report")
+		elif self.path.startswith("/zap"):
+			# A leaked ad to zap: big, named like one, and where a tap lands.
+			body = ("<!doctype html><meta name=viewport content='width=device-width'>"
+			        "<title>Zap</title><p>Some article text.</p>"
+			        "<div class=leaked-banner onclick='window.__clicks=(window.__clicks||0)+1' "
+			        "style='position:fixed;left:0;right:0;top:30%;"
+			        "height:40%;background:#fcc;font-size:40px'>AN AD</div>").encode()
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
 		elif self.path.startswith("/clicked"):
 			body = b"ok"
 			self.send_response(200)
@@ -1035,6 +1044,36 @@ def main():
 			time.sleep(3)
 			state = probe("getComputedStyle(document.getElementById('hc-sp')).display").strip()
 			check(state == "block", f"and shown again once it says something else ({state})")
+
+			print("\n== Zap an Element picks what a finger taps ==")
+			# The picker reaches the page through the bridge Android emulates,
+			# and had never been tried on a phone. A pick goes on to filter
+			# evolution, which has no model here, so the status line is the
+			# witness: it leaves the picker's prompt, and is not "cancelled".
+			# Whatever a section before this one left open -- the Downloads
+			# window, a consent box -- Back closes, as the shell's Back does.
+			for _ in range(4):
+				if on_screen("Tools"):
+					break
+				adb("shell", "input", "keyevent", "4")
+				time.sleep(2)
+			open_url(f"http://127.0.0.1:{port}/zap", wait=12)
+			ok = tap("Tools") and tap("Zap an Element")
+			check(ok, "Tools, Zap an Element")
+			time.sleep(3)
+			# The status line is painted by Qt and is not in the tree a test
+			# can read, so the page is the witness: the picker takes a tap in
+			# the capture phase and the ad's own handler never hears it; the
+			# next tap, with the picker gone, it does.
+			adb("shell", "input", "tap", "540", "1170")
+			time.sleep(3)
+			first = probe("String(window.__clicks || 0)").strip()
+			adb("shell", "input", "tap", "540", "1170")
+			time.sleep(3)
+			second = probe("String(window.__clicks || 0)").strip()
+			check(first == "0" and second == "1",
+			      f"the picker took the first tap, and let go of the next ({first}, {second})")
+
 		finally:
 			adb("reverse", "--remove", f"tcp:{port}")
 			# The AVD keeps its data between runs, so what this run wrote

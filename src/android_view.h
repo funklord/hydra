@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bridge_invoker.h"
+#include <QSet>
 #include "web_view_backend.h"
 #include "web_view_factory.h"
 
@@ -431,6 +432,8 @@ private:
 	bool               m_desktop_site = false;
 	navigation_decider m_navigation_decider;
 	bridge_invoker m_bridges;
+	bridge_signal_relay *m_signal_relay = nullptr;
+	QSet<QObject *>      m_relayed;
 	QStringList    m_script_names;   // named, so a test can see what was asked for
 	QStringList    m_script_sources; // in registration order, which is load order
 	// **Which of them belong in every frame**, parallel to the two above.
