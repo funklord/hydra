@@ -179,4 +179,27 @@ public class HydraIntents {
             }
         });
     }
+
+    /**
+     * Lock task mode for a locked kiosk: Home and Recents stop leaving the
+     * app until it is unpinned. On a device that is not managed the system
+     * asks the person to allow it, once per pin. A refusal or an error
+     * leaves the kiosk running unpinned rather than failing to start.
+     */
+    public static void setPinned(final Activity a, final boolean on) {
+        if (a == null)
+            return;
+        a.runOnUiThread(new Runnable() {
+            @Override public void run() {
+                try {
+                    if (on)
+                        a.startLockTask();
+                    else
+                        a.stopLockTask();
+                } catch (RuntimeException e) {
+                    android.util.Log.w("hydra", "lock task: " + e);
+                }
+            }
+        });
+    }
 }

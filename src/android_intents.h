@@ -56,4 +56,10 @@ QString store_view();
 // cannot be relied on to hide the phone's clock and battery.
 void hide_status_bar();
 
+// Pin the app to the screen, or unpin it: Android's lock task mode, which
+// a locked kiosk asks for (architecture sec 19.5). Off a managed device the
+// system asks the person once to allow the pin, and that is the point --
+// pinning is the person's to grant, not an app's to take.
+void set_pinned(bool on);
+
 }  // namespace android_intents

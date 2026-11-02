@@ -96,6 +96,12 @@ void hide_status_bar() {
 	  QNativeInterface::QAndroidApplication::context().object());
 }
 
+void set_pinned(bool on) {
+	QJniObject::callStaticMethod<void>(
+	  k_cls, "setPinned", "(Landroid/app/Activity;Z)V",
+	  QNativeInterface::QAndroidApplication::context().object(), jboolean(on));
+}
+
 QString store_view() {
 	const QJniObject v = QJniObject::callStaticObjectMethod(
 	  k_cls, "storeView", "(Landroid/app/Activity;)Ljava/lang/String;",

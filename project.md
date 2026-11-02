@@ -17937,6 +17937,20 @@ bars hidden, and Back leaves kiosk with them restored. The same race can
 touch anything that hides and quickly re-shows the page -- a menu opened
 and closed fast -- and is closed for all of them by the same check.
 
+**A locked kiosk pins the screen (2026-11-02)**, the last of §19.5's kiosk
+half. With *allow escape* off, Esc and Back already cannot leave kiosk, but
+Home and Recents could; now entering it calls `startLockTask`
+(`android_intents::set_pinned`) and leaving unpins, only if this session
+pinned. Off a managed device Android asks the person to allow the pin,
+which is right: pinning is theirs to grant. Measured on the emulator with
+`allowEscape=false` written to `files/settings/hydra/hydra.ini` -- the
+path Qt reads there (`qsettings.cpp`, `GenericConfigLocation` is
+`files/settings`): F11 put the page up with the bars hidden and the
+system's "App is pinned" confirmation over it, and Back did not leave
+kiosk. `mLockTaskModeState` stays `NONE` until the person answers, which
+the test does not do. `test_kiosk` (80) is unchanged on the desktop, where
+none of this is compiled.
+
 ### Watched, both directions
 
 A page served over `adb reverse` with a div that calls `requestFullscreen()`

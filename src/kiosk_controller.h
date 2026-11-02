@@ -139,6 +139,8 @@ private:
 	QPointer<QWidget>          m_stage;
 	QPointer<QWidget>          m_restore_to;
 	QTimer                    *m_idle_timer = nullptr;
+	// Whether this session pinned the screen, so leaving unpins only then.
+	bool m_pinned = false;
 
 	// Geometric-scale path only.
 	QGraphicsScene       *m_scene = nullptr;

@@ -1,6 +1,9 @@
 #include "kiosk_controller.h"
 #include "web_view_backend.h"
 #include "web_view_factory.h"
+#ifdef Q_OS_ANDROID
+#include "android_intents.h"
+#endif
 
 #include <QApplication>
 #include <QDebug>
@@ -122,6 +125,14 @@ bool kiosk_controller::enter(web_view_backend *view, QWidget *restore_to) {
 	forget_session("entering");
 
 	m_stage->showFullScreen();
+#ifdef Q_OS_ANDROID
+	// **A locked kiosk is pinned** (sec 19.5): Esc and Back already cannot
+	// leave it, and Home and Recents can unless the screen is pinned.
+	if (!m_config.allow_escape) {
+		android_intents::set_pinned(true);
+		m_pinned = true;
+	}
+#endif
 	set_cursor_hidden(m_config.hide_cursor);
 	reset_idle_timer();
 	relayout();
@@ -201,6 +212,11 @@ void kiosk_controller::exit() {
 
 	m_idle_timer->stop();
 	set_cursor_hidden(false);
+#ifdef Q_OS_ANDROID
+	if (m_pinned)
+		android_intents::set_pinned(false);
+#endif
+	m_pinned = false;
 
 	if (m_view) {
 		disconnect(m_view, &web_view_backend::render_process_gone, this, nullptr);
