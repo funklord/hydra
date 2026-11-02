@@ -284,11 +284,14 @@ public:
 	// Through the system's print dialog, which saves a PDF as well.
 	void print() override;
 	bool can_print() const override { return m_native; }
+	void save_page() override;
+	bool can_save_page() const override { return m_native; }
 	// Through `loadDataWithBaseURL`, with the page as both base and history
 	// address.
 	void show_html(const QString &html, const QUrl &base) override;
 	bool can_show_html() const override { return m_native; }
 	static void report_print(qint64 id, bool ok);
+	static void report_saved(qint64 id, const QString &path);
 	void find_text(const QString &text, bool forward, bool fresh,
 	                bool case_sensitive) override;
 	void set_permission_decider(permission_decider fn) override { m_decider = std::move(fn); }

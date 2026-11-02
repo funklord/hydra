@@ -2304,6 +2304,29 @@ public class HydraWebView {
     }
 
     /** How a print job ended: true when it completed. */
+    public static native void onPageSaved(long id, String path);
+
+    /**
+     * The page as a web archive at `path`, then `onPageSaved` with the path
+     * written, or an empty one when the WebView saved nothing.
+     */
+    public static void savePage(final long id, final String path) {
+        onUi(new Runnable() {
+            @Override public void run() {
+                WebView w = VIEWS.get(id);
+                if (w == null) {
+                    onPageSaved(id, "");
+                    return;
+                }
+                w.saveWebArchive(path, false, new android.webkit.ValueCallback<String>() {
+                    @Override public void onReceiveValue(String written) {
+                        onPageSaved(id, written == null ? "" : written);
+                    }
+                });
+            }
+        });
+    }
+
     public static native void onPrintFinished(long id, boolean ok);
 
     /**

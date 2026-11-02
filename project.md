@@ -17980,6 +17980,24 @@ emission reaches the sink with its arguments. SponsorBlock rides the
 same path; it was not exercised on the emulator, which would need
 YouTube.
 
+### Save Page on Android, and View Page Source checked there (2026-11-02)
+
+**Save Page was greyed on Android**, honestly, because nothing was wired.
+The WebView saves a page as a web archive (`saveWebArchive`), so it is
+wired now. The archive is written into the app's download folder under
+the page's title (numbered if the name is taken), then published into
+the shared Downloads with `android_downloads::publish`, as a finished
+download is. The window says so through a new `page_saved` signal. The
+desktop is unchanged: there the engine's MHTML goes through the download
+list. The emulator check finds `Rivers rise.mht` in `/sdcard/Download`.
+The status line cannot be the witness, because Qt paints its message and
+`uiautomator` cannot read it.
+
+**View Page Source was believed broken on Android and is not.** The
+WebView renders `view-source:` with Chromium's own viewer ("Line wrap"
+above the markup). A fix written on that belief was reverted before it
+was committed. The check now asserts the markup is shown, and it passes.
+
 ### Watched, both directions
 
 A page served over `adb reverse` with a div that calls `requestFullscreen()`

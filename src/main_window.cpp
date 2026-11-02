@@ -4998,6 +4998,12 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 		connect(view, &web_view_backend::print_finished, this, [this](bool ok) {
 			m_status->showMessage(ok ? "Printed." : "Nothing was printed.", 5000);
 		});
+		connect(view, &web_view_backend::page_saved, this, [this](const QString &where) {
+			m_status->showMessage(where.isEmpty()
+			                        ? QStringLiteral("The page could not be saved.")
+			                        : QStringLiteral("Saved a copy of this page to Downloads."),
+			                      6000);
+		});
 		connect(view, &web_view_backend::find_result, this,
 		         [this, view](int matches, int active) {
 			if (view == current_view())

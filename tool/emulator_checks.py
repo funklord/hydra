@@ -1074,6 +1074,38 @@ def main():
 			check(first == "0" and second == "1",
 			      f"the picker took the first tap, and let go of the next ({first}, {second})")
 
+			print("\n== File > Save Page puts a web archive in Downloads ==")
+			# Greyed on Android until 2026-11-02: the WebView saves a page as
+			# a web archive, published into the shared Downloads.
+			for _ in range(4):
+				if on_screen("Tools"):
+					break
+				adb("shell", "input", "keyevent", "4")
+				time.sleep(2)
+			open_url(f"http://127.0.0.1:{port}/article", wait=12)
+			ok = tap("File") and tap("Save Page")
+			check(ok, "File, Save Page")
+			# The status line is Qt's own painting and not in the readable
+			# tree, so the file is the witness.
+			def archived():
+				listed = adb("shell", "ls", "/sdcard/Download/").split("\n")
+				return [f.strip() for f in listed
+				        if f.strip().startswith("Rivers rise") and f.strip().endswith(".mht")]
+			wait_for("the archive in Downloads", lambda: bool(archived()), 30, step=2)
+			archive = archived()
+			check(bool(archive), f"the archive is in Downloads ({archive})")
+			made = (made if "made" in locals() else set()) | set(archive)
+
+			print("\n== View Page Source shows the page's HTML ==")
+			open_url(f"http://127.0.0.1:{port}/article", wait=12)
+			ok = tap("View", exact=True) and tap("View Page Source")
+			check(ok, "View, View Page Source")
+			time.sleep(8)
+			# Chromium's own source viewer -- Android's WebView has it too,
+			# with its "Line wrap" box above the markup.
+			shown = probe("document.body ? document.body.innerText.slice(0, 2000) : ''").strip()
+			check("<title>Rivers rise</title>" in shown,
+			      f"the new tab shows the markup ({shown[:120]!r})")
 		finally:
 			adb("reverse", "--remove", f"tcp:{port}")
 			# The AVD keeps its data between runs, so what this run wrote

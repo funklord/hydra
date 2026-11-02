@@ -129,6 +129,9 @@ public:
 	// persists, so there is no chooser here and none of print()'s dialog
 	// ownership. Android's WebView is not wired to a page save, so there
 	// `can_save_page()` is false and the entry is greyed rather than silent.
+	//
+	// Android has one since 2026-11-02: the WebView's own web archive, put
+	// into the shared Downloads; that backend says where in `page_saved`.
 	virtual void save_page() {}
 	virtual bool can_save_page() const { return false; }
 
@@ -592,4 +595,8 @@ signals:
 	// status bar can say so -- printing is one of the few things a browser does
 	// whose outcome is invisible from inside the window.
 	void print_finished(bool ok);
+	// A save that does not go through the download list -- Android's --
+	// says how it went: `where` is the saved copy, empty when nothing was
+	// saved.
+	void page_saved(const QString &where);
 };

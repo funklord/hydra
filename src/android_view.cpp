@@ -12,6 +12,7 @@
 #ifdef Q_OS_ANDROID
 
 #include "android_view.h"
+#include "android_downloads.h"
 #include "page_key.h"
 
 #include <QPixmap>
@@ -26,6 +27,10 @@
 #include <QJsonDocument>
 #include <QApplication>
 #include <QClipboard>
+#include <QDir>
+#include <QFile>
+#include <QRegularExpression>
+#include <QStandardPaths>
 #include <QDialog>
 #include <QFileDialog>
 #include <QLabel>
@@ -308,6 +313,11 @@ Java_se_vibes_hydra_HydraWebView_onDownload(JNIEnv *env, jclass, jlong id, jstri
 	                              java_string(env, user_agent),
 	                              java_string(env, referer),
 	                              java_string(env, file_name));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onPageSaved(JNIEnv *env, jclass, jlong id, jstring path) {
+	android_view::report_saved(id, java_string(env, path));
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -1260,6 +1270,45 @@ void android_view::show_html(const QString &html, const QUrl &base) {
 	  k_cls, "showHtml", "(JLjava/lang/String;Ljava/lang/String;)V", jlong(m_id),
 	  QJniObject::fromString(html).object<jstring>(),
 	  QJniObject::fromString(base.toString(QUrl::FullyEncoded)).object<jstring>());
+}
+
+// **Save Page, as the WebView saves one: a web archive.** Written into the
+// app's own download folder under the page's title, then published into the
+// shared Downloads as every finished download is, so a file manager finds it
+// where the desktop's MHTML would have gone (2026-11-02; until then the entry
+// was greyed on Android).
+void android_view::save_page() {
+	if (!m_native)
+		return;
+	QString name = page_title().trimmed();
+	name.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|\\x00-\\x1f]+")), QStringLiteral(" "));
+	name = name.simplified().left(80);
+	if (name.isEmpty())
+		name = QStringLiteral("page");
+	const QString dir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+	QDir().mkpath(dir);
+	QString path = dir + QLatin1Char('/') + name + QStringLiteral(".mht");
+	for (int n = 2; QFile::exists(path) && n < 1000; ++n)
+		path = QString("%1/%2 (%3).mht").arg(dir, name).arg(n);
+	QJniObject::callStaticMethod<void>(
+	  k_cls, "savePage", "(JLjava/lang/String;)V", jlong(m_id),
+	  QJniObject::fromString(path).object<jstring>());
+}
+
+void android_view::report_saved(qint64 id, const QString &path) {
+	QMetaObject::invokeMethod(qApp, [id, path] {
+		android_view *v = s_views.value(id);
+		if (!v)
+			return;
+		QString where;
+		if (!path.isEmpty() && QFile::exists(path)) {
+			QString error;
+			const QString uri = android_downloads::publish(path, QStringLiteral("multipart/related"),
+			                                               &error);
+			where = uri.isEmpty() ? path : uri;
+		}
+		emit v->page_saved(where);
+	}, Qt::QueuedConnection);
 }
 
 void android_view::report_print(qint64 id, bool ok) {
