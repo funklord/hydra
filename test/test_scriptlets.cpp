@@ -153,6 +153,10 @@ static void give_window(QJSEngine *eng, const char *host = "x.test") {
 	loc.setProperty("hostname", QString::fromLatin1(host));
 	eng->globalObject().setProperty("location", loc);
 	eng->globalObject().setProperty("document", eng->newObject());
+	// **The page's own config objects, made as a page makes them.** The
+	// setters wait for a parent rather than making one (uBlock's way, since
+	// 2026-11-02), so a rule naming `cfg.x` acts on a page that has `cfg`.
+	eng->evaluate("window.cfg = {}; window.v = {};");
 }
 
 // The same, plus the page facilities the rest of the catalog wraps.
@@ -503,6 +507,37 @@ int main(int argc, char **argv) {
 		check(got == "{} \"\" [] {} [] threw -32767 undefined undefined",
 		      "{} '' [] emptyObj emptyArr throwFunc and a small number are set; a number "
 		      "past 32767 and a fraction are not: " + got);
+
+		// **A parent is waited for, not made**, as uBlock's trapChain; and
+		// once it is made, the rule applies to it.
+		QJSEngine wait;
+		give_window(&wait);
+		scriptlet_call later;
+		later.scope = "x.test";
+		later.name  = "set-constant";
+		later.args  = { "late.ads", "false" };
+		wait.evaluate(scriptlets::source_for({ later }));
+		check(wait.evaluate("typeof window.late").toString() == "undefined",
+		      "no object is made for a parent the page has not made");
+		wait.evaluate("window.late = { ads: true };");
+		check(wait.evaluate("String(window.late.ads)").toString() == "false",
+		      "and when the page makes it, the rule applies to it");
+
+		// **uBlock's mustAbort**: a value of another type means the rule
+		// guessed wrong, and the page's own value is kept from then on.
+		QJSEngine guess;
+		give_window(&guess);
+		scriptlet_call wrong;
+		wrong.scope = "x.test";
+		wrong.name  = "set-constant";
+		wrong.args  = { "cfg.player", "false" };
+		guess.evaluate(scriptlets::source_for({ wrong }));
+		guess.evaluate("window.cfg.player = true;");
+		check(guess.evaluate("String(window.cfg.player)").toString() == "false",
+		      "a write of the same type is ignored");
+		guess.evaluate("window.cfg.player = { play: function () { return 1; } };");
+		check(guess.evaluate("typeof window.cfg.player").toString() == "object",
+		      "and one of another type stands the rule down, keeping the page's value");
 	}
 
 	// **The first YouTube page load, in miniature.** The ad data arrives in
@@ -632,16 +667,16 @@ int main(int argc, char **argv) {
 		give_window(&elsewhere, "other.test");
 		check(!elsewhere.evaluate(src).isError(),
 		       "the script evaluates elsewhere too");
-		check(elsewhere.evaluate("typeof window.cfg").toString() == "undefined",
+		check(elsewhere.evaluate("typeof window.cfg.ok").toString() == "undefined",
 		       QString("and does nothing there (%1)")
-		           .arg(elsewhere.evaluate("String(typeof window.cfg)")
+		           .arg(elsewhere.evaluate("String(typeof window.cfg.ok)")
 		                    .toString()));
 		// The near-miss that a suffix test gets wrong: a host ENDING in the
 		// scope's text without the dot is a different site.
 		QJSEngine lookalike;
 		give_window(&lookalike, "notplayer.test");
 		check(!lookalike.evaluate(src).isError() &&
-		          lookalike.evaluate("typeof window.cfg").toString() ==
+		          lookalike.evaluate("typeof window.cfg.ok").toString() ==
 		              "undefined",
 		       "and nothing on a host that merely ends with those letters");
 	}
@@ -1680,21 +1715,26 @@ int main(int argc, char **argv) {
 		// or a number, and this can say anything at all.
 		QJSEngine eng;
 		give_page(&eng);
+		// **uBlock's reading** (`validateConstantFn`, 2026-11-02): `json:`
+		// is parsed, `{...}` gives its `value`, and a bare string is not a
+		// value at all -- it sets `undefined`.
 		check(run_one(&eng, "trusted-set-constant",
 		               { "cfg.token", "a-string-no-word-covers" },
-		               true).isEmpty(), "a bare string is set");
-		check(ask(&eng, "window.cfg.token") == "a-string-no-word-covers",
-		       QString("and reads back as itself (%1)")
-		           .arg(ask(&eng, "window.cfg.token")));
+		               true).isEmpty(), "a bare string runs");
+		check(ask(&eng, "typeof window.cfg.token") == "undefined",
+		       QString("and sets undefined, not the string (%1)")
+		           .arg(ask(&eng, "String(window.cfg.token)")));
 
 		QJSEngine j;
 		give_page(&j);
 		check(run_one(&j, "trusted-set-constant",
-		               { "cfg.obj", "{\"ok\":1}" }, true).isEmpty(),
-		       "a JSON value is set");
-		check(ask(&j, "String(window.cfg.obj.ok)") == "1",
-		       QString("and is parsed (%1)")
-		           .arg(ask(&j, "String(window.cfg.obj.ok)")));
+		               { "cfg.obj", "json:{\"ok\":1}" }, true).isEmpty() &&
+		        run_one(&j, "trusted-set-constant",
+		               { "cfg.wrapped", "{\"value\":{\"ok\":2}}" }, true).isEmpty(),
+		       "a json: value and a {value} object are set");
+		check(ask(&j, "String(window.cfg.obj.ok) + String(window.cfg.wrapped.ok)") == "12",
+		       QString("and parsed (%1)")
+		           .arg(ask(&j, "String(window.cfg.obj.ok) + String(window.cfg.wrapped.ok)")));
 
 		// The shared vocabulary is still consulted first, so a rule saying
 		// `false` gets the boolean rather than the five-character string.

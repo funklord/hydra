@@ -431,8 +431,10 @@ var owner_of = function (path) {
 // `adSlots` under the same global, and three accessors that each overwrote
 // the last would leave only one of them following a replacement.
 //
-// Absent parents are still created, as `owner_of` does, so a rule naming
-// `cfg.ads` reads back on a page that has not made `cfg` yet.
+// **An absent parent is waited for, not made**, as uBlock's `trapChain`
+// does (`set-constant.js`, read at 2be6e29e4a92). Until 2026-11-02 it was
+// created as an empty object, which a page can see -- and one that tests
+// `if (window.cfg) cfg.init()` then calls a method on nothing and breaks.
 var trap_chain = function (path, leaf) {
 	var parts = String(path || '').split('.');
 	if (!parts[parts.length - 1]) return;
@@ -444,12 +446,8 @@ var trap_chain = function (path, leaf) {
 		if (i === parts.length - 1) { leaf(owner, k); return; }
 		var cur;
 		try { cur = owner[k]; } catch (e) { return; }
-		if (cur === undefined || cur === null) {
-			cur = {};
-			try { owner[k] = cur; } catch (e) { return; }
-			try { cur = owner[k]; } catch (e) { return; }
-		}
-		if (!holds(cur)) return;
+		var absent = cur === undefined || cur === null;
+		if (!absent && !holds(cur)) return;
 		var prev = null;
 		try { prev = Object.getOwnPropertyDescriptor(owner, k); } catch (e) {}
 		var held = cur;
@@ -470,19 +468,33 @@ var trap_chain = function (path, leaf) {
 				}
 			});
 		} catch (e) {}
-		walk(cur, i + 1);
+		if (!absent) walk(cur, i + 1);
 	};
 	walk(window, 0);
 };
 
 // The leaf both setters define: reads answer the chosen value and writes are
 // dropped. Non-configurable, so the page cannot define it back.
-var pin = function (v) {
+//
+// **Except that an untrusted rule stands down for a value of another type**,
+// uBlock's `mustAbort`: a rule that pinned `false` where the page then
+// assigns an object guessed the type wrong, and the page's own value is
+// worth more than the guess. From then on the page's writes are kept. A
+// trusted rule never stands down, as in uBlock.
+var pin = function (v, trusted) {
 	return function (o, k) {
+		var value = v, gave_up = false;
+		var stands_down = function (a) {
+			if (trusted) return false;
+			if (gave_up) return true;
+			gave_up = a !== undefined && a !== null && value !== undefined &&
+			          value !== null && typeof a !== typeof value;
+			return gave_up;
+		};
 		try {
 			Object.defineProperty(o, k, {
-				get: function () { return v; },
-				set: function () {},
+				get: function () { return value; },
+				set: function (a) { if (stands_down(a)) value = a; },
 				configurable: false
 			});
 		} catch (e) { /* already non-configurable: the page wins */ }
@@ -912,22 +924,24 @@ C['remove-class'] = remove_dom('class');
 // page's behalf", with a value the rule chooses: a cookie, an arbitrary
 // global, a replaced response body. A rule in that class is a small program.
 
-// trusted-set-constant: set-constant without the vocabulary. A string, or
-// JSON where the value looks like it.
+// trusted-set-constant: set-constant past the vocabulary, as uBlock reads it
+// (`validateConstantFn`, read at 2be6e29e4a92, 2026-11-02): a word from the
+// vocabulary as usual; `json:` and JSON after it; `{...}` read as JSON and
+// its `value` taken; anything else is `undefined`, not the string. Until
+// then a bare string was set as itself and `{...}` as the whole object.
 C['trusted-set-constant'] = function (path, value) {
 	if (!path) return;
-	var chosen = vocabulary(value, false);
+	var raw = String(value == null ? '' : value);
+	var chosen = vocabulary(raw, false);
 	var v;
 	if (chosen) {
 		v = chosen.v;
-	} else {
-		var raw = String(value == null ? '' : value);
-		v = raw;
-		if (raw.charAt(0) === '{' || raw.charAt(0) === '[') {
-			try { v = JSON.parse(raw); } catch (e) { v = raw; }
-		}
+	} else if (raw.indexOf('json:') === 0) {
+		try { v = JSON.parse(raw.slice(5)); } catch (e) { return; }
+	} else if (raw.charAt(0) === '{' && raw.charAt(raw.length - 1) === '}') {
+		try { v = JSON.parse(raw).value; } catch (e) { return; }
 	}
-	trap_chain(path, pin(v));
+	trap_chain(path, pin(v, true));
 };
 
 // trusted-set-cookie: write one, for a site whose own banner will not take an

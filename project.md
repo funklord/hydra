@@ -35812,6 +35812,40 @@ read throws once the page makes the parent and again after it replaces
 it, and that the write rule makes nothing. Against the old code, five
 checks fail. `try_scriptlets` still passes (39).
 
+### set-constant waits for a parent, and stands down for a wrong guess (2026-11-02)
+
+The last of this audit's ports, against uBlock's `setConstantFn` and
+`validateConstantFn` at `2be6e29e4a92`. This is the 1,397-rule
+scriptlet.
+
+**`trap_chain` no longer makes missing parents.** Its comment gave the
+reason as "so a rule naming `cfg.ads` reads back on a page that has not
+made `cfg` yet". But a page can see a made-up `cfg`, and one that tests
+`if (window.cfg) cfg.init()` calls a method on an empty object and
+breaks. uBlock waits: the parent gets an accessor, and the rule applies
+to whatever the page assigns. Hydra now does the same. `acs` uses the
+same path, and so waits too where uBlock would give up, which is
+harmless.
+
+**An untrusted rule stands down for a value of another type**, as
+uBlock's `mustAbort` does. A rule that pinned `false` where the page
+then assigns an object guessed the type wrong. The page's value is kept
+from then on. Before, it was ignored for ever. A trusted rule never
+stands down.
+
+**`trusted-set-constant` reads values as uBlock does:** `json:` followed
+by JSON, `{...}` taken through its `value` field, and anything else is
+`undefined`. Before, a bare string was set as itself and `{...}` as the
+whole object. The holder's lists use `json:` and `{"value": ...}`.
+
+The suite's stub page now has `cfg` and `v` of its own, as the page a
+rule is written for does. `test_scriptlets` passes 400. Its new checks
+(no parent made, the rule applying once the page makes one, standing
+down, and the trusted forms) fail four times against the old code.
+`try_scriptlets` passes (39). On a YouTube watch page the ad fields are
+still gone, the `serverContract` rewrite still runs, and there is no
+wall.
+
 ### Two engine limits that were silently disabling whole scriptlets
 
 Both found by a test failing on code that was right, and both are real
