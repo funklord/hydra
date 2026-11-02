@@ -207,6 +207,15 @@ public:
 				        "setTimeout(function () { var b = document.querySelector('#slot .ad-filled');"
 				        "new Image().src = '/report?bait=' + (b ? b.textContent : 'none'); }, 800);"
 				        "</script></body></html>";
+			} else if (target.startsWith("/agegate")) {
+				// **An age gate in two steps**: the second button exists only
+				// after the first is clicked, and only some time later.
+				body = "<!doctype html><html><body>gate"
+				        "<button id=\"age\" onclick=\"setTimeout(function(){"
+				        "var b=document.createElement('button');b.id='ok';"
+				        "b.onclick=function(){new Image().src='/report?gate=passed';};"
+				        "document.body.appendChild(b);},300);\">I am 18</button>"
+				        "</body></html>";
 			} else if (target.startsWith("/late-contract")) {
 				// **The script to rewrite comes after a hundred others**, as
 				// YouTube's `serverContract` comes after many: every script's
@@ -382,6 +391,8 @@ int main(int argc, char *argv[]) {
 			// A stand-in for an ad slot, put where the page looks for it.
 			body.write("127.0.0.1##+js(trusted-create-html, #slot, "
 			           "<div class=\"ad-filled\">filled</div>)\n");
+			// uBlock's two-step click, comma escaped as a list writes it.
+			body.write("127.0.0.1##+js(trusted-click-element, #age\\, #ok)\n");
 			// quick-fixes' `rpnt` shape: a pattern, a count and a condition.
 			body.write("127.0.0.1##+js(rpnt, script, /__mark_a/, __mark_b, "
 			           "sedCount, 1, condition, /__mark/)\n");
@@ -707,6 +718,17 @@ int main(int argc, char *argv[]) {
 		const bool answered = server.wait_for_report();
 		check(answered && server.report().contains("bait=filled"),
 		      QString("the element was created under Trusted Types (%1)").arg(server.report()));
+	}
+
+	section("a trusted list clicks through an age gate, step by step");
+	{
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/agegate").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		const bool answered = server.wait_for_report();
+		check(answered && server.report().contains("gate=passed"),
+		      QString("both buttons were clicked, the second once it appeared (%1)")
+		        .arg(server.report()));
 	}
 
 	section("and so is one that comes after a hundred other scripts");

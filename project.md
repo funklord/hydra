@@ -35188,22 +35188,21 @@ in the url. The replacement is position 1 and is deliberately not checked:
 it is text, and refusing text for looking like a regex would refuse a rule
 that meant what it said.
 
-### The one refused on its merits
+### The one refused on its merits -- until the holder lifted it
 
-`trusted-click-element` is not here and is not deferred. `consent_blocker`
-already clicks a banner's buttons, from rules written in this tree and
-reviewed in this tree, and a scriptlet that clicks whatever a selector names
-would be a second path to the same action with less guarding it. The test
-suite's "not in the catalog" list names it, so the refusal is asserted rather
-than only written down.
+`trusted-click-element` was refused here, not deferred: `consent_blocker`
+already clicks a banner's buttons from rules written and reviewed in this
+tree, and a scriptlet clicking whatever a selector names would be a second
+path to the same action with less guarding it.
 
-**A port was written on 2026-11-02 and reverted the same hour** (`21dbb5b`,
-reverted by the commit after it), by a session working through the
-scriptlets the lists name and the catalog lacks: 14 rules, mostly age gates
-and dialogs rather than consent banners. The suite's assertion is what
-caught it. It is in history, tested against a two-step gate, if the holder
-decides the refusal should go; that is the holder's call, put to them
-rather than taken.
+**The holder lifted the refusal on 2026-11-02** ("yes of course"), asked
+after a session had ported it, found this record, and reverted the port. It
+is in the catalog now, as uBlock's `trustedClickElement`: 14 rules in the
+holder's lists, mostly age gates and dialogs rather than consent banners.
+What still guards it is the trusted class itself -- it runs only from a
+list the person marked trusted. The consent blocker is unchanged and stays
+the path for consent banners. `try_scriptlets` clicks through a two-step
+gate whose second button appears 300 ms after the first.
 
 ### What the suite asserts, and the sabotage
 
@@ -35236,8 +35235,9 @@ could tell the two apart.** The same case had already been moved once for the
 same reason, off `nowebrtc` when the catalog grew to eleven -- that time the
 test went red and announced itself.
 
-It names `trusted-click-element` now, which is refused on its merits and will
-not be implemented. The proof that the repair is a repair is the sabotage run
+It named `trusted-click-element` then, refused on its merits; since that
+refusal was lifted (2026-11-02) it names `spoof-css`, which this build does
+not implement. The proof that the repair is a repair is the sabotage run
 again: the case stays **green** with the trust gate disabled, so it is
 answering about an unimplemented name rather than about the gate, and the
 gate's own sabotage now turns five checks red instead of six.
@@ -35941,9 +35941,9 @@ list. A directive the vocabulary has no word for becomes the response
 body itself, as in uBlock's `generateContentFn`; the untrusted spelling
 still answers it with an empty body. `test_scriptlets` covers both (416).
 
-`trusted-click-element` stays refused on its merits; see *The one
-refused on its merits*. What remains unported is about 15 rules across
-ten names, none with more than 8.
+`trusted-click-element` is in too, the holder having lifted its refusal;
+see *The one refused on its merits -- until the holder lifted it*. What
+remains unported is about 15 rules across ten names, none with more than 8.
 
 ### Two engine limits that were silently disabling whole scriptlets
 
@@ -36774,9 +36774,9 @@ addresses on a new machine without granting anything.
 ~~Every `trusted-*` scriptlet, for the reason recorded when the catalog was
 written: the first of those belongs with whatever UI says which lists are
 trusted, and there is none.~~ **Closed by *The trusted class, and the box
-that turns it on***, which built the box the absence was waiting on. `trusted-click-element` is the one refused on
-its merits rather than deferred. Nothing else in the families this project has
-met is missing.
+that turns it on***, which built the box the absence was waiting on. `trusted-click-element`, once refused on its
+merits, is in since 2026-11-02 on the holder's word. Nothing else in the
+families this project had met then was missing.
 
 ## Every session-bus call here abstains on the answer, not on the question
 

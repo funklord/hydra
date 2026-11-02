@@ -228,7 +228,7 @@ int main(int argc, char **argv) {
 		// stored as something that will never run.
 		why.clear();
 		got = filter_subscription::classify(
-		  "youtube.com##+js(trusted-click-element, .accept)", nullptr, &why);
+		  "youtube.com##+js(spoof-css, .accept, display, block)", nullptr, &why);
 		check(got == line_kind::unsupported,
 		       QString("one this build does not implement is not (%1: %2)")
 		           .arg(kind_name(got), why));
@@ -381,7 +381,7 @@ int main(int argc, char **argv) {
 		// so did the popup rules and `$removeparam` after them; `$csp` is not.
 		const subscription_read unread = filter_subscription::read(
 		  "||a.example^$csp=x\n||b.example^$csp=y\n"
-		  "example.com##+js(trusted-click-element, .accept)\n");
+		  "example.com##+js(spoof-css, .accept, display, block)\n");
 		check(!unread.ok() && unread.refusal.contains("3 candidate"),
 		       QString("three lines, none enforceable (%1)")
 		           .arg(unread.refusal));

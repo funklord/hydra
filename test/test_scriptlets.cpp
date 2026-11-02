@@ -339,19 +339,16 @@ int main(int argc, char **argv) {
 		// **The whole security position in one line.** A rule names a
 		// scriptlet; it does not carry one. Anything this build has not
 		// implemented and reviewed does not run.
-		// **`trusted-click-element` is the deliberate absence now**, and the
-		// reason is in project.md: `consent_blocker` already clicks a banner's
-		// buttons from rules written here and reviewed here, so a scriptlet
-		// that clicks whatever a selector names would be a second and less
-		// guarded path to the same action. The trusted names that ARE in the
-		// catalog were absent for want of anything saying which lists are
-		// trusted, which the settings page now does.
+		// **`trusted-click-element` was the deliberate absence here until
+		// 2026-11-02**, when the holder lifted the refusal; it runs only from
+		// a list the person marked trusted, like every `trusted-` name.
+		// `spoof-css` stands in as a real uBlock name this catalog lacks.
 		// **`aost` has since been implemented**, so it moved out of this list
 		// -- which is the list noticing a capability arrive rather than a
 		// regression, as `nowebrtc` and `trusted-set-cookie` did before it.
 		// `json-edit` left the same way on 2026-10-25, with the query
 		// language uBlock's YouTube rules came to depend on.
-		for (const char *no : { "trusted-click-element", "trusted-prune-fetch",
+		for (const char *no : { "spoof-css", "trusted-prune-fetch",
 		                         "trusted-prune-inbound-object",
 		                         "jsonl-edit-xhr-response", "eval", "" }) {
 			check(!scriptlets::vetted(QString::fromLatin1(no)),
@@ -366,7 +363,7 @@ int main(int argc, char **argv) {
 		check(c.name == "json-prune" && c.args == QStringList{ "adPlacements" },
 		       QString("with its argument (%1 / %2)")
 		           .arg(c.name, c.args.join("|")));
-		check(!scriptlets::parse_call("trusted-click-element, a, b", &c, &why),
+		check(!scriptlets::parse_call("spoof-css, a, b", &c, &why),
 		       QString("one to an unimplemented scriptlet does not (%1)")
 		           .arg(why));
 		check(!scriptlets::parse_call("", &c, &why),
@@ -924,8 +921,8 @@ int main(int argc, char **argv) {
 		// 54 since `xml-prune` and `m3u-prune`, which need an XML parser
 		// and a network and so are run by `try_prune` in a real engine; 58
 		// with the session-storage pair and the set-attr pair.
-		check(scriptlets::names().size() == 63,
-		       QString("sixty-three scriptlets in the catalog (%1)")
+		check(scriptlets::names().size() == 64,
+		       QString("sixty-four scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 		// The trusted four, named here rather than counted: the question a
 		// reader has is which scriptlets can act on a page's behalf, and a
