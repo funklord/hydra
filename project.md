@@ -17909,6 +17909,19 @@ leave it, and a locked kiosk keeps the key rather than letting it close
 the app. `test_rotation` (616) has a page take the screen and Back leave
 it with the app kept; with the step removed that check fails.
 
+**And the bars stayed on screen during the video (2026-11-02).** The
+fullscreen view was laid over everything but nothing asked the window to
+give up its status and navigation bars, so "fullscreen" on a phone was the
+height between the clock and the back button. `setImmersive` hides both on
+show, the way a player does (a swipe brings them back for a moment), and
+shows them again on hide. Measured on the emulator with a page whose button
+calls `requestFullscreen`, from `pm clear`, reading `dumpsys window`:
+before, both bars `visible=true`; in fullscreen both `false`, and the
+system's own "Viewing full screen" hint appeared; after Back, both `true`
+again with hydra still the focused app on the same page. An earlier run
+seemed to show Back leaving the app; that AVD had a stale tab in front of
+the test page, and the run from a cleared app did not reproduce it.
+
 ### Watched, both directions
 
 A page served over `adb reverse` with a div that calls `requestFullscreen()`

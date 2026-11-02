@@ -7,6 +7,8 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
@@ -769,9 +771,45 @@ public class HydraWebView {
                     ViewGroup.LayoutParams.MATCH_PARENT));
                 v.bringToFront();
                 v.setZ(200f);   // above the page, which is already above Qt
+                setImmersive(true);
                 onFullscreen(id, true);
             }
         });
+    }
+
+    /**
+     * The status and navigation bars, hidden or shown again.
+     *
+     * **A fullscreen video kept both bars on screen** until 2026-11-02:
+     * the page's view was laid over everything, and nothing asked the
+     * window to give up its bars, so on a phone "fullscreen" was the
+     * height between the clock and the back button. Hidden the way a
+     * player hides them -- a swipe from the edge shows them for a moment
+     * and they go again -- so the phone stays usable without leaving the
+     * video.
+     */
+    @SuppressWarnings("deprecation")
+    private static void setImmersive(boolean on) {
+        if (ACTIVITY == null)
+            return;
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController c = ACTIVITY.getWindow().getInsetsController();
+            if (c == null)
+                return;
+            if (on) {
+                c.hide(WindowInsets.Type.systemBars());
+                c.setSystemBarsBehavior(
+                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            } else {
+                c.show(WindowInsets.Type.systemBars());
+            }
+        } else {
+            View d = ACTIVITY.getWindow().getDecorView();
+            d.setSystemUiVisibility(on
+                ? (View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                   | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
+                : View.SYSTEM_UI_FLAG_VISIBLE);
+        }
     }
 
     private static void hideFullscreen() {
@@ -786,6 +824,7 @@ public class HydraWebView {
                     p.removeView(v);
                 FULLSCREEN_VIEW = null;
                 FULLSCREEN_ID = 0;
+                setImmersive(false);
                 // **The page is told last.** Its callback is what lets it put
                 // the player back the way it was, and calling it before the
                 // view is detached leaves the old surface on screen over the
