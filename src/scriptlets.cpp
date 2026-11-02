@@ -1406,6 +1406,80 @@ C['trusted-replace-node-text'] = function (node_name, pattern, replacement) {
 	node_text(node_name, pattern, replacement, extras);
 };
 
+// trusted-replace-outbound-text(chain, pattern, replacement): what a method
+// returns -- `JSON.stringify` is the usual one -- rewritten on its way out.
+// Ported from uBlock's `trustedReplaceOutboundText` (`scriptlets.js`, read
+// at 2be6e29e4a92, 2026-11-02), 16 rules in the lists. The replacement may
+// be `json:` and JSON; `condition, <pattern>` limits it to text that
+// matches; `encoding, base64` decodes before and encodes after. The first
+// match is replaced, as a pattern without `g` replaces in uBlock.
+C['trusted-replace-outbound-text'] = function (chain, pattern, replacement) {
+	if (!chain) return;
+	var raw = String(pattern == null ? '' : pattern);
+	if (raw === '') return;
+	var re = re_of(raw, '', false);
+	if (!re) return;
+	var rep = String(replacement == null ? '' : replacement);
+	if (rep.indexOf('json:') === 0) {
+		try { rep = JSON.parse(rep.slice(5)); } catch (e) { return; }
+	}
+	var opts = named_args(Array.prototype.slice.call(arguments, 3));
+	var cond = re_of(String(opts.condition || ''), '', false);
+	var b64 = String(opts.encoding || '') === 'base64';
+	wrap_method(chain, function (call, self, args) {
+		var out = call(self, args);
+		var text = out;
+		if (b64) {
+			try { text = window.atob(out); } catch (e) { return out; }
+		}
+		if (typeof text !== 'string') return out;
+		if (cond) { cond.lastIndex = 0; if (!cond.test(text)) return out; }
+		var after = text.replace(re, rep);
+		if (after === text) return out;
+		return b64 ? window.btoa(after) : after;
+	});
+};
+
+// prevent-innerHTML(selector, pattern): an assignment to `innerHTML` is
+// dropped where the element matches the selector and the value the pattern
+// (`!` inverts it; empty matches any). uBlock's `freezeElementProperty`
+// (`prevent-innerHTML.js`, read at 2be6e29e4a92, 2026-11-02), 9 rules in
+// the lists. The accessor stands in for the engine's on the prototype that
+// has it, and reads as the engine's own, as every patch in this catalog
+// does.
+C['prevent-innerHTML'] = function (selector, pattern) {
+	var sel = String(selector == null ? '' : selector);
+	var raw = String(pattern == null ? '' : pattern);
+	var not = raw.charAt(0) === '!';
+	var hit = matcher(not ? raw.slice(1) : raw);
+	var protos = [window.HTMLScriptElement, window.HTMLElement, window.Element, window.Node];
+	var owner = null;
+	for (var i = 0; i < protos.length && !owner; i++) {
+		var p = protos[i] && protos[i].prototype;
+		if (p && Object.prototype.hasOwnProperty.call(p, 'innerHTML')) owner = p;
+	}
+	if (!owner) return;
+	var real = Object.getOwnPropertyDescriptor(owner, 'innerHTML');
+	if (!real || !real.set) return;
+	var refuse = function (el, v) {
+		if (sel !== '') {
+			try { if (typeof el.matches !== 'function' || !el.matches(sel)) return false; }
+			catch (e) { return false; }
+		}
+		return hit(String(v)) !== not;
+	};
+	try {
+		Object.defineProperty(owner, 'innerHTML', {
+			configurable: true,
+			enumerable: real.enumerable,
+			get: disguise(function () { return real.get.call(this); }, real.get),
+			set: disguise(function (v) {
+				if (!refuse(this, v)) real.set.call(this, v);
+			}, real.set)
+		});
+	} catch (e) {}
+};
+
 // --- the anti-anti-adblock shims -------------------------------------------
 //
 // **These four take no arguments and are not filters at all**: each one hands
@@ -3050,6 +3124,7 @@ const catalog_entry k_entries[] = {
 	{ "set-local-storage-item",          0,      0,      false },
 	{ "set-session-storage-item",        0,      0,      false },
 	{ "set-attr",                        0,      1 << 0, false },
+	{ "prevent-innerHTML",               1 << 1, 1 << 0, false },
 	// The booster family: the needle is matched against the callback.
 	{ "adjust-setInterval",              1 << 0, 0,      false },
 	{ "adjust-setTimeout",               1 << 0, 0,      false },
@@ -3090,6 +3165,7 @@ const catalog_entry k_entries[] = {
 	{ "trusted-set-constant",            0,      0,      true  },
 	{ "trusted-set-local-storage-item",  0,      0,      true  },
 	{ "trusted-set-session-storage-item", 0,     0,      true  },
+	{ "trusted-replace-outbound-text",   1 << 1, 0,      true  },
 	{ "trusted-set-attr",                0,      1 << 0, true  },
 	{ "trusted-set-cookie",              0,      0,      true  },
 	// Two patterns: what to look for, and which url to look in.

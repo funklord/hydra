@@ -924,8 +924,8 @@ int main(int argc, char **argv) {
 		// 54 since `xml-prune` and `m3u-prune`, which need an XML parser
 		// and a network and so are run by `try_prune` in a real engine; 58
 		// with the session-storage pair and the set-attr pair.
-		check(scriptlets::names().size() == 58,
-		       QString("fifty-eight scriptlets in the catalog (%1)")
+		check(scriptlets::names().size() == 60,
+		       QString("sixty scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 		// The trusted four, named here rather than counted: the question a
 		// reader has is which scriptlets can act on a page's behalf, and a
@@ -1267,6 +1267,51 @@ int main(int argc, char **argv) {
 		          .isEmpty() &&
 		        ask(&eng4, "String(window.__session.note)") == "anything",
 		      "and takes any value");
+	}
+
+	section("trusted-replace-outbound-text: what a method returns, rewritten");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		check(run_one(&eng, "trusted-replace-outbound-text",
+		              { "JSON.stringify", "\"clientScreen\":\"WATCH\"",
+		                "\"clientScreen\":\"ADUNIT\"", "condition", "contentPlaybackContext" },
+		              true).isEmpty(),
+		      "it installs");
+		check(ask(&eng, "JSON.stringify({ clientScreen: 'WATCH', contentPlaybackContext: {} })") ==
+		        "{\"clientScreen\":\"ADUNIT\",\"contentPlaybackContext\":{}}",
+		      "matching text goes out rewritten: " +
+		        ask(&eng, "JSON.stringify({ clientScreen: 'WATCH', contentPlaybackContext: {} })"));
+		check(ask(&eng, "JSON.stringify({ clientScreen: 'WATCH' })") ==
+		        "{\"clientScreen\":\"WATCH\"}",
+		      "and text the condition does not match goes out as it was");
+		check(scriptlets::requires_trust("trusted-replace-outbound-text"),
+		      "it needs trust");
+	}
+
+	section("prevent-innerHTML: an assignment dropped by element and value");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(
+		  "window.__set = [];"
+		  "window.Element = function () {};"
+		  "Object.defineProperty(window.Element.prototype, 'innerHTML', { configurable: true,"
+		  "  get: function () { return this.__h || ''; },"
+		  "  set: function (v) { this.__h = v; window.__set.push(this.id + '=' + v); } });"
+		  "window.mk = function (id, cls) { var e = new window.Element(); e.id = id;"
+		  "  e.matches = function (s) { return s === '.' + cls; }; return e; };");
+		check(run_one(&eng, "prevent-innerHTML", { ".ad", "!keep" }).isEmpty(),
+		      "it installs");
+		eng.evaluate("window.mk('a', 'ad').innerHTML = 'banner';"
+		             "window.mk('b', 'ad').innerHTML = 'keep me';"
+		             "window.mk('c', 'post').innerHTML = 'banner';");
+		check(ask(&eng, "window.__set.join(',')") == "b=keep me,c=banner",
+		      "only an element the selector names, with a value the pattern takes, is "
+		      "refused: " + ask(&eng, "window.__set.join(',')"));
+		check(ask(&eng, "(function () { var e = window.mk('d', 'post'); e.innerHTML = 'x';"
+		                " return e.innerHTML; })()") == "x",
+		      "and reading goes through the engine's own getter");
 	}
 
 	section("set-attr: an attribute given, and only a value that carries no code");

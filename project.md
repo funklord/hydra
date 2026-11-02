@@ -35887,6 +35887,25 @@ on attributes and elements that remain in the document, and its
 DOMContentLoaded sweep reaches them. `try_scriptlets` passes 41 and
 `test_scriptlets` 402.
 
+### trusted-replace-outbound-text and prevent-innerHTML (2026-11-02)
+
+Two more names the lists use and the catalog lacked, ported from uBlock
+at `2be6e29e4a92`. The catalog is now 60.
+
+- **`trusted-replace-outbound-text`** (16 rules) rewrites what a method
+  returns, usually `JSON.stringify`. The replacement may be `json:`
+  followed by JSON. `condition` limits it to text that matches, and
+  `encoding, base64` decodes the text first and encodes it after.
+- **`prevent-innerHTML`** (9 rules) drops an assignment to `innerHTML`
+  where the element matches the selector and the value matches the
+  pattern; a leading `!` inverts the pattern. The accessor reads as the
+  engine's own.
+
+`test_scriptlets` passes 409, `try_scriptlets` 41. What remains
+unported is about 75 rules across a dozen names, the largest
+`trusted-create-html` (20), `trusted-suppress-native-method` (16) and
+`trusted-click-element` (14).
+
 ### Two engine limits that were silently disabling whole scriptlets
 
 Both found by a test failing on code that was right, and both are real
