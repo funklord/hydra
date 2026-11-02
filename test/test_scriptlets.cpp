@@ -1184,15 +1184,31 @@ int main(int argc, char **argv) {
 		check(run_one(&eng2, "window.open-defuser", { "popunder" }).isEmpty(),
 		       "prevent-window-open evaluates, by its alias");
 		eng2.evaluate("window.__a = window.open('https://x.test/popunder/1');");
+		// **As uBlock: refused is null**, the answer a blocked popup gets.
 		check(ask(&eng2, "window.__opened.length") == "0" &&
-		          ask(&eng2, "String(window.__a.closed)") == "false",
-		       QString("a matching popup is refused and a stub handed back "
+		          ask(&eng2, "String(window.__a)") == "null",
+		       QString("a matching popup is refused, and the caller told null "
 		                "(opened=%1 a=%2)")
 		           .arg(ask(&eng2, "window.__opened.length"),
-		                 ask(&eng2, "String(window.__a && window.__a.closed)")));
+		                 ask(&eng2, "String(window.__a)")));
 		eng2.evaluate("window.open('https://x.test/help');");
 		check(ask(&eng2, "window.__opened.length") == "1",
 		       "and anything else opens");
+
+		// A `!` keeps what matches and refuses the rest; the pattern sees
+		// every argument, the target name included.
+		QJSEngine neg;
+		give_page(&neg);
+		run_one(&neg, "nowoif", { "!/^https:\\/\\/x\\.test\\//" });
+		neg.evaluate("window.open('https://x.test/ok'); window.open('https://ads.example/');");
+		check(ask(&neg, "window.__opened.join(',')") == "https://x.test/ok",
+		      "with !, only what matches opens: " + ask(&neg, "window.__opened.join(',')"));
+		QJSEngine named;
+		give_page(&named);
+		run_one(&named, "nowoif", { "_blank" });
+		named.evaluate("window.open('https://x.test/a', '_blank');");
+		check(ask(&named, "window.__opened.length") == "0",
+		      "the pattern is tested against the target name as well");
 
 		QJSEngine eng3;
 		give_page(&eng3);

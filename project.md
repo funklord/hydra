@@ -35846,6 +35846,26 @@ down, and the trusted forms) fail four times against the old code.
 still gone, the `serverContract` rewrite still runs, and there is no
 wall.
 
+### Popups refused as uBlock refuses them (2026-11-02)
+
+`prevent-window-open` (`nowoif`) is in 863 rules in the holder's lists,
+and was compared with uBlock's `noWindowOpenIf` at `2be6e29e4a92`. It
+differed in three ways:
+
+- It tested the address alone. uBlock tests all the call's arguments
+  joined, so a target name such as `_blank` counts.
+- It did not read a leading `!`. So the 44 rules written `!pattern`,
+  meaning "anything but", matched nothing.
+- A refused popup handed back a stand-in window. uBlock answers `null`,
+  which is what a blocked popup gets.
+
+With a delay (26 rules), uBlock answers with a decoy instead: a hidden
+frame or `object`, or `about:blank` really opened, removed after that
+many seconds. Hydra now does all of this. `test_scriptlets` (402
+passed) covers `null`, `!` and the target name; against the old code
+those three fail. The decoy needs a real DOM, and only its parsing is
+checked, by `try_scriptlets`.
+
 ### Two engine limits that were silently disabling whole scriptlets
 
 Both found by a test failing on code that was right, and both are real

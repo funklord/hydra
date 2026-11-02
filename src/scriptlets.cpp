@@ -772,21 +772,64 @@ C['nowebrtc'] = function () {
 	}
 };
 
-// prevent-window-open: a matching popup is refused and the caller is handed a
-// stub, because code that opens a window usually touches what comes back.
-C['prevent-window-open'] = function (needle) {
+// prevent-window-open(pattern, delay, decoy): a matching popup is refused.
+// Ported from uBlock's `noWindowOpenIf` (`scriptlets.js`, read at
+// 2be6e29e4a92, 2026-11-02). The pattern is tested against all the call's
+// arguments joined, and a leading `!` inverts it -- 44 rules in the lists,
+// which matched nothing here before. With no delay the caller is answered
+// `null`, as a blocked popup is; until then it got a stand-in window, which
+// is not what a browser hands back. With a delay (26 rules) it gets a decoy:
+// a hidden frame -- or `object`, or `about:blank` really opened -- that is
+// removed after that many seconds, for a page that checks its popup opened.
+C['prevent-window-open'] = function (pattern, delay, decoy) {
 	if (typeof window.open !== 'function') return;
-	var hit = matcher(needle);
+	var raw = String(pattern == null ? '' : pattern);
+	var want = raw.charAt(0) !== '!';
+	if (!want) raw = raw.slice(1);
+	var hit = matcher(raw);
+	var wait = String(delay == null ? '' : delay);
+	var after = (parseFloat(wait) || 0) * 1000;
+	var how = String(decoy == null ? '' : decoy);
+	var later = window.setTimeout;
+	var make_decoy = function (tag, prop, url) {
+		var el = document.createElement(tag);
+		el[prop] = url;
+		el.style.setProperty('height', '1px', 'important');
+		el.style.setProperty('position', 'fixed', 'important');
+		el.style.setProperty('top', '-1px', 'important');
+		el.style.setProperty('width', '1px', 'important');
+		(document.body || document.documentElement).appendChild(el);
+		later(function () { el.remove(); }, after);
+		return el;
+	};
 	var real = window.open;
-	window.open = disguise(function (url) {
-		if (hit(String(url == null ? '' : url))) {
-			return {
-				closed: false, close: function () { this.closed = true; },
-				focus: function () {}, blur: function () {},
-				document: { write: function () {}, close: function () {} }
-			};
-		}
-		return real.apply(this, arguments);
+	window.open = disguise(function () {
+		var args = Array.prototype.slice.call(arguments);
+		if (hit(args.join(' ')) !== want) return real.apply(this, arguments);
+		if (wait === '') return null;
+		try {
+			if (how === 'blank') {
+				args[0] = 'about:blank';
+				var w = real.apply(this, args);
+				later(function () { try { w.close(); } catch (e) {} }, after);
+				return w;
+			}
+			var el = how === 'obj' ? make_decoy('object', 'data', String(args[0] || ''))
+			                       : make_decoy('iframe', 'src', String(args[0] || ''));
+			var popup = el.contentWindow;
+			if (popup && typeof popup === 'object') {
+				try { Object.defineProperty(popup, 'closed', { value: false }); } catch (e) {}
+				return popup;
+			}
+		} catch (e) {}
+		var noop = function () {};
+		return new Proxy(window, {
+			get: function (t, prop) {
+				if (prop === 'closed') return false;
+				var r = Reflect.get(t, prop);
+				return typeof r === 'function' ? noop : r;
+			}
+		});
 	}, real);
 };
 
