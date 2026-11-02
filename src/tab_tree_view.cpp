@@ -16,6 +16,7 @@
 #include <QKeyEvent>
 #include <QFormLayout>
 #include <QLabel>
+#include <QLocale>
 #include <QListWidget>
 #include <QLineEdit>
 #include <QMenu>
@@ -802,8 +803,12 @@ void tab_tree_view::edit_properties(node *n) {
 	form->addRow("Tags", tags);
 	form->addRow("Locked", locked);
 	form->addRow("Id", id);
-	form->addRow("Added", new QLabel(n->created.toString(Qt::ISODate), &dlg));
-	form->addRow("Last seen", new QLabel(n->last_seen.toString(Qt::ISODate), &dlg));
+	// In the person's own date format: these are read, not parsed, and the
+	// ISO form with its `T` was a timestamp rather than a date. The tree
+	// file keeps ISO, which is where something parses it.
+	const QLocale here = QLocale::system();
+	form->addRow("Added", new QLabel(here.toString(n->created, QLocale::ShortFormat), &dlg));
+	form->addRow("Last seen", new QLabel(here.toString(n->last_seen, QLocale::ShortFormat), &dlg));
 
 	// **Where this tab had been, when it was imported from another browser.**
 	//

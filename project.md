@@ -41736,3 +41736,9 @@ address. A new tab therefore still shows where it is. `test_model` (397)
 holds the three address forms against a saved title, a real title still
 replacing it, and an address-only row not held to its own address.
 `try_look` run again shows both saved titles kept.
+
+### Tab properties showed dates as timestamps
+
+The Properties dialog printed Added and Last seen as `2026-11-02T14:03:11`,
+the tree file's own form. They are read there, not parsed, so they now use
+the system locale's short date and time; the tree file keeps ISO.
