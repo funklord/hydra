@@ -473,6 +473,33 @@ int main(int argc, char **argv) {
 		       QString("and sets nothing (%1)")
 		           .arg(eng2.evaluate("String(window.cfg && window.cfg.name)")
 		                    .toString()));
+
+		// **uBlock's vocabulary, word for word** (`validateConstantFn`):
+		// 264 rules in the holder's lists set `{}`, `''` or `[]`, which this
+		// refused until 2026-11-02.
+		QJSEngine eng3;
+		give_window(&eng3);
+		QList<scriptlet_call> words;
+		const char *pairs[][2] = { { "v.obj", "{}" }, { "v.str", "''" }, { "v.arr", "[]" },
+		                            { "v.eo", "emptyObj" }, { "v.ea", "emptyArr" },
+		                            { "v.thr", "throwFunc" }, { "v.neg", "-32767" },
+		                            { "v.big", "32768" }, { "v.dec", "1.5" } };
+		for (const auto &p : pairs) {
+			scriptlet_call c;
+			c.scope = "x.test";
+			c.name  = "set-constant";
+			c.args  = { QString::fromLatin1(p[0]), QString::fromLatin1(p[1]) };
+			words << c;
+		}
+		check(!eng3.evaluate(scriptlets::source_for(words)).isError(), "every word evaluates");
+		const QString got = eng3.evaluate(
+		  "(function (v) { return [JSON.stringify(v.obj), JSON.stringify(v.str),"
+		  " JSON.stringify(v.arr), JSON.stringify(v.eo), JSON.stringify(v.ea),"
+		  " (function(){try{v.thr();return 'ran';}catch(e){return 'threw';}})(),"
+		  " v.neg, typeof v.big, typeof v.dec].join(' '); })(window.v)").toString();
+		check(got == "{} \"\" [] {} [] threw -32767 undefined undefined",
+		      "{} '' [] emptyObj emptyArr throwFunc and a small number are set; a number "
+		      "past 32767 and a fraction are not: " + got);
 	}
 
 	// **The first YouTube page load, in miniature.** The ad data arrives in
@@ -917,6 +944,17 @@ int main(int argc, char **argv) {
 		       "reading it throws");
 		check(ask(&eng, "typeof window.ads") == "object",
 		       "and the path to it was built");
+		// **What a page catching it reads**: a token, nothing named for this
+		// browser and not the property, and an `onerror` that swallows it.
+		const QString message = ask(&eng, "(function(){try{window.ads.enabled;}"
+		                                   "catch(e){return String(e.message);}})()");
+		check(!message.isEmpty() && !message.contains("hydra", Qt::CaseInsensitive) &&
+		        !message.contains("ads"),
+		      "the error names neither this browser nor the property: " + message);
+		check(ask(&eng, "String(window.onerror('Uncaught ReferenceError: ' + "
+		                 "(function(){try{window.ads.enabled;}catch(e){return e.message;}})()))") ==
+		        "true",
+		      "and the page's error handler never hears of it");
 
 		QJSEngine eng2;
 		give_page(&eng2);

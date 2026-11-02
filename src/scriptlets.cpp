@@ -368,19 +368,11 @@ C['trusted-replace-xhr-response'] = function (search, replacement, match) {
 // page's globals, and the gain does not pay for it.
 C['set-constant'] = function (path, raw) {
 	if (!path) return;
-	var value;
-	var word = String(raw);
-	if (word === 'true') value = true;
-	else if (word === 'false') value = false;
-	else if (word === 'null') value = null;
-	else if (word === 'undefined') value = undefined;
-	else if (word === 'noopFunc') value = function () {};
-	else if (word === 'trueFunc') value = function () { return true; };
-	else if (word === 'falseFunc') value = function () { return false; };
-	else if (word === '' || word === 'emptyStr') value = '';
-	else if (/^-?[0-9]+(\.[0-9]+)?$/.test(word)) value = Number(word);
-	else return;
-	trap_chain(path, pin(value));
+	// The shared vocabulary, assigned further down: every call runs after
+	// the whole catalog has been read.
+	var chosen = vocabulary(raw, false);
+	if (!chosen) return;
+	trap_chain(path, pin(chosen.v));
 };
 
 // --- shared helpers for the rest of the catalog ---------------------------
@@ -501,18 +493,51 @@ var pin = function (v) {
 // else. One copy, because two scriptlets take a value and a second list of
 // words is a second thing to be wrong.
 var vocabulary = function (raw, allow_remove) {
+	// uBlock's `validateConstantFn` (`set-constant.js`, read at 2be6e29e4a92,
+	// 2026-11-02), plus AdGuard's `emptyStr`. Until then `set-constant` kept
+	// a list of its own without `''`, `{}`, `[]` and their spellings, and
+	// 264 of the 1,397 rules in the holder's lists named one of those and
+	// did nothing. Whole numbers only, within 32767 either way.
 	var w = String(raw);
 	if (allow_remove && w === '$remove$') return { remove: true };
-	if (w === 'true') return { v: true };
-	if (w === 'false') return { v: false };
-	if (w === 'null') return { v: null };
 	if (w === 'undefined') return { v: undefined };
+	if (w === 'false') return { v: false };
+	if (w === 'true') return { v: true };
+	if (w === 'null') return { v: null };
+	if (w === "''" || w === '' || w === 'emptyStr') return { v: '' };
+	if (w === '[]' || w === 'emptyArr') return { v: [] };
+	if (w === '{}' || w === 'emptyObj') return { v: {} };
 	if (w === 'noopFunc') return { v: function () {} };
 	if (w === 'trueFunc') return { v: function () { return true; } };
 	if (w === 'falseFunc') return { v: function () { return false; } };
-	if (w === '' || w === 'emptyStr') return { v: '' };
-	if (/^-?[0-9]+(\.[0-9]+)?$/.test(w)) return { v: Number(w) };
+	if (w === 'throwFunc') return { v: function () { throw ''; } };
+	if (/^-?[0-9]+$/.test(w)) {
+		var n = parseInt(w, 10);
+		return Math.abs(n) > 0x7fff ? null : { v: n };
+	}
 	return null;
+};
+
+// **What an abort throws: a random token, and an `onerror` that swallows
+// exactly it.** uBlock's `getExceptionTokenFn` (`utils.js`, read at
+// 2be6e29e4a92). These threw `ReferenceError('hydra: ' + path)` until
+// 2026-11-02, so a page that caught the error, or reported its uncaught
+// errors home as YouTube does, read this browser's name and the property it
+// had trapped. Made once per page, on first use.
+var abort_token = null;
+var exception_token = function () {
+	if (abort_token) return abort_token;
+	abort_token = String.fromCharCode(Date.now() % 26 + 97) +
+	              Math.floor(Math.random() * 982451653 + 982451653).toString(36);
+	try {
+		var was = window.onerror;
+		window.onerror = function (msg) {
+			if (typeof msg === 'string' && msg.indexOf(abort_token) >= 0) return true;
+			if (typeof was === 'function') return was.apply(this, arguments);
+			return undefined;
+		};
+	} catch (e) {}
+	return abort_token;
 };
 
 // abort-on-property-read: reading it throws, which stops the script doing the
@@ -521,7 +546,7 @@ var vocabulary = function (raw, allow_remove) {
 C['abort-on-property-read'] = function (path) {
 	var at = owner_of(path);
 	if (!at) return;
-	var stop = function () { throw new ReferenceError('hydra: ' + path); };
+	var stop = function () { throw new ReferenceError(exception_token()); };
 	try {
 		Object.defineProperty(at.o, at.k, {
 			get: stop, set: function () {}, configurable: false
@@ -538,7 +563,7 @@ C['abort-on-property-write'] = function (path) {
 	try {
 		Object.defineProperty(at.o, at.k, {
 			get: function () { return held; },
-			set: function () { throw new ReferenceError('hydra: ' + path); },
+			set: function () { throw new ReferenceError(exception_token()); },
 			configurable: false
 		});
 	} catch (e) {}
@@ -559,7 +584,7 @@ C['abort-current-script'] = function (path, needle) {
 				try { el = document.currentScript; } catch (e) {}
 				var text = (el && el.textContent) ? el.textContent : '';
 				if (text && hit(text))
-					throw new ReferenceError('hydra: ' + path);
+					throw new ReferenceError(exception_token());
 				return held;
 			},
 			set: function (v) { held = v; },
@@ -1458,7 +1483,10 @@ C['abort-on-stack-trace'] = function (chain, needle) {
 	if (raw === '') return;
 	var negated = raw.charAt(0) === '!';
 	var want = matcher(negated ? raw.slice(1) : raw);
-	var token = 'hydra_' + Math.floor(Math.random() * 982451653).toString(36);
+	// Random, and naming nobody: a page that sets V8's
+	// `Error.prepareStackTrace` sees the message of every error made.
+	var token = String.fromCharCode(Date.now() % 26 + 97) +
+	            Math.floor(Math.random() * 982451653 + 982451653).toString(36);
 
 	var here = '';
 	// `location` rather than `window.location`: the same object in a page,

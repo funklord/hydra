@@ -35696,6 +35696,41 @@ The catalog is 58 names. `test_scriptlets` covers each (378 passed); the
 new checks run against the old catalog fail 11 times. `try_scriptlets`
 still passes (39).
 
+### set-constant's vocabulary was not uBlock's, and the aborts named this browser (2026-11-02)
+
+This was found by checking, against uBlock's current source, the
+scriptlets this file says were "read out of uBlock's source", after the
+storage pair above turned out not to have been.
+
+**264 of the 1,397 `set-constant` rules in the holder's lists did
+nothing.** They set `{}` (127), `''` (111), `[]` (20), `emptyObj`,
+`emptyArr` or `throwFunc`, and `set-constant`'s own word list knew none
+of them. It also took fractions and numbers of any size, where uBlock
+takes whole numbers within 32767. The cause was two copies: `vocabulary`
+said there was one, and `set-constant` kept a second inline. There is
+one copy now, uBlock's `validateConstantFn` (at `2be6e29e4a92`) plus
+AdGuard's `emptyStr`, and `set-constant`, `trusted-set-constant` and
+`trusted-replace-argument` all use it.
+
+**The three aborts threw `ReferenceError('hydra: ' + path)`.** A page
+that catches the error reads this browser's name and the property that
+was trapped. So does a page that reports its uncaught errors home, as
+YouTube does. They now throw uBlock's random per-page token, with an
+`onerror` that swallows exactly that token (`getExceptionTokenFn`).
+`abort-on-stack-trace`'s token began `hydra_` too. It is never thrown,
+but a page that sets V8's `Error.prepareStackTrace` sees the message of
+every error made, so it is random now as well.
+
+`test_scriptlets` (382 passed) sets every word through `set-constant`
+and refuses `32768` and `1.5`. It asserts the abort's message names
+neither this browser nor the property, and that the page's own
+`onerror` never hears of it; with the old message both checks fail.
+
+**Still to look at, same class:** the consent blocker and sponsor skip
+pass `postMessage` objects keyed `__hydra_consent_*` and
+`__hydra_sponsor_*` between frames, which any `message` listener on the
+page receives.
+
 ### Two engine limits that were silently disabling whole scriptlets
 
 Both found by a test failing on code that was right, and both are real
