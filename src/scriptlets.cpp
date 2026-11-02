@@ -569,28 +569,61 @@ C['abort-on-property-write'] = function (path) {
 	} catch (e) {}
 };
 
-// abort-current-script: reading the property throws, but only from a script
-// whose own text matches the needle. Narrower than aborting every reader,
-// which is the point -- the page's own code reads the same globals.
-C['abort-current-script'] = function (path, needle) {
-	var at = owner_of(path);
-	if (!at) return;
+// abort-current-script(path, needle, context): touching the property --
+// reading it or writing it -- throws, but only from a script whose text
+// matches the needle and whose `src` matches the context. Narrower than
+// aborting every reader, which is the point: the page's own code touches the
+// same globals.
+//
+// Ported from uBlock's `abortCurrentScriptFn` (`abort-current-script.js`,
+// read at 2be6e29e4a92, 2026-11-02). Until then a write never aborted, the
+// context argument (9 rules) was ignored, and a script with no inline text
+// was never aborted -- so the 109 rules naming no needle, which mean "any
+// script touching this", missed every external script. An empty needle
+// matches any script now, a `data:` script is read through its address, and
+// the path is followed through a replaced parent, as `set-constant`'s is.
+C['abort-current-script'] = function (path, needle, context) {
+	if (!path) return;
 	var hit = matcher(needle);
-	var held = at.o[at.k];
-	try {
-		Object.defineProperty(at.o, at.k, {
-			get: function () {
-				var el = null;
-				try { el = document.currentScript; } catch (e) {}
-				var text = (el && el.textContent) ? el.textContent : '';
-				if (text && hit(text))
-					throw new ReferenceError(exception_token());
-				return held;
-			},
-			set: function (v) { held = v; },
-			configurable: false
-		});
-	} catch (e) {}
+	var ctx_raw = String(context == null ? '' : context);
+	var in_context = matcher(ctx_raw);
+	var mine = null;
+	try { mine = document.currentScript; } catch (e) {}
+	var texts = typeof WeakMap === 'function' ? new WeakMap() : null;
+	var text_of = function (el) {
+		var t = '';
+		try { t = String(el.textContent || ''); } catch (e) {}
+		if (t.replace(/^\s+|\s+$/g, '') !== '') return t;
+		if (texts && texts.has(el)) return texts.get(el);
+		var m = /^data:([^,]*),(.+)$/.exec(String(el.src || '').replace(/^\s+|\s+$/g, ''));
+		if (m) {
+			try {
+				t = /;base64$/.test(m[1]) ? window.atob(m[2]) : decodeURIComponent(m[2]);
+			} catch (e) {}
+		}
+		if (texts) texts.set(el, t);
+		return t;
+	};
+	var check = function () {
+		var el = null;
+		try { el = document.currentScript; } catch (e) {}
+		if (!el || String(el.tagName || '').toUpperCase() !== 'SCRIPT' || el === mine)
+			return;
+		if (ctx_raw !== '' && !in_context(String(el.src || ''))) return;
+		if (!hit(text_of(el))) return;
+		throw new ReferenceError(exception_token());
+	};
+	trap_chain(path, function (o, k) {
+		var held;
+		try { held = o[k]; } catch (e) {}
+		try {
+			Object.defineProperty(o, k, {
+				get: function () { check(); return held; },
+				set: function (v) { check(); held = v; },
+				configurable: false
+			});
+		} catch (e) {}
+	});
 };
 
 // A delay test, uBlock's `RangeParser` (`prevent-settimeout.js`, read at

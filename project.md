@@ -35772,6 +35772,27 @@ handed, and covers the ranges, the negations, a type that only contains
 the name, and `elements`. Against the old catalog, nine of those checks
 fail. `try_scriptlets` still passes (39).
 
+### abort-current-script, held to uBlock's source (2026-11-02)
+
+The holder's lists carry 1,171 rules for this scriptlet. Compared with
+uBlock's `abortCurrentScriptFn` at `2be6e29e4a92`, hydra's version
+differed in four ways:
+
+- A write never aborted, only a read.
+- The third argument was ignored. It matches the script's `src`, and 9
+  rules use it.
+- A script with no inline text was never aborted. So the 109 rules that
+  name no needle, which mean any script that touches the property,
+  missed every external script.
+- A `data:` script's text was not read.
+
+All four now follow uBlock. The script must be a real `<script>` and not
+the runner itself, and the path is laid with `trap_chain`, so it follows
+a replaced parent as `set-constant`'s does. `test_scriptlets` (394
+passed) adds a write from an external script with no needle, a context
+naming one address and not another, and a `data:` script; against the
+old code, three of those fail. `try_scriptlets` still passes (39).
+
 ### Two engine limits that were silently disabling whole scriptlets
 
 Both found by a test failing on code that was right, and both are real

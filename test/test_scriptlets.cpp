@@ -987,7 +987,7 @@ int main(int argc, char **argv) {
 		       "acs evaluates");
 		eng.evaluate("window.cfg = window.cfg || {}; ");
 		eng.evaluate("document.currentScript = "
-		              "{ textContent: 'var x = adsbygoogle.push(1);' };");
+		              "{ tagName: 'SCRIPT', textContent: 'var x = adsbygoogle.push(1);' };");
 		check(ask(&eng, "(function(){try{var x=window.cfg.token;return 'read';}"
 		                 "catch(e){return 'threw';}})()") == "threw",
 		       QString("a script whose text matches is stopped (%1, cfg=%2)")
@@ -996,7 +996,7 @@ int main(int argc, char **argv) {
 		                           "})()"),
 		                 ask(&eng, "typeof window.cfg")));
 		eng.evaluate("document.currentScript = "
-		              "{ textContent: 'var y = player.start();' };");
+		              "{ tagName: 'SCRIPT', textContent: 'var y = player.start();' };");
 		check(ask(&eng, "(function(){try{var x=window.cfg.token;return 'read';}"
 		                 "catch(e){return 'threw';}})()") == "read",
 		       "and one that does not is left alone");
@@ -1004,6 +1004,44 @@ int main(int argc, char **argv) {
 		check(ask(&eng, "(function(){try{var x=window.cfg.token;return 'read';}"
 		                 "catch(e){return 'threw';}})()") == "read",
 		       "as is a read from no script at all");
+
+		// **uBlock's rules** (2026-11-02): a write aborts too; with no needle
+		// any script does, an external one included; the third argument is
+		// matched against the script's address; a data: script is read.
+		const char *touch = "(function(){try{%1;return 'ok';}catch(e){return 'threw';}})()";
+		QJSEngine any;
+		give_page(&any);
+		run_one(&any, "acs", { "cfg.flag" });
+		any.evaluate("document.currentScript = { tagName: 'SCRIPT', textContent: '',"
+		             " src: 'https://cdn.example/detect.js' };");
+		check(ask(&any, QString::fromLatin1(touch).arg("window.cfg.flag = 1")
+		                  .toUtf8().constData()) == "threw",
+		      "no needle: an external script writing it is stopped");
+		any.evaluate("document.currentScript = null;");
+		check(ask(&any, QString::fromLatin1(touch).arg("window.cfg.flag = 2")
+		                  .toUtf8().constData()) == "ok",
+		      "and a write from no script is not");
+		QJSEngine ctx;
+		give_page(&ctx);
+		run_one(&ctx, "acs", { "cfg.flag", "", "/detect/" });
+		ctx.evaluate("document.currentScript = { tagName: 'SCRIPT', textContent: 'x',"
+		             " src: 'https://cdn.example/player.js' };");
+		check(ask(&ctx, QString::fromLatin1(touch).arg("window.cfg.flag")
+		                  .toUtf8().constData()) == "ok",
+		      "a context names the scripts by address: another is left alone");
+		ctx.evaluate("document.currentScript = { tagName: 'SCRIPT', textContent: 'x',"
+		             " src: 'https://cdn.example/detect.js' };");
+		check(ask(&ctx, QString::fromLatin1(touch).arg("window.cfg.flag")
+		                  .toUtf8().constData()) == "threw",
+		      "and the one it names is stopped");
+		QJSEngine data;
+		give_page(&data);
+		run_one(&data, "acs", { "cfg.flag", "adblock" });
+		data.evaluate("document.currentScript = { tagName: 'SCRIPT', textContent: '',"
+		              " src: 'data:text/javascript,if(adblock)alert(1)' };");
+		check(ask(&data, QString::fromLatin1(touch).arg("window.cfg.flag")
+		                  .toUtf8().constData()) == "threw",
+		      "a data: script is read through its address");
 	}
 
 	section("dropping a timer by what its callback says");
