@@ -120,6 +120,22 @@ public:
 					body += "<p>Subscribe to read the rest of this story, today only.</p>";
 				}
 				body += "</body></html>";
+			} else if (target.startsWith("/softwall") || target.startsWith("/signedin")) {
+				// **The paid part sent to everybody**: `/softwall` hides it
+				// and stops the page scrolling, as a soft paywall does;
+				// `/signedin` shows it, as a subscriber's page does.
+				const bool hide = target.startsWith("/softwall");
+				body = "<!doctype html><html><head><title>A story</title>"
+				        "<script type=\"application/ld+json\">{\"@type\":\"NewsArticle\","
+				        "\"isAccessibleForFree\":false,\"hasPart\":{\"@type\":\"WebPageElement\","
+				        "\"isAccessibleForFree\":false,\"cssSelector\":\".paywalled\"}}</script>";
+				if (hide)
+					body += "<style>.paywalled{display:none}body{overflow:hidden}</style>";
+				body += "</head><body><p>The opening of the story, which everybody is "
+				        "sent in full.</p><div class=\"paywalled\">";
+				for (int i = 0; i < 12; ++i)
+					body += "<p>The rest of the story, sent to everybody and hidden.</p>";
+				body += "</div></body></html>";
 			} else if (target.startsWith("/js/sdkloader/ima3.js")) {
 				// The real SDK, as far as this test is concerned: it would
 				// leave the player waiting on an ad that never comes.
@@ -554,6 +570,39 @@ int main(int argc, char *argv[]) {
 		const QString sent = text_of_page();
 		check(sent.contains("Subscribe to read") && !sent.contains("only a crawler"),
 		      "a reload shows the page as sent to the person: " + sent.left(120));
+		messages.clear();
+
+		section("and a paid part the page sent and hid is shown where it is");
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/softwall").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		const QString shown = said("was in the page, hidden");
+		check(!shown.isEmpty(), QString("the status line says so (%1)").arg(shown));
+		spin(500);
+		const QString revealed = text_of_page();
+		check(revealed.count("sent to everybody and hidden") == 12,
+		      QString("all twelve paragraphs are on view (%1 chars)").arg(revealed.size()));
+		int soft_fetched = 0;
+		for (const QString &a : server.asked)
+			soft_fetched += a == QLatin1String("/softwall");
+		check(soft_fetched == 1, QString("and no crawler was asked for it (%1)").arg(soft_fetched));
+		QMetaObject::invokeMethod(&window, [&] {
+			for (QAction *a : window.findChildren<QAction *>())
+				if (a->text().remove('&') == QLatin1String("Reload")) { a->trigger(); break; }
+		});
+		spin(3000);
+		check(!text_of_page().contains("sent to everybody and hidden"),
+		      "a reload shows the page as sent, hidden part and all");
+		messages.clear();
+
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/signedin").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		spin(4000);
+		bool touched = false;
+		for (const QString &m : messages)
+			touched |= m.contains("hidden; it is shown") || m.contains("crawler");
+		check(!touched, "a subscriber's page, with the part on view, is left alone");
 		messages.clear();
 
 		bar->setText(QString("http://127.0.0.1:%1/locked").arg(server.port));

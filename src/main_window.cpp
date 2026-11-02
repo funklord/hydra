@@ -6052,8 +6052,16 @@ void main_window::try_crawler_copy(web_view_backend *view) {
 		}
 		const agent_fetch::reading tab =
 		  agent_fetch::read(QStringLiteral("this tab"), 200, html.toUtf8());
-		if (!tab.declared_paywall || tab.paywalled_present) {
+		if (!tab.declared_paywall) {
 			m_crawler_pending.remove(view);
+			return;
+		}
+		// **The paid part is in the page.** Either somebody signed in has
+		// it, or the page sent it and hides it -- a soft paywall. Which, the
+		// page itself says.
+		if (tab.paywalled_present) {
+			m_crawler_pending.remove(view);
+			reveal_paid_part(view, page, tab.paywalled_selector);
 			return;
 		}
 		auto *fetcher = new agent_fetcher(this);
@@ -6092,6 +6100,65 @@ void main_window::try_crawler_copy(web_view_backend *view) {
 				          "you a teaser. Reload to see it as sent to you.")
 				    .arg(who), 12000);
 		});
+	});
+}
+
+// **A paywall that hides what it sent** -- the paid part is in the page,
+// under the selector the JSON-LD names, and the page keeps it from view: it
+// is not displayed, it is hidden, faded or blurred, or it is cut to a sliver
+// of its height. A subscriber who is signed in sees it, so nothing is done
+// unless most of its text is out of sight. Then a stylesheet shows it, and
+// lets the page scroll again, since a paywall's overlay usually stops it.
+//
+// The stylesheet is adopted, not inserted as a `<style>`, for the reason the
+// cosmetic filter learned: a page whose policy refuses inline style would
+// refuse that, and be told. Only a class selector is used, the shape
+// `agent_fetch::servable` already accepts; anything else is left alone
+// rather than put into script.
+//
+// Shown in the tab it is in, with no load, and Reload shows the page as sent
+// to the person -- the crawler copy's record and rule, which is why it is
+// kept there.
+void main_window::reveal_paid_part(web_view_backend *view, const QUrl &page,
+                                   const QString &selector) {
+	static const QRegularExpression cls(QStringLiteral("^\\.([A-Za-z0-9_-]+)$"));
+	const QRegularExpressionMatch m = cls.match(selector.trimmed());
+	if (!m.hasMatch())
+		return;
+	QPointer<QObject> alive(view);
+	view->run_probe(QString::fromLatin1(
+	  "(function (cls) {"
+	  "  var els = document.getElementsByClassName(cls), text = 0, hidden = 0;"
+	  "  for (var i = 0; i < els.length; i++) {"
+	  "    var e = els[i], t = (e.textContent || '').replace(/\\s+/g, ' ').length;"
+	  "    var cs = getComputedStyle(e);"
+	  "    text += t;"
+	  "    if (!e.getClientRects().length || cs.visibility === 'hidden' ||"
+	  "        parseFloat(cs.opacity) < 0.2 || /blur/.test(cs.filter) ||"
+	  "        (e.scrollHeight > 200 && e.clientHeight < e.scrollHeight / 2))"
+	  "      hidden += t;"
+	  "  }"
+	  "  if (text < 200 || hidden * 2 < text) return 'shown';"
+	  "  try {"
+	  "    var s = new CSSStyleSheet();"
+	  "    s.replaceSync('.' + cls + '{display:block!important;"
+	  "visibility:visible!important;max-height:none!important;height:auto!important;"
+	  "overflow:visible!important;opacity:1!important;filter:none!important}"
+	  "html,body{overflow:auto!important}');"
+	  "    document.adoptedStyleSheets ="
+	  "      Array.prototype.slice.call(document.adoptedStyleSheets).concat([s]);"
+	  "  } catch (x) { return 'refused'; }"
+	  "  return 'revealed ' + hidden;"
+	  "})('%1')").arg(m.captured(1)),
+	  [this, view, alive, page](const QString &said) {
+		if (!alive || view->url() != page || !said.startsWith(QLatin1String("revealed")))
+			return;
+		m_crawler_copy.insert(view, reader_state{ page, 0 });
+		if (view == current_view())
+			m_status->showMessage(
+			  QStringLiteral("The rest of this article was in the page, hidden; it "
+			                 "is shown now. Reload to see the page as sent to you."),
+			  12000);
 	});
 }
 

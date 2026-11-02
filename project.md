@@ -39576,6 +39576,31 @@ check red (58 characters shown). On Android, `tool/emulator_checks.py`
 serves the same page through `adb reverse`, and hydra's own fetches reach
 it: the tab shows all twelve paragraphs.
 
+### A paid part the page sent and hid is shown where it is (2026-11-02)
+
+The copy above stepped aside whenever the paid part was already in the
+tab, on the reasoning that this means a subscriber who is signed in. It
+can also mean a soft paywall. Such a page sends the whole article and
+keeps the paid part from view: it is not displayed, it is hidden, faded
+or blurred, or it is cut to a sliver of its height, and the page often
+stops scrolling as well. In that case nothing reachable was being
+reached, although it was already in the tab.
+
+`reveal_paid_part` asks the page itself which case it is in. It takes
+the JSON-LD's selector, but only a class, the shape `servable` accepts.
+It measures how much of that part's text is out of sight. When most of
+it is, it adopts a stylesheet that shows the part and lets the page
+scroll. A subscriber's page has the part on view, and is left alone.
+No fetch is made. The status line says what happened, and Reload shows
+the page as sent, through the crawler copy's own record. The sheet is
+adopted rather than inserted as a `<style>`, so a page whose policy
+refuses inline style neither blocks it nor is told about it.
+
+`try_scriptlets` serves both shapes. On `/softwall` the status line
+says so, all twelve paragraphs are on view, no crawler is asked, and a
+reload hides them again. `/signedin` is left alone. With the call
+removed, the first two checks fail (58 characters on view).
+
 ## The AI load knob
 
 Asked for again on 2026-10-10 -- "that knob to turn down AI system load as

@@ -697,6 +697,8 @@ public:
 	// of the page, or the page back again. Public so a test drives it.
 	void toggle_reader();
 	void try_crawler_copy(web_view_backend *view);
+	void reveal_paid_part(web_view_backend *view, const QUrl &page,
+	                      const QString &selector);
 	// The end of a navigation from the bar, once what was typed has become a
 	// url: into the tab in front, or a new one when there is none.
 	void open_typed(const QString &text, const QUrl &target, bool upgraded = false);
