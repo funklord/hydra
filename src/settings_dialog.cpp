@@ -1343,23 +1343,23 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 			// pressing OK without touching anything.
 			const int at = combo->findData(int(cur));
 			combo->setCurrentIndex(at >= 0 ? at : 0);
-			// Greyed on the desktop for the reason the shield gives: the
-			// desktop already asks as a desktop, so this changes nothing there.
+			// **Absent where it means nothing**, as an ask that nothing
+			// prompts for is absent above. It was greyed, and a greyed
+			// "Block" beside "Request desktop site" on the desktop read as
+			// desktop sites being blocked, with the reason only in a tooltip
+			// (try_look, 2026-11-02). The desktop already asks as a desktop;
+			// the phone has no screen sharing to allow. The per-site shield
+			// keeps its greyed row, since there the row's place is its
+			// meaning.
 #ifndef Q_OS_ANDROID
-			if (f == policy::feature::desktop_site) {
-				combo->setEnabled(false);
-				combo->setToolTip("Only meaningful on a phone. This build "
-				                   "already asks as a desktop.");
-			}
+			const bool means_nothing = f == policy::feature::desktop_site;
 #else
-			// The same shape for the feature the phone cannot do; see the
-			// shield, which carries the measurement.
-			if (f == policy::feature::screen_share) {
-				combo->setEnabled(false);
-				combo->setToolTip("Not available on this platform. Android's "
-				                   "WebView has no screen sharing to allow.");
-			}
+			const bool means_nothing = f == policy::feature::screen_share;
 #endif
+			if (means_nothing) {
+				delete combo;
+				continue;
+			}
 			combo->setObjectName(QString("feature_%1").arg(policy::feature_name(f)));
 			m_feature_combos[int(f)] = combo;
 			v->addWidget(settings_row(policy::feature_label(f),

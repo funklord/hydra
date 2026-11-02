@@ -41742,3 +41742,15 @@ replacing it, and an address-only row not held to its own address.
 The Properties dialog printed Added and Last seen as `2026-11-02T14:03:11`,
 the tree file's own form. They are read there, not parsed, so they now use
 the system locale's short date and time; the tree file keeps ISO.
+
+### A setting that means nothing here is absent, not greyed
+
+On the desktop, Settings showed "Request desktop site" with a greyed
+"Block", and the reason only in a tooltip. That reads as desktop sites
+being blocked. The desktop already asks as a desktop, so the row is now
+left out there. Android leaves out screen sharing in the same way, since
+its WebView has none. This is the rule the Ask entries already follow:
+absent where nothing could use it. Both save loops skip a missing combo.
+The per-site shield keeps its greyed row, because there the row's place
+in the list is what it says. `try_settings_ui` checks that the platform's
+row is absent and that every other feature has a control.

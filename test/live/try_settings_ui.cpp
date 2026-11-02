@@ -202,14 +202,26 @@ int main(int argc, char **argv) {
 		for (int i = 0; i < policy::feature_count(); ++i) {
 			const auto f = static_cast<policy::feature>(i);
 			const QString id = QString("feature_%1").arg(policy::feature_name(f));
+			// The one feature this platform cannot use is left out on
+			// purpose, and must be absent rather than greyed.
+#ifndef Q_OS_ANDROID
+			const bool means_nothing = f == policy::feature::desktop_site;
+#else
+			const bool means_nothing = f == policy::feature::screen_share;
+#endif
+			if (means_nothing) {
+				check(!dlg.findChild<QComboBox *>(id),
+				      id + " is absent on this platform, not greyed");
+				continue;
+			}
 			if (!dlg.findChild<QComboBox *>(id)) {
 				++missing;
 				names += QString(policy::feature_name(f)) + " ";
 			}
 		}
 		check(missing == 0,
-		      QString("all %1 features have a control%2")
-		          .arg(policy::feature_count())
+		      QString("the other %1 features all have a control%2")
+		          .arg(policy::feature_count() - 1)
 		          .arg(missing ? QString(" — missing: " + names) : QString()));
 
 		auto *banners = dlg.findChild<QComboBox *>("feature_cookieNotices");
