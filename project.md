@@ -41777,3 +41777,14 @@ calls in the three dialogs all follow a send, which already needed a
 ready provider. `try_look` now fails a settled dialog whose banner says
 the provider cannot answer while Send is enabled. With the fix reverted
 it reported exactly that on extractor-loaded; with the fix in, nothing.
+
+### The screen picker looked as if Screen 1 were already picked
+
+The picker opened with focus in the screen list, and a focused list marks
+its first row current. In the dark scheme that tint looks like a
+selection, so the dialog appeared to have chosen Screen 1 while Share
+stayed dead. That is correct, since nothing is picked until somebody
+picks it, but it looks broken. Cancel, already the default button, now
+holds the initial focus, and no row is current until the person reaches
+the lists. `try_phone` checks that both lists start with no current row.
+With the focus line removed it failed; with it in, it passes (206).

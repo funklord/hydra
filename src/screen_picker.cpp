@@ -69,6 +69,11 @@ screen_picker::screen_picker(const QString &host, QAbstractListModel *screens,
 	cancel->setObjectName("screen_picker_cancel");
 	m_share->setObjectName("screen_picker_share");
 	cancel->setDefault(true);
+	// **And it holds the focus to begin with**, rather than the screen list.
+	// A list given focus marks its first row current, and in the dark scheme
+	// that tint reads as "Screen 1 is chosen" -- beside a Share that is dead
+	// because nothing is (try_look, 2026-11-02). Tab still reaches the lists.
+	cancel->setFocus();
 	// **Disabled until something is picked**, rather than sharing a default. A
 	// picker whose Share button works before a choice has been made will
 	// eventually send the wrong surface to a meeting, and nothing about the

@@ -816,6 +816,11 @@ int main(int argc, char *argv[]) {
 		             "default would eventually send the wrong surface to a meeting");
 		shell::check(dlg.chosen_row() < 0,
 		             "and nothing is chosen to begin with");
+		shell::check(screen_list && window_list &&
+		             !screen_list->currentIndex().isValid() &&
+		             !window_list->currentIndex().isValid(),
+		             "nor does any row look chosen: the focus tint on a first "
+		             "row read as a pick beside a dead Share");
 
 		if (screen_list && window_list && share) {
 			window_list->setCurrentIndex(window_list->model()->index(1, 0));
