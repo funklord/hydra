@@ -367,7 +367,8 @@ public class HydraWebView {
      * with -- what a site checking for an ad blocker expects to receive, where
      * a refusal is what it is looking for.
      */
-    public static native String requestVerdict(String url, String accept, String pageUrl);
+    public static native String requestVerdict(String url, String accept, String pageUrl,
+                                               String method);
     /** A navigation's address with the lists' removeparam removals made, or empty. */
     public static native String cleanUrl(String url);
     public static native String resourceMime(String name);
@@ -1527,9 +1528,11 @@ public class HydraWebView {
                                 accept = a;
                         }
                         final String page = PAGE_URLS.get(Long.valueOf(id));
+                        final String method = req.getMethod();
                         final String verdict = requestVerdict(req.getUrl().toString(),
                                                               accept,
-                                                              page != null ? page : "");
+                                                              page != null ? page : "",
+                                                              method != null ? method : "");
                         if (verdict == null || verdict.isEmpty())
                             return null;
                         if (verdict.equals("block"))

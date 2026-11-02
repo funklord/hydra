@@ -149,6 +149,17 @@ struct network_rule {
 	// plain pattern can name (2026-10-30).
 	bool        regex = false;
 	int         party = 0;           // 0 any, 1 first-party only, 3 third-party only
+	// `strict1p`, `strict3p`: the party by the exact host rather than by the
+	// site -- `cdn.site.example` is first-party to `site.example` and
+	// strictly third-party to it. 36 lines of the default lists.
+	bool        strict_party = false;
+	// `method=get|post`, `method=~head`: upper case, either list. A rule
+	// naming methods decides only a request whose method is known -- the
+	// Android backend's always is, Qt's always is -- and 52 lines of the
+	// default lists, one of them quick-fixes' rule for YouTube's ad segments
+	// (2026-11-02).
+	QStringList methods;
+	QStringList not_methods;
 	// Compiled once, by `filter_list::pattern_regex`.
 	QRegularExpression match;
 	QString            literal;   // `filter_list::literal_of`, tested first
@@ -185,6 +196,7 @@ public:
 		QString  host;      // the request's
 		QString  site;      // the page's
 		unsigned type = 0;  // request_type, or unknown
+		QString  method;    // upper case; empty: not known
 	};
 	// **Everything the rules say about one request, in one pass** over its
 	// candidates: what `decide` needs, asked once rather than three times.

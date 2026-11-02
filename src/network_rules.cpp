@@ -431,6 +431,33 @@ parsed parse_network_rule(const QString &line, network_rule *out, QString *why,
 			r.party = 3;
 			continue;
 		}
+		if (o == QLatin1String("strict1p") || o == QLatin1String("~strict3p")) {
+			r.party = 1;
+			r.strict_party = true;
+			continue;
+		}
+		if (o == QLatin1String("strict3p") || o == QLatin1String("~strict1p")) {
+			r.party = 3;
+			r.strict_party = true;
+			continue;
+		}
+		if (o.startsWith(QLatin1String("method="))) {
+			static const QStringList known = {
+				QStringLiteral("CONNECT"), QStringLiteral("DELETE"), QStringLiteral("GET"),
+				QStringLiteral("HEAD"),    QStringLiteral("OPTIONS"), QStringLiteral("PATCH"),
+				QStringLiteral("POST"),    QStringLiteral("PUT"),    QStringLiteral("TRACE")
+			};
+			for (const QString &m : o.mid(7).split(QLatin1Char('|'), Qt::SkipEmptyParts)) {
+				const bool negated = m.startsWith(QLatin1Char('~'));
+				const QString name = (negated ? m.mid(1) : m).toUpper();
+				if (!known.contains(name))
+					return refuse(QString("a method this reader does not know (%1)").arg(m));
+				(negated ? r.not_methods : r.methods) << name;
+			}
+			if (r.methods.isEmpty() && r.not_methods.isEmpty())
+				return refuse(QStringLiteral("a method option naming no method"));
+			continue;
+		}
 		if (o == QLatin1String("important")) {
 			r.important = true;
 			continue;
@@ -727,10 +754,25 @@ bool network_rule_set::applies(const network_rule &rule, const request &r,
 		return false;
 	if (rule.not_types && r.type != request_type::unknown && (rule.not_types & r.type))
 		return false;
-	if (rule.party == 1 && !same_party)
-		return false;
-	if (rule.party == 3 && same_party)
-		return false;
+	if (rule.strict_party) {
+		const bool same_host = !r.site.isEmpty() &&
+		                       r.host.compare(r.site, Qt::CaseInsensitive) == 0;
+		if ((rule.party == 1) != same_host)
+			return false;
+	} else {
+		if (rule.party == 1 && !same_party)
+			return false;
+		if (rule.party == 3 && same_party)
+			return false;
+	}
+	if (!rule.methods.isEmpty() || !rule.not_methods.isEmpty()) {
+		if (r.method.isEmpty())
+			return false;
+		if (!rule.methods.isEmpty() && !rule.methods.contains(r.method))
+			return false;
+		if (rule.not_methods.contains(r.method))
+			return false;
+	}
 	const QString site = r.site.toLower();
 	if (!rule.include.isEmpty()) {
 		bool in = false;

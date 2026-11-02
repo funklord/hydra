@@ -133,8 +133,10 @@ public:
 	// The same decision with its redirect: empty to let the request through,
 	// "block" to refuse it, or the name of the resource to answer it with
 	// (`network_rules.h`). What Java's interceptor asks.
+	// `method` is the request's, as Java has it; empty where it is unknown.
 	static QString request_verdict(const QString &url, const QString &accept,
-	                               const QString &page_url);
+	                               const QString &page_url,
+	                               const QString &method = QString());
 	static bool should_block(const QString &url, const QString &accept,
 	                          const QString &page_url);
 	// A navigation's address with the lists' `$removeparam` removals made,

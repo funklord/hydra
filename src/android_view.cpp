@@ -408,10 +408,12 @@ Java_se_vibes_hydra_HydraWebView_bridgeDescribe(JNIEnv *env, jclass,
 // The same, with the redirect: see `android_view::request_verdict`.
 extern "C" JNIEXPORT jstring JNICALL
 Java_se_vibes_hydra_HydraWebView_requestVerdict(JNIEnv *env, jclass, jstring url,
-                                                jstring accept, jstring page_url) {
+                                                jstring accept, jstring page_url,
+                                                jstring method) {
 	const QString v = android_view::request_verdict(from_java(env, url),
 	                                                from_java(env, accept),
-	                                                from_java(env, page_url));
+	                                                from_java(env, page_url),
+	                                                from_java(env, method));
 	return env->NewStringUTF(v.toUtf8().constData());
 }
 
@@ -1060,7 +1062,7 @@ bool android_view::should_block(const QString &url, const QString &accept,
 }
 
 QString android_view::request_verdict(const QString &url, const QString &accept,
-                                      const QString &page_url) {
+                                      const QString &page_url, const QString &method) {
 	if (!s_filter)
 		return QString();
 
@@ -1074,6 +1076,7 @@ QString android_view::request_verdict(const QString &url, const QString &accept,
 	// rules that key off the request host apply, which is the safe subset.
 	ctx.site_host    = QUrl(page_url).host();
 	ctx.page         = QUrl(page_url);
+	ctx.method       = method.toUpper();
 	ctx.kind         = kind_from_hints(accept, ctx.url);
 	// Only what the hints can say: a script, an image or a font is told apart
 	// and anything else is `unknown`, which any type option accepts.

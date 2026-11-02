@@ -196,6 +196,7 @@ request_decision request_filter::decide(const request_context &ctx) const {
 	q.host = ctx.request_host;
 	q.site = ctx.site_host;
 	q.type = ctx.type;
+	q.method = ctx.method;
 	bool have_url = false;
 	const auto url = [&]() -> const QString & {
 		if (!have_url) {

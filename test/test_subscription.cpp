@@ -1641,6 +1641,81 @@ int main(int argc, char **argv) {
 		      "and the site's own script is first-party, which the rule does not name");
 	}
 
+	section("$method: a rule for one kind of request, decided when the kind is known");
+	{
+		network_rule r;
+		QString why;
+		// quick-fixes' rule for YouTube's ad segments, word for word.
+		const QString yt = QStringLiteral(
+		  "/\\.googlevideo\\.com\\/videoplayback\\?expire=(?:[02-9]\\d+|1[1-68-9]\\d+|"
+		  "17[1-7]\\d+)&/$xhr,3p,method=get,domain=www.youtube.com");
+		check(parse_network_rule(yt, &r, &why) == parsed::option &&
+		        r.methods == QStringList({ "GET" }) && r.not_methods.isEmpty(),
+		      QString("quick-fixes' YouTube rule is read (%1)").arg(why));
+		check(parse_network_rule("||x.example^$method=post|~get", &r, &why) == parsed::option &&
+		        r.methods == QStringList({ "POST" }) && r.not_methods == QStringList({ "GET" }),
+		      QString("a list and a negation (%1)").arg(why));
+		check(parse_network_rule("||x.example^$method=fetch", &r, &why) == parsed::refused,
+		      QString("a method this reader does not know refuses the line (%1)").arg(why));
+		QList<network_rule> rules;
+		for (const char *line : { "||beacon.example^$method=post",
+		                          "||api.example^$method=~get" })
+			if (parse_network_rule(QString::fromLatin1(line), &r, nullptr) == parsed::option)
+				rules << r;
+		policy_engine pol;
+		request_filter f(&pol);
+		f.set_network_rules(rules);
+		const auto blocks = [&](const char *url, const char *method) {
+			request_context ctx;
+			ctx.url = QUrl(QString::fromLatin1(url));
+			ctx.request_host = ctx.url.host();
+			ctx.site_host = "site.example";
+			ctx.type = request_type::xhr;
+			ctx.method = QString::fromLatin1(method);
+			return f.decide(ctx).block;
+		};
+		check(blocks("https://beacon.example/hit", "POST") &&
+		        !blocks("https://beacon.example/hit", "GET"),
+		      "method=post blocks a POST and spares a GET");
+		check(blocks("https://api.example/v1", "DELETE") && !blocks("https://api.example/v1", "GET"),
+		      "method=~get blocks all but a GET");
+		check(!blocks("https://beacon.example/hit", ""),
+		      "and a request whose method is not known is not decided by either");
+	}
+
+	section("$strict1p and $strict3p: the party by host, not by site");
+	{
+		network_rule r;
+		QString why;
+		QList<network_rule> rules;
+		check(parse_network_rule("||cdn.site.example^$strict3p", &r, &why) == parsed::option &&
+		        r.strict_party && r.party == 3,
+		      QString("strict3p is read (%1)").arg(why));
+		rules << r;
+		check(parse_network_rule("||site.example/own.js^$strict1p", &r, &why) == parsed::option &&
+		        r.strict_party && r.party == 1,
+		      QString("strict1p is read (%1)").arg(why));
+		rules << r;
+		network_rule_set set;
+		set.replace(rules);
+		auto blocks = [&](const char *url, const char *site) {
+			network_rule_set::request q;
+			q.url = QString::fromLatin1(url);
+			q.lower = q.url.toLower();
+			q.host = QUrl(q.url).host();
+			q.site = QString::fromLatin1(site);
+			q.type = request_type::script;
+			return set.blocks(q);
+		};
+		check(blocks("https://cdn.site.example/a.js", "www.site.example"),
+		      "strict3p: another host of the same site is strictly third-party");
+		check(!blocks("https://cdn.site.example/a.js", "cdn.site.example"),
+		      "strict3p: the page's own host is not");
+		check(blocks("https://site.example/own.js", "site.example") &&
+		        !blocks("https://site.example/own.js", "www.site.example"),
+		      "strict1p: only the very host the page is on");
+	}
+
 	section("$urlskip: a tracking redirect is gone past, to where it leads");
 	{
 		network_rule r;

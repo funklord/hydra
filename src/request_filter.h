@@ -42,6 +42,9 @@ struct request_context {
 	// uBlock's type, where the backend can tell it; `unknown` matches any
 	// type option (`network_rules.h` says why).
 	unsigned      type = request_type::unknown;
+	// The HTTP method, upper case, where the backend can say; empty where
+	// it cannot, and then no `$method` rule decides the request.
+	QString       method;
 };
 
 // What a request is, worked out from the `Accept` header and the URL.

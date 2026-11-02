@@ -18,6 +18,7 @@ void qtwebengine_interceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
 	ctx.site_host    = info.firstPartyUrl().host();   // the page's site
 	ctx.page         = info.firstPartyUrl();
 	ctx.url          = info.requestUrl();
+	ctx.method       = QString::fromLatin1(info.requestMethod()).toUpper();
 	switch (info.resourceType()) {
 		case RT::ResourceTypeScript: ctx.kind = resource_kind::script; break;
 		case RT::ResourceTypeImage:  ctx.kind = resource_kind::image;  break;

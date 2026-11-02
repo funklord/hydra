@@ -39125,6 +39125,54 @@ a step not read. `test_subscription` holds the steps and the refusals
 (`javascript:`, `file:`, nothing found); `try_filters` goes past a
 redirect through the real interceptor, the redirect never asked for.
 
+### `$method`, `$strict1p` and `$strict3p` are read (2026-11-02)
+
+Counted on 2026-11-02 over the holder's six lists, these options were
+still refused:
+
+- `$ghide`/`$generichide`: 1,046. These are taken by the cosmetic reader
+  instead.
+- `$csp`: 95.
+- `$replace`: 78. Firefox-only in uBlock as well.
+- `$method`: 52.
+- `$header`: 42.
+- `$ipaddress`: 40.
+- `$cname`: 29.
+- `$popunder`: 25.
+- `$strict1p`/`$strict3p`: 36.
+- The rest are in single figures.
+
+Two of them were cheap and worth having.
+
+**`$method`.** Quick-fixes' rule for YouTube's ad segments is one of
+these 52. It blocks `googlevideo.com/videoplayback` requests by their
+`expire=` value, `$xhr,3p,method=get`, and it was being refused. The
+method now reaches the filter as `request_context::method`: Qt's
+interceptor reads `requestMethod()`, and Android passes
+`WebResourceRequest.getMethod()` through `requestVerdict`, which gained
+an argument for it. A list of methods and a `~` negation are read. A
+method the reader does not know refuses the line. **A rule naming
+methods decides only a request whose method is known.** Both backends
+always know it. The page and popup checks build their requests without
+one, so a `$method` rule never refuses a navigation.
+
+**`$strict1p` and `$strict3p`** compare the exact host rather than the
+site, so `cdn.site.example` is strictly third-party to
+`www.site.example`.
+
+**Left alone, with reasons.** `$header` matches a response header, and
+Qt's interceptor sees only requests. `$csp` adds a policy to the
+response, which neither backend can do from where it decides; injecting
+an equivalent `<meta>` at document start is possible but not equivalent,
+and it was not attempted. `$replace` is Firefox-only in uBlock as well.
+
+`test_subscription` reads quick-fixes' rule word for word. It drives
+`method=post` and `method=~get` through `request_filter::decide`,
+including a request with no method, and the strict parties through the
+rule set (281 passed). With both checks in the matcher disabled, five
+checks fail. `jni_check` compares the new `requestVerdict` signature, and
+the x86_64 Android build passes.
+
 ### `$popup`: a window the lists name is refused, clicked or not
 
 **What the lists still could not say, counted 2026-10-29** over the holder's
