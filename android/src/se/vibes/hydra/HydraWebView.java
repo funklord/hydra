@@ -1932,9 +1932,21 @@ public class HydraWebView {
         });
     }
 
+    /**
+     * The visibility C++ asked for last, per view. The hide below is
+     * asynchronous -- a picture first, then GONE -- and a show can arrive in
+     * between: entering kiosk hides the page as it leaves the main window
+     * and shows it in the stage a moment later. The picture's callback then
+     * hid the page the stage had just shown, and kiosk on Android was a
+     * blank screen (emulator, 2026-11-02). The callback asks this first.
+     */
+    private static final java.util.HashMap<Long, Boolean> WANT_VISIBLE =
+        new java.util.HashMap<Long, Boolean>();
+
     public static void setVisible(final long id, final boolean on) {
         onUi(new Runnable() {
             @Override public void run() {
+                WANT_VISIBLE.put(id, on);
                 final WebView w = VIEWS.get(id);
                 if (w == null)
                     return;
@@ -1953,6 +1965,8 @@ public class HydraWebView {
                 // hidden; if the copy fails the page is hidden all the same.
                 snapshot(id, w, new Runnable() {
                     @Override public void run() {
+                        if (!Boolean.FALSE.equals(WANT_VISIBLE.get(id)))
+                            return;   // shown again while the picture was taken
                         w.setVisibility(android.view.View.GONE);
                     }
                 });
@@ -2534,6 +2548,7 @@ public class HydraWebView {
                         h.cancel();
                 }
                 WebView w = VIEWS.remove(id);
+                WANT_VISIBLE.remove(id);
                 if (w == null)
                     return;
                 // A closed tab is silent whatever it was doing a moment ago.

@@ -17922,6 +17922,21 @@ again with hydra still the focused app on the same page. An earlier run
 seemed to show Back leaving the app; that AVD had a stale tab in front of
 the test page, and the run from a cleared app did not reproduce it.
 
+**Kiosk mode on Android was a blank screen (2026-11-02)**, never having
+been tried there. F11 on the emulator hid both system bars and showed an
+empty grey stage. `dumpsys activity top` said why: the page's WebView was
+`GONE`, at its old main-window position. A log line in `sync_geometry`
+showed C++ had asked for it visible, full size in the stage. The hide was
+the culprit: `setVisible(false)` on a visible WebView takes a picture first
+and hides in the picture's callback, and entering kiosk hides the page as
+it leaves the main window and shows it in the stage a moment later -- so
+the late callback hid the page the stage had just shown. The callback now
+hides only if hidden is still the last thing asked (`WANT_VISIBLE`). Run
+again: the WebView is visible at 0,0 1078x2338 and the page is on screen,
+bars hidden, and Back leaves kiosk with them restored. The same race can
+touch anything that hides and quickly re-shows the page -- a menu opened
+and closed fast -- and is closed for all of them by the same check.
+
 ### Watched, both directions
 
 A page served over `adb reverse` with a div that calls `requestFullscreen()`
