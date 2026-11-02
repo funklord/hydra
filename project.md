@@ -41788,3 +41788,21 @@ picks it, but it looks broken. Cancel, already the default button, now
 holds the initial focus, and no row is current until the person reaches
 the lists. `try_phone` checks that both lists start with no current row.
 With the focus line removed it failed; with it in, it passes (206).
+
+### A shown certificate chooser had a certificate chosen and Send on
+
+`cert_dialog` deliberately starts with no row and Send disabled, so that
+one keystroke cannot identify somebody who is still reading the
+question. Showing the dialog undid both. The list took the focus, a
+focused list makes its first row current, and `currentRowChanged`
+enabled Send. One click then sent the first certificate. `try_chrome`
+checked the intent only on a dialog that was never shown. It now shows
+the dialog and checks again: with the fix removed it reported row 0,
+and with it in, row -1 (80 passed). "Don't send", already the default
+button, now holds the initial focus.
+
+The cookie-banner dialog had the cosmetic half of the same thing: its
+first row was tinted, and that row is a site, which cannot become a
+rule, so it sat beside two dead buttons. Close holds the focus there.
+This is the same shape as the screen picker above. A dialog whose list
+is a choice should not give that list the initial focus.

@@ -80,6 +80,12 @@ consent_dialog::consent_dialog(consent_blocker *blocker, const QString &rules_pa
 
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+	// **Close holds the focus to begin with**, not the list. A focused tree
+	// marks its first row current, and that row is a site, which cannot
+	// become a rule -- so it looked picked beside two dead buttons
+	// (try_look, 2026-11-02). Tab still reaches the list.
+	if (QPushButton *close = buttons->button(QDialogButtonBox::Close))
+		close->setFocus();
 	connect(m_reject, &QPushButton::clicked, this,
 	         [this] { setProperty("as", "reject"); on_accept_selected(); });
 	connect(m_accept, &QPushButton::clicked, this,
