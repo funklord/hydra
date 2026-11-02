@@ -398,17 +398,19 @@ var matcher = function (raw) {
 	return function (t) { return String(t).indexOf(s) >= 0; };
 };
 
-// The object a dotted path names and the last key in it, building the path as
-// it goes. Null when the path runs into something that cannot hold a property.
+// The object a dotted path names and the last key in it, as the path is now.
+// Null when a link is missing or cannot hold a property. It used to build
+// missing links as empty objects, which a page can see; since 2026-11-02
+// nothing in the catalog makes an object the page did not (`lay_trap` and
+// `trap_chain` wait for one instead).
 var owner_of = function (path) {
 	var parts = String(path || '').split('.');
 	var last = parts.pop();
 	if (!last) return null;
 	var o = window;
 	for (var i = 0; i < parts.length; i++) {
-		if (o[parts[i]] === undefined || o[parts[i]] === null) o[parts[i]] = {};
-		o = o[parts[i]];
-		if (typeof o !== 'object' && typeof o !== 'function') return null;
+		try { o = o[parts[i]]; } catch (e) { return null; }
+		if (o === null || (typeof o !== 'object' && typeof o !== 'function')) return null;
 	}
 	return { o: o, k: last };
 };
@@ -562,20 +564,14 @@ var exception_token = function () {
 // empty `window.adsbygoogle` the page could see, and a parent the page
 // assigned later left the trap behind on the placeholder. Now the parent
 // holds an accessor that lays the trap on whatever object is assigned to it.
-C['abort-on-property-read'] = function (path) {
-	var chain = String(path || '');
-	if (chain === '') return;
-	var stop = function () { throw new ReferenceError(exception_token()); };
+// The walk both waiting traps share -- uBlock's `makeProxy`, in
+// `abortOnPropertyRead` and `abortOnStackTrace`: an object already on the
+// path is walked into; one that is not yet there gets an accessor that lays
+// the rest on whatever object is assigned to it later. Nothing is made.
+var lay_trap = function (chain, leaf) {
 	var lay = function (owner, rest) {
 		var dot = rest.indexOf('.');
-		if (dot < 0) {
-			try {
-				var d = Object.getOwnPropertyDescriptor(owner, rest);
-				if (!d || d.get !== stop)
-					Object.defineProperty(owner, rest, { get: stop, set: function () {} });
-			} catch (e) {}
-			return;
-		}
+		if (dot < 0) { leaf(owner, rest); return; }
 		var prop = rest.slice(0, dot);
 		var tail = rest.slice(dot + 1);
 		var v;
@@ -594,6 +590,19 @@ C['abort-on-property-read'] = function (path) {
 		} catch (e) {}
 	};
 	lay(window, chain);
+};
+
+C['abort-on-property-read'] = function (path) {
+	var chain = String(path || '');
+	if (chain === '') return;
+	var stop = function () { throw new ReferenceError(exception_token()); };
+	lay_trap(chain, function (owner, key) {
+		try {
+			var d = Object.getOwnPropertyDescriptor(owner, key);
+			if (!d || d.get !== stop)
+				Object.defineProperty(owner, key, { get: stop, set: function () {} });
+		} catch (e) {}
+	});
 };
 
 // abort-on-property-write: writing throws, and reading answers nothing. For a
@@ -1897,23 +1906,25 @@ C['abort-on-stack-trace'] = function (chain, needle) {
 	// rather than aborting on every read.
 	var stack_matches = stack_matcher(needle);
 	if (!stack_matches) return;
-	var at = owner_of(chain);
-	if (!at) return;
-	var held;
-	try { held = at.o[at.k]; } catch (e) {}
-	try {
-		Object.defineProperty(at.o, at.k, {
-			get: function () {
-				if (stack_matches()) throw new ReferenceError(exception_token());
-				return held;
-			},
-			set: function (v) {
-				if (stack_matches()) throw new ReferenceError(exception_token());
-				held = v;
-			},
-			configurable: true
-		});
-	} catch (e) {}
+	// The path as uBlock's `abortOnStackTrace` lays it: a parent the page
+	// has not made yet is waited for, not made (2026-11-02).
+	lay_trap(String(chain), function (owner, key) {
+		var held;
+		try { held = owner[key]; } catch (e) {}
+		try {
+			Object.defineProperty(owner, key, {
+				get: function () {
+					if (stack_matches()) throw new ReferenceError(exception_token());
+					return held;
+				},
+				set: function (v) {
+					if (stack_matches()) throw new ReferenceError(exception_token());
+					held = v;
+				},
+				configurable: true
+			});
+		} catch (e) {}
+	});
 };
 
 // trusted-suppress-native-method(path, signature, how, stack): a call to a

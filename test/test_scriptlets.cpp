@@ -2350,6 +2350,12 @@ int main(int argc, char **argv) {
 		                 "catch (e) { return 'threw'; } })()")
 		          == "read kept",
 		       "and a read from anywhere else gets the value");
+		// The path is waited for, not made, as uBlock's is (2026-11-02).
+		QJSEngine wait;
+		give_page(&wait);
+		run_one(&wait, "abort-on-stack-trace", { "notyet.flag", "detector" });
+		check(ask(&wait, "typeof window.notyet") == "undefined",
+		      "abort-on-stack-trace makes no parent for the page to find");
 	}
 
 	section("trusted-replace-argument changes what a call is given");

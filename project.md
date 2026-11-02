@@ -35815,6 +35815,11 @@ uBlock creates nothing. The parent holds an accessor, and whatever
 object is assigned to it gets the trap. Hydra now does the same.
 `abort-on-property-write` walks the path as it is, and a missing parent
 means no rule, as in uBlock (8 of its 296 rules are nested).
+`abort-on-stack-trace` (203 rules) followed the same day onto the same
+shared walk, `lay_trap`, uBlock's `makeProxy`. `owner_of`, now used only
+by `trusted-replace-argument` to find a method, no longer makes the
+links it walks either. Nothing in the catalog makes an object the page
+did not make.
 `test_scriptlets` (396 passed) checks that no object is made, that the
 read throws once the page makes the parent and again after it replaces
 it, and that the write rule makes nothing. Against the old code, five
