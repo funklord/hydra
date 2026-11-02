@@ -41818,15 +41818,20 @@ feature at all would send somebody looking for a KeePassXC to start.
 Both are now absent on Android, the same rule as the settings row
 above.
 
-### Open: a phone's Tools menu elides its longest entry
+### A phone's Tools menu elided its longest entry
 
-On the emulator (1080x2340, about 411 logical pixels wide), Tools shows
-"Something Go...hrough Here...". The menu runs from below "Tools" to the
-screen's right edge, about 263 logical pixels, and Qt elides the label
-to fit instead of moving the menu left. The label is deliberate: it
-repeats the tooltip's words so people can find it, so the fix is not to
-shorten it. Not yet established: what caps the width, and whether the
-shortcut column ("Ctrl+J", "Ctrl+,") is what pushes it over. Finding out
-takes an Android build per experiment. Photographed 2026-11-03 by an
-emulator driver that also confirmed Tools has no Passwords entry and the
-toolbar has no Key.
+On the emulator (1080x2340, 411 logical pixels at a scale of 2.625),
+Tools showed "Something Go...hrough Here...". The label is deliberate:
+it repeats the tooltip's words so people can find it, so the fix is not
+to shorten it. A temporary log on the emulator showed nothing capping
+the menu. It was 266 pixels at x=145, exactly its own size hint, with
+the label measuring 199. The width the menu asked for and the text
+rectangle the style elides to disagree by a few pixels at that scale.
+The desktop at 2.625 with Roboto did not reproduce it: there the menu
+was 364 against a label of 261.
+
+On Android, `icon_style` now adds two average characters of width to
+every menu item. The menu became 282 pixels, Qt moved it left to x=129
+to fit, and the label is drawn whole. Checked on the emulator, and the
+same driver confirmed that Tools has no Passwords entry and the toolbar
+has no Key.

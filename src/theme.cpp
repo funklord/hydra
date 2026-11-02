@@ -582,6 +582,24 @@ public:
 		p->restore();
 	}
 
+#ifdef Q_OS_ANDROID
+	// **A menu item gets a little more width than the style asks for.** At
+	// the phone's fractional scale (2.625 on the emulator) a menu sized to
+	// its own hint drew its widest label elided in the middle: Tools showed
+	// "Something Go...hrough Here..." in a 266-pixel menu at x=145 of a
+	// 411-pixel screen, so nothing capped it -- the size the menu asked for
+	// and the text rectangle the style elides to disagree by a few pixels
+	// (measured 2026-11-03). The desktop has the slack already and is left
+	// alone. Two average characters, so it scales with the font.
+	QSize sizeFromContents(ContentsType type, const QStyleOption *opt,
+	                        const QSize &size, const QWidget *w) const override {
+		QSize sz = QProxyStyle::sizeFromContents(type, opt, size, w);
+		if (type == CT_MenuItem && opt)
+			sz.rwidth() += 2 * opt->fontMetrics.averageCharWidth();
+		return sz;
+	}
+#endif
+
 	QPixmap generatedIconPixmap(QIcon::Mode mode, const QPixmap &pixmap,
 	                               const QStyleOption *opt) const override {
 		if (mode != QIcon::Disabled || pixmap.isNull())
