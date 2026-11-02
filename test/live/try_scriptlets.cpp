@@ -199,6 +199,15 @@ public:
 				        "    + '&procedural=' + d('.hide-too');"
 				        "}, 2500);"
 				        "</script></body></html>";
+			} else if (target.startsWith("/agegate")) {
+				// **An age gate in two steps**: the second button exists only
+				// after the first is clicked, and only some time later.
+				body = "<!doctype html><html><body>gate"
+				        "<button id=\"age\" onclick=\"setTimeout(function(){"
+				        "var b=document.createElement('button');b.id='ok';"
+				        "b.onclick=function(){new Image().src='/report?gate=passed';};"
+				        "document.body.appendChild(b);},300);\">I am 18</button>"
+				        "</body></html>";
 			} else if (target.startsWith("/late-contract")) {
 				// **The script to rewrite comes after a hundred others**, as
 				// YouTube's `serverContract` comes after many: every script's
@@ -371,6 +380,8 @@ int main(int argc, char *argv[]) {
 			// nothing there.
 			body.write("/instream/ad_status.js^$script,xhr,"
 			           "redirect=doubleclick_instream_ad_status.js:5,domain=127.0.0.1\n");
+			// uBlock's two-step click, comma escaped as a list writes it.
+			body.write("127.0.0.1##+js(trusted-click-element, #age\\, #ok)\n");
 			// quick-fixes' `rpnt` shape: a pattern, a count and a condition.
 			body.write("127.0.0.1##+js(rpnt, script, /__mark_a/, __mark_b, "
 			           "sedCount, 1, condition, /__mark/)\n");
@@ -686,6 +697,17 @@ int main(int argc, char *argv[]) {
 		for (const QString &a : server.asked)
 			reported |= a.startsWith("/csp-report");
 		check(!reported, "and the page's policy was told of nothing");
+	}
+
+	section("a trusted list clicks through an age gate, step by step");
+	{
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/agegate").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		const bool answered = server.wait_for_report();
+		check(answered && server.report().contains("gate=passed"),
+		      QString("both buttons were clicked, the second once it appeared (%1)")
+		        .arg(server.report()));
 	}
 
 	section("and so is one that comes after a hundred other scripts");

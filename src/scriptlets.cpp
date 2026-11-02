@@ -1480,6 +1480,163 @@ C['prevent-innerHTML'] = function (selector, pattern) {
 	} catch (e) {}
 };
 
+// trusted-click-element(selectors, extraMatch, delay): click a page's own
+// buttons, in order -- an age gate's "I am 18", a dialog's close. uBlock's
+// `trustedClickElement` with its `lookupElementsFn` (`scriptlets.js`,
+// `utils.js`, read at 2be6e29e4a92, 2026-11-02), 14 rules in the lists.
+//
+// `selectors` is a list (`,`, or `;`/`|` when it starts with one), each a
+// CSS selector -- `a >>> b` reaches into an open shadow root, `xpath:` is an
+// XPath, `when-visible:` waits for it to be seen -- or a number, a pause in
+// ms. Between two selectors the pause is `delay` (default 1). The last
+// number is how long to wait for each element (default 11 s); a selector
+// that never appears ends the run. `extraMatch` is `cookie:` or
+// `localStorage:` assertions, `!` to negate, all of which must hold.
+// The open shadow roots only: Chromium's way to a closed one is an
+// extension API, which a page script does not have.
+C['trusted-click-element'] = function (selectors, extra, delay) {
+	var sel_raw = String(selectors == null ? '' : selectors);
+	var extra_raw = String(extra == null ? '' : extra);
+	var delay_raw = String(delay == null ? '' : delay);
+	if (extra_raw !== '') {
+		var pairs = function (text, sep) {
+			return String(text || '').split(sep).map(function (p) {
+				var eq = p.indexOf('=');
+				return eq <= 0 ? null : (p.slice(0, eq).replace(/^\s+|\s+$/g, '') + '=' +
+				                         p.slice(eq + 1).replace(/^\s+|\s+$/g, ''));
+			}).filter(Boolean);
+		};
+		var cookies = null, stored = null;
+		var asserts = extra_raw.split(',');
+		for (var a = 0; a < asserts.length; a++) {
+			var item = asserts[a];
+			var colon = item.indexOf(':');
+			var kind = colon >= 0 ? item.slice(0, colon) : item;
+			var not = kind.charAt(0) === '!';
+			if (not) kind = kind.slice(1);
+			var what = colon >= 0 ? item.slice(colon + 1).replace(/^\s+|\s+$/g, '') : '';
+			if (what === '') continue;
+			var re;
+			var m = /^\/(.+)\/(i?)$/.exec(what);
+			if (m) { try { re = new RegExp(m[1], m[2] || undefined); } catch (e) { return; } }
+			else {
+				var eq2 = what.indexOf('=');
+				var key = eq2 >= 0 ? what.slice(0, eq2) : what;
+				var val = eq2 >= 0 ? what.slice(eq2 + 1) : '';
+				var esc = function (t) { return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); };
+				re = new RegExp('^' + esc(key.replace(/^\s+|\s+$/g, '')) + '=' +
+				                esc(val.replace(/^\s+|\s+$/g, '')));
+			}
+			var pool;
+			if (kind === 'cookie') {
+				if (!cookies) { try { cookies = pairs(document.cookie, /\s*;\s*/); } catch (e) { cookies = []; } }
+				pool = cookies;
+			} else if (kind === 'localStorage') {
+				if (!stored) {
+					stored = [];
+					try {
+						for (var si = 0; si < window.localStorage.length; si++) {
+							var sk = window.localStorage.key(si);
+							stored.push(sk + '=' + window.localStorage.getItem(sk));
+						}
+					} catch (e) {}
+				}
+				pool = stored;
+			} else continue;
+			var found = false;
+			for (var pi = 0; pi < pool.length && !found; pi++) found = re.test(pool[pi]);
+			if (found === not) return;
+		}
+	}
+	var steps = (/^[;|]/.test(sel_raw) ? sel_raw.slice(1).split(sel_raw.charAt(0))
+	                                   : sel_raw.split(',')).map(function (x) {
+		x = x.replace(/^\s+|\s+$/g, '');
+		return /^\d+$/.test(x) ? parseInt(x, 10) : x;
+	}).filter(function (x) { return x !== ''; });
+	if (!steps.length) return;
+	var pause = parseInt(delay_raw, 10) || 1;
+	for (var i = steps.length - 1; i > 0; i--)
+		if (typeof steps[i] === 'string' && typeof steps[i - 1] === 'string')
+			steps.splice(i, 0, pause);
+	if (steps.length === 1 && delay_raw !== '') steps.unshift(pause);
+	if (typeof steps[steps.length - 1] !== 'number') steps.push(11000);
+	var timeout = steps.pop();
+	var query = function (selector, context) {
+		if (selector.indexOf('xpath:') === 0) {
+			var out = [];
+			try {
+				var r = document.evaluate(selector.slice(6), context, null, 7, null);
+				for (var k = 0; k < r.snapshotLength; k++) out.push(r.snapshotItem(k));
+			} catch (e) {}
+			return out;
+		}
+		try { return Array.prototype.slice.call(context.querySelectorAll(selector)); }
+		catch (e) { return []; }
+	};
+	var query_ex = function (selector, context) {
+		var at = selector.indexOf(' >>> ');
+		if (at < 0) return query(selector, context);
+		var hosts = query(selector.slice(0, at).replace(/\s+$/, ''), context);
+		var inner = selector.slice(at + 5).replace(/^\s+/, '');
+		var out = [];
+		for (var h = 0; h < hosts.length; h++)
+			if (hosts[h].shadowRoot)
+				out = out.concat(query_ex(inner, hosts[h].shadowRoot));
+		return out;
+	};
+	var lookup = function (directive) {
+		var visible = directive.indexOf('when-visible:') === 0;
+		var found = query_ex(visible ? directive.slice(13) : directive, document);
+		if (!visible) return found;
+		return found.filter(function (el) {
+			try {
+				return typeof el.checkVisibility === 'function'
+				  ? el.checkVisibility({ opacityProperty: true, visibilityProperty: true })
+				  : !!el.getClientRects().length;
+			} catch (e) { return false; }
+		});
+	};
+	var wait_for = function (directive, done) {
+		var until = Date.now() + timeout;
+		var obs = null, timer = null, over = false;
+		var finish = function (el) {
+			if (over) return;
+			over = true;
+			if (obs) obs.disconnect();
+			if (timer) window.clearTimeout(timer);
+			done(el);
+		};
+		var look = function () {
+			var found = lookup(directive);
+			if (found.length) return finish(found[0]);
+			if (Date.now() >= until) return finish(null);
+		};
+		look();
+		if (over) return;
+		try {
+			obs = new window.MutationObserver(look);
+			obs.observe(document, { childList: true, subtree: true, attributes: true });
+		} catch (e) {}
+		timer = window.setTimeout(function () { look(); finish(null); }, timeout);
+	};
+	var next = function () {
+		if (!steps.length) return;
+		var step = steps.shift();
+		if (typeof step === 'number') { window.setTimeout(next, step); return; }
+		if (step.charAt(0) === '!') { next(); return; }
+		wait_for(step, function (el) {
+			if (!el) return;
+			try { el.click(); } catch (e) {}
+			next();
+		});
+	};
+	var start = function () {
+		if (!document.documentElement) { window.setTimeout(start, 10); return; }
+		next();
+	};
+	start();
+};
+
 // --- the anti-anti-adblock shims -------------------------------------------
 //
 // **These four take no arguments and are not filters at all**: each one hands
@@ -3166,6 +3323,7 @@ const catalog_entry k_entries[] = {
 	{ "trusted-set-local-storage-item",  0,      0,      true  },
 	{ "trusted-set-session-storage-item", 0,     0,      true  },
 	{ "trusted-replace-outbound-text",   1 << 1, 0,      true  },
+	{ "trusted-click-element",           0,      0,      true  },
 	{ "trusted-set-attr",                0,      1 << 0, true  },
 	{ "trusted-set-cookie",              0,      0,      true  },
 	// Two patterns: what to look for, and which url to look in.

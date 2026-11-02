@@ -35901,10 +35901,19 @@ at `2be6e29e4a92`. The catalog is now 60.
   pattern; a leading `!` inverts the pattern. The accessor reads as the
   engine's own.
 
-`test_scriptlets` passes 409, `try_scriptlets` 41. What remains
-unported is about 75 rules across a dozen names, the largest
-`trusted-create-html` (20), `trusted-suppress-native-method` (16) and
-`trusted-click-element` (14).
+`test_scriptlets` passes 409, `try_scriptlets` 41.
+
+**`trusted-click-element`** (14 rules) followed the same day. It clicks
+a page's own buttons in order, such as an age gate and then its
+confirmation, waiting up to 11 s for each one. It takes uBlock's list
+syntax, ` >>> ` into open shadow roots, `xpath:` and `when-visible:`,
+and its `cookie:`/`localStorage:` conditions. A closed shadow root is
+out of reach, since Chromium opens one only to extensions.
+`try_scriptlets` serves a two-step gate whose second button appears
+300 ms after the first is clicked, and both are clicked (42 passed).
+What remains unported is about 60 rules across a dozen names, the
+largest `trusted-create-html` (20) and `trusted-suppress-native-method`
+(16).
 
 ### Two engine limits that were silently disabling whole scriptlets
 
