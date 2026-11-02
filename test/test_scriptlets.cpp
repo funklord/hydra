@@ -924,8 +924,8 @@ int main(int argc, char **argv) {
 		// 54 since `xml-prune` and `m3u-prune`, which need an XML parser
 		// and a network and so are run by `try_prune` in a real engine; 58
 		// with the session-storage pair and the set-attr pair.
-		check(scriptlets::names().size() == 62,
-		       QString("sixty-two scriptlets in the catalog (%1)")
+		check(scriptlets::names().size() == 63,
+		       QString("sixty-three scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 		// The trusted four, named here rather than counted: the question a
 		// reader has is which scriptlets can act on a page's behalf, and a
@@ -2484,6 +2484,23 @@ int main(int argc, char **argv) {
 		                 "x.open('GET', 'https://news.test/a'); x.send(); "
 		                 "return String(window.__sent.length); })()") != "0",
 		       "another url is sent as usual");
+
+		// The trusted spelling answers with the directive itself where the
+		// vocabulary has no word for it; the untrusted one never does.
+		const char *body_of =
+		  "(function () { var x = new window.XMLHttpRequest(); "
+		  "x.open('GET', 'https://doubleclick.test/a'); x.send(); return x.responseText; })()";
+		QJSEngine tx;
+		give_page(&tx);
+		tx.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&tx, "trusted-prevent-xhr", { "doubleclick", "{\"ok\":true}" }, true);
+		check(ask(&tx, body_of) == "{\"ok\":true}",
+		      "trusted-prevent-xhr answers with the body the rule gives: " + ask(&tx, body_of));
+		QJSEngine ux;
+		give_page(&ux);
+		ux.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&ux, "prevent-xhr", { "doubleclick", "{\"ok\":true}" });
+		check(ask(&ux, body_of).isEmpty(), "and prevent-xhr does not");
 
 		// **The answer's SHAPE follows responseType**, which is the part that
 		// turns a block into a crash when it is got wrong: a page asking for

@@ -35936,9 +35936,14 @@ already had is now a shared `stack_matcher`, and both use it.
 `test_scriptlets` (413) covers a pattern signature, an exact-value
 signature and `abort`.
 
+**`trusted-prevent-xhr`** (11 rules) is `prevent-xhr` from a trusted
+list. A directive the vocabulary has no word for becomes the response
+body itself, as in uBlock's `generateContentFn`; the untrusted spelling
+still answers it with an empty body. `test_scriptlets` covers both (416).
+
 `trusted-click-element` stays refused on its merits; see *The one
-refused on its merits*. What remains unported is about 25 rules across
-a dozen names, none with more than 11.
+refused on its merits*. What remains unported is about 15 rules across
+ten names, none with more than 8.
 
 ### Two engine limits that were silently disabling whole scriptlets
 

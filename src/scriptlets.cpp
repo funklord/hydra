@@ -2010,7 +2010,7 @@ var props_matcher = function (raw, implicit) {
 // The body a `directive` asks for. uBlock's words, and the random filler is
 // what `true` and `length:` mean -- a page checking that something came back
 // is satisfied, without being handed anything that parses.
-var generated_body = function (directive) {
+var generated_body = function (directive, trusted) {
 	var d = String(directive == null ? '' : directive);
 	var randomize = function (len) {
 		var out = [];
@@ -2036,8 +2036,9 @@ var generated_body = function (directive) {
 	}
 	// **An unknown directive gets an empty body rather than a guess.** The
 	// alternative is handing a page the directive's own text, which is a
-	// filter list's words appearing in a response.
-	return '';
+	// filter list's words appearing in a response -- which is exactly what a
+	// trusted list may ask for, so for one it is the answer.
+	return trusted ? d : '';
 };
 
 // prevent-xhr(propsToMatch, directive): answer a matching request here
@@ -2048,7 +2049,8 @@ var generated_body = function (directive) {
 // object, and anything textual gets what the directive asks for. Handing a
 // page a string where it asked for an ArrayBuffer is how a block turns into
 // a crash in the page's own code.
-C['prevent-xhr'] = function (props, directive) {
+var make_prevent_xhr = function (trusted) {
+return function (props, directive) {
 	var XHR = window.XMLHttpRequest;
 	if (typeof XHR !== 'function' || !XHR.prototype) return;
 	var raw_props = String(props == null ? '' : props);
@@ -2086,7 +2088,7 @@ C['prevent-xhr'] = function (props, directive) {
 			text = '{}';
 			value = {};
 		} else {
-			text = generated_body(directive);
+			text = generated_body(directive, trusted);
 			value = text;
 		}
 		var define = function (name, v) {
@@ -2128,6 +2130,12 @@ C['prevent-xhr'] = function (props, directive) {
 		else fire();
 	}, send);
 };
+};
+C['prevent-xhr'] = make_prevent_xhr(false);
+// trusted-prevent-xhr: the same, and a directive the vocabulary does not
+// know is the body itself (uBlock's `generateContentFn` when trusted, read
+// at 2be6e29e4a92, 2026-11-02). 11 rules in the lists.
+C['trusted-prevent-xhr'] = make_prevent_xhr(true);
 
 // trusted-prevent-fetch(propsToMatch, body, type): the same for fetch, with
 // a body the rule chooses -- which is why it needs trust where `no-fetch-if`,
@@ -3293,6 +3301,7 @@ const catalog_entry k_entries[] = {
 	{ "trusted-replace-outbound-text",   1 << 1, 0,      true  },
 	{ "trusted-create-html",             0,      1 << 0, true  },
 	{ "trusted-suppress-native-method",  0,      0,      true  },
+	{ "trusted-prevent-xhr",             1 << 0, 0,      true  },
 	{ "trusted-set-attr",                0,      1 << 0, true  },
 	{ "trusted-set-cookie",              0,      0,      true  },
 	// Two patterns: what to look for, and which url to look in.
