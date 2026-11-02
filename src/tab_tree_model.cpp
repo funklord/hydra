@@ -1109,6 +1109,28 @@ bool tab_tree_model::set_locked(node *n, bool locked, const QString &pin_url) {
 	return true;
 }
 
+namespace {
+// Whether a title says nothing but where the page is: its host, or its
+// address with or without the scheme and a trailing slash.
+bool address_like(const QString &title, const QString &url) {
+	const QString t = title.trimmed();
+	const QUrl u(url);
+	if (t.isEmpty() || !u.isValid())
+		return false;
+	if (t.compare(u.host(), Qt::CaseInsensitive) == 0)
+		return true;
+	auto bare = [](QString s) {
+		const int scheme = s.indexOf(QLatin1String("://"));
+		if (scheme > 0)
+			s = s.mid(scheme + 3);
+		while (s.endsWith(QLatin1Char('/')))
+			s.chop(1);
+		return s.toLower();
+	};
+	return bare(t) == bare(u.toString());
+}
+}  // namespace
+
 bool tab_tree_model::set_page_title(node *n, const QString &title) {
 	if (!n || title.isEmpty() || n->renamed || title == n->title)
 		return false;
@@ -1120,6 +1142,16 @@ bool tab_tree_model::set_page_title(node *n, const QString &title) {
 	// until a real page says otherwise.
 	// Nor Android's `chrome://blank` for the same page (`shown_address`).
 	if (shown_address(title).isEmpty())
+		return false;
+	// **An address is not a better name than the one the row has.** Chromium
+	// titles a page that has none -- an error page above all -- with its
+	// address or host, so a tab warmed in the background while offline, or
+	// whose site was down, had its saved title replaced by a bare host and
+	// written to disk: "Qt documentation" became "docs.example.test" before
+	// anyone had opened it (try_look, 2026-11-02). A row whose title is
+	// already only an address takes it, so a new tab still shows where it is.
+	if (address_like(title, n->url) && !n->title.isEmpty() &&
+	    !address_like(n->title, n->url))
 		return false;
 	n->title = title;
 	refresh_node(n);

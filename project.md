@@ -41710,3 +41710,29 @@ QtWebEngine or QtPdf minds 6.10. QTBUG-144207 above is open against
 The claim this replaces, "no Qt through 6.10 can", was in `user_agent.h`.
 It came from Qt's documentation rather than its code, and is corrected
 there too.
+
+## A usability pass over every surface (2026-11-02)
+
+Holder's focus for a `/go` run: the GUI, for usability. Method: `try_look`
+photographs every surface, and the pictures were read rather than the code.
+Accessibility stays deferred.
+
+### A tab that failed to load lost its saved title
+
+The first picture showed the two saved tabs in the fixture tree as
+`docs.example.test` and `example.test`, where the tree file names them
+"Qt documentation" and "A tab with a rather long title...". This was at
+startup, before either was opened, with "Saving..." on the status line.
+The window warms tabs in the background. These made-up hosts do not
+load, and Chromium titles its error page with the host. So
+`set_page_title` took the host and the tree wrote it to disk. Starting
+the browser offline, or with a site down, would rename every warmed tab
+to a bare host for good.
+
+A title that is only the page's address or host (`address_like`: the
+host, or the address with or without the scheme and a trailing slash)
+no longer replaces a row's title, unless that title is itself only an
+address. A new tab therefore still shows where it is. `test_model` (397)
+holds the three address forms against a saved title, a real title still
+replacing it, and an address-only row not held to its own address.
+`try_look` run again shows both saved titles kept.

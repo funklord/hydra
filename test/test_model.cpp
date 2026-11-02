@@ -852,6 +852,22 @@ int main(int argc, char **argv) {
 		m.update_node(t, "My bank", "http://x/", {});
 		check(!m.set_page_title(t, "Something Else"),
 		      "and a tab a person named is left alone");
+
+		// **An address does not replace a name** (2026-11-02): an error page
+		// is titled with its host, so a tab warmed while offline lost its
+		// saved title to "docs.example.test" and kept it.
+		node *saved = m.add_tab(m.root(), "Qt documentation", "https://docs.example.test/qt");
+		check(!m.set_page_title(saved, "docs.example.test") &&
+		        !m.set_page_title(saved, "docs.example.test/qt") &&
+		        !m.set_page_title(saved, "https://docs.example.test/qt"),
+		      "a host or an address does not replace a saved title");
+		check(saved->title == "Qt documentation",
+		      QString("which stays (%1)").arg(saved->title));
+		check(m.set_page_title(saved, "Qt 6 Documentation"),
+		      "while a real title still does");
+		node *bare = m.add_tab(m.root(), "example.test", "https://example.test/");
+		check(m.set_page_title(bare, "example.test/") || bare->title == "example.test",
+		      "and a row that is only an address already is not held to it");
 		holds(m, "what a page may call a tab");
 	}
 
