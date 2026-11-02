@@ -35726,10 +35726,22 @@ and refuses `32768` and `1.5`. It asserts the abort's message names
 neither this browser nor the property, and that the page's own
 `onerror` never hears of it; with the old message both checks fail.
 
-**Still to look at, same class:** the consent blocker and sponsor skip
-pass `postMessage` objects keyed `__hydra_consent_*` and
-`__hydra_sponsor_*` between frames, which any `message` listener on the
-page receives.
+**The frames' messages named it too, and no longer do.** The consent
+blocker and sponsor skip pass `postMessage` objects between frames, and
+every `message` listener on the page receives them. Their keys were
+`__hydra_consent_*` and `__hydra_sponsor_*`. `page_key.h` now picks a
+random ten-letter stem once per process, and `disguise_keys` writes it
+into both scripts' sources. Every frame of a page is injected by the same
+process, so they still agree on it. The `window` guards keep their names:
+on the desktop they are in an isolated world, and on Android `bundled`
+already moves them into a private object. `test_sponsor` (55) checks both
+sponsor scripts carry no such key and share one stem, and runs the frame
+worker through the rewritten harness. `test_rotation` (614) checks the
+consent script. `try_consent` passed 61 of 61 twice with the change. A
+third run failed one check: on the German pay wall in a frame, something
+was clicked. That run was on a machine at load 74, and so were the
+others, and the committed code passed once in between. This is recorded
+as unreproduced rather than explained.
 
 ### Two engine limits that were silently disabling whole scriptlets
 

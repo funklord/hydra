@@ -1122,6 +1122,11 @@ int main(int argc, char **argv) {
 		consent_blocker *cb = vb ? vb->findChild<consent_blocker *>() : nullptr;
 		consent_blocker *cf = vf ? vf->findChild<consent_blocker *>() : nullptr;
 		check(cb && cf, "each tab has its own consent blocker");
+		// Its frames talk by postMessage, which any `message` listener on
+		// the page receives: the keys must not name this browser.
+		check(!consent_blocker::script_source().contains("__hydra_consent_") &&
+		        consent_blocker::script_source().contains("consent_need"),
+		      "the consent script's message keys name nobody, and are still there");
 		if (cb && cf) {
 			m.m_status->clearMessage();
 			emit cb->acted("behind.example", "aside");

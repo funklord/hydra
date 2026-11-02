@@ -1,4 +1,5 @@
 #include "consent_blocker.h"
+#include "page_key.h"
 
 #include "policy_engine.h"
 #include "site_rules.h"
@@ -443,7 +444,9 @@ const char *k_script = R"JS(
 consent_blocker::consent_blocker(policy_engine *policy, QObject *parent)
   : QObject(parent), m_policy(policy) {}
 
-QString consent_blocker::script_source() { return QString::fromUtf8(k_script); }
+QString consent_blocker::script_source() {
+	return page_key::disguise_keys(QString::fromUtf8(k_script), "consent");
+}
 
 void consent_blocker::set_page_host(const QString &host) {
 	m_host = host;

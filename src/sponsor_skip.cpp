@@ -1,4 +1,5 @@
 #include "sponsor_skip.h"
+#include "page_key.h"
 
 #include "policy_engine.h"
 
@@ -160,7 +161,7 @@ void sponsor_skip::ask(const QString &token, const QString &url) {
 QString sponsor_skip::relay_source() {
 	// The main frame only: it has the channel. Everything it does is carry a
 	// question up and an answer back down.
-	return QStringLiteral(R"JS(
+	return page_key::disguise_keys(QStringLiteral(R"JS(
 (function () {
   if (window.__hydra_sponsor_relay) return;
   window.__hydra_sponsor_relay = 1;
@@ -210,13 +211,13 @@ QString sponsor_skip::relay_source() {
   };
   start();
 })();
-)JS");
+)JS"), "sponsor");
 }
 
 QString sponsor_skip::frame_source() {
 	// Every frame, including the main one. It has the DOM and no channel, so
 	// it asks upwards and applies what comes back to its own video.
-	return QStringLiteral(R"JS(
+	return page_key::disguise_keys(QStringLiteral(R"JS(
 (function () {
   if (window.__hydra_sponsor_frame) return;
   window.__hydra_sponsor_frame = 1;
@@ -273,5 +274,5 @@ QString sponsor_skip::frame_source() {
   };
   ask();
 })();
-)JS");
+)JS"), "sponsor");
 }

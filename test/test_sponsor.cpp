@@ -8,11 +8,13 @@
 // to a different video -- wrong in a way that looks like bad data rather than
 // like a bug here.
 #include "sponsor_segments.h"
+#include "page_key.h"
 #include "sponsor_skip.h"
 
 #include "echo_server.h"
 #include "policy_engine.h"
 
+#include <QRegularExpression>
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QJSEngine>
@@ -228,7 +230,8 @@ function deliver(json) {
   listeners.message({ data: { __hydra_sponsor_segs: json } });
 }
 )JS");
-		check(!eng.evaluate(harness).isError(), "the stub page evaluates");
+		check(!eng.evaluate(page_key::disguise_keys(harness, "sponsor")).isError(),
+		      "the stub page evaluates");
 		const QJSValue loaded = eng.evaluate(sponsor_skip::frame_source());
 		check(!loaded.isError(),
 		       QString("and the worker (%1)")
@@ -240,10 +243,10 @@ function deliver(json) {
 		check(eng.evaluate("posted.length").toInt() == 1,
 		       QString("it posts one question to the top frame (%1)")
 		           .arg(eng.evaluate("posted.length").toInt()));
-		check(eng.evaluate("String(posted[0].__hydra_sponsor_ask)").toString()
+		check(eng.evaluate(page_key::disguise_keys("String(posted[0].__hydra_sponsor_ask)", "sponsor")).toString()
 		          .contains("aAbBcCdDeE1"),
 		       QString("naming its own url (%1)")
-		           .arg(eng.evaluate("String(posted[0].__hydra_sponsor_ask)")
+		           .arg(eng.evaluate(page_key::disguise_keys("String(posted[0].__hydra_sponsor_ask)", "sponsor"))
 		                    .toString()));
 
 		// Two segments that abut, which is where the chaining matters.
@@ -354,6 +357,21 @@ function deliver(json) {
 		       QString("a repeat is answered from the cache (%1)")
 		           .arg(srv.files_served));
 		qunsetenv("HYDRA_SPONSOR_SERVICE");
+	}
+
+	section("what a page listening to messages reads names nobody");
+	{
+		// **The frames talk by postMessage**, which every `message` listener
+		// on the page also receives. The keys were `__hydra_sponsor_*`.
+		const QString relay = sponsor_skip::relay_source();
+		const QString frame = sponsor_skip::frame_source();
+		check(!relay.contains("__hydra_sponsor_") && !frame.contains("__hydra_sponsor_"),
+		      "neither script sends or reads a key named for this browser");
+		const QRegularExpression key(QStringLiteral("__([a-z]{10})sponsor_ask"));
+		const QString a = key.match(relay).captured(1), b = key.match(frame).captured(1);
+		check(!a.isEmpty() && a == b,
+		      QString("and both use the same stem, so they still hear each other (%1/%2)")
+		        .arg(a, b));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
