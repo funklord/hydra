@@ -199,6 +199,14 @@ public:
 				        "    + '&procedural=' + d('.hide-too');"
 				        "}, 2500);"
 				        "</script></body></html>";
+			} else if (target.startsWith("/bait")) {
+				// **An anti-adblock check that looks for its own ad slot**,
+				// on a page that requires Trusted Types.
+				csp = "require-trusted-types-for 'script'";
+				body = "<!doctype html><html><body>bait<div id=\"slot\"></div><script>"
+				        "setTimeout(function () { var b = document.querySelector('#slot .ad-filled');"
+				        "new Image().src = '/report?bait=' + (b ? b.textContent : 'none'); }, 800);"
+				        "</script></body></html>";
 			} else if (target.startsWith("/late-contract")) {
 				// **The script to rewrite comes after a hundred others**, as
 				// YouTube's `serverContract` comes after many: every script's
@@ -371,6 +379,9 @@ int main(int argc, char *argv[]) {
 			// nothing there.
 			body.write("/instream/ad_status.js^$script,xhr,"
 			           "redirect=doubleclick_instream_ad_status.js:5,domain=127.0.0.1\n");
+			// A stand-in for an ad slot, put where the page looks for it.
+			body.write("127.0.0.1##+js(trusted-create-html, #slot, "
+			           "<div class=\"ad-filled\">filled</div>)\n");
 			// quick-fixes' `rpnt` shape: a pattern, a count and a condition.
 			body.write("127.0.0.1##+js(rpnt, script, /__mark_a/, __mark_b, "
 			           "sedCount, 1, condition, /__mark/)\n");
@@ -686,6 +697,16 @@ int main(int argc, char *argv[]) {
 		for (const QString &a : server.asked)
 			reported |= a.startsWith("/csp-report");
 		check(!reported, "and the page's policy was told of nothing");
+	}
+
+	section("a trusted list puts a stand-in where a page looks for its ad");
+	{
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/bait").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		const bool answered = server.wait_for_report();
+		check(answered && server.report().contains("bait=filled"),
+		      QString("the element was created under Trusted Types (%1)").arg(server.report()));
 	}
 
 	section("and so is one that comes after a hundred other scripts");

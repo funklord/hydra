@@ -35909,10 +35909,23 @@ at `2be6e29e4a92`. The catalog is now 60.
   pattern; a leading `!` inverts the pattern. The accessor reads as the
   engine's own.
 
-`test_scriptlets` passes 409, `try_scriptlets` 41. What remains
-unported is about 75 rules across a dozen names, the largest
-`trusted-create-html` (20), `trusted-suppress-native-method` (16) and
-`trusted-click-element` (14).
+`test_scriptlets` passes 409, `try_scriptlets` 41.
+
+**`trusted-create-html`** (20 rules) followed. It puts elements into the
+page, most often the filled ad slot an anti-adblock check looks for. It
+is appended to the element the selector names, waiting for one to
+appear, and removed again after a duration if the rule gives one. The
+HTML is parsed through the Trusted Types policy, which now makes HTML
+as well as script. uBlock marks the window with a global so that a frame
+it inserts does not insert again; a page can read that global, so it is
+left out, since a frame such a rule inserts has a host the page-scoped
+rule does not name. `try_scriptlets` serves a page under Trusted Types
+that looks for its slot, and finds it filled (42). Parsing the plain
+string instead fails that check, and the page's CSP is told.
+
+`trusted-click-element` stays refused on its merits; see *The one
+refused on its merits*. What remains unported is about 40 rules,
+the largest `trusted-suppress-native-method` (16).
 
 ### Two engine limits that were silently disabling whole scriptlets
 

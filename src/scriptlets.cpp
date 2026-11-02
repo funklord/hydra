@@ -1269,7 +1269,7 @@ C['disable-newtab-links'] = function () {
 // 2026-10-31). uBlock does the same. The policy is made only when a script
 // is actually rewritten, under a random name, and passes the text through.
 var script_policy;
-var as_script = function (text) {
+var tt_policy = function () {
 	if (script_policy === undefined) {
 		script_policy = null;
 		try {
@@ -1277,10 +1277,19 @@ var as_script = function (text) {
 			if (tt && typeof tt.createPolicy === 'function')
 				script_policy = tt.createPolicy(
 				  Math.random().toString(36).slice(2),
-				  { createScript: function (t) { return t; } });
+				  { createScript: function (t) { return t; },
+				    createHTML: function (t) { return t; } });
 		} catch (e) {}
 	}
-	return script_policy ? script_policy.createScript(text) : text;
+	return script_policy;
+};
+var as_script = function (text) {
+	var p = tt_policy();
+	return p ? p.createScript(text) : text;
+};
+var as_html = function (text) {
+	var p = tt_policy();
+	return p ? p.createHTML(text) : text;
 };
 
 var node_text = function (node_name, pattern, replacement, extras) {
@@ -1478,6 +1487,64 @@ C['prevent-innerHTML'] = function (selector, pattern) {
 			}, real.set)
 		});
 	} catch (e) {}
+};
+
+// trusted-create-html(parent, html, ms): put elements into the page -- most
+// often the stand-ins an anti-adblock check looks for, an ad slot that says
+// it was filled. uBlock's `trustedCreateHTML` (`create-html.js`, read at
+// 2be6e29e4a92, 2026-11-02), 20 rules in the lists. Appended to the first
+// element the selector names (`limit, n` for more, each a copy), waiting
+// for one if none is there yet, and taken out again after `ms` if given.
+// Parsed through the Trusted Types policy, as a script rewrite is, so it
+// works on a page that requires one.
+//
+// uBlock marks the window with a global, `trustedCreateHTML`, so that a
+// frame this inserts does not insert again. A global is a name any page can
+// read, and the frame such a rule inserts has its own host, which a rule
+// scoped to the page does not name -- so it is left out.
+C['trusted-create-html'] = function (parent, html, duration) {
+	var sel = String(parent == null ? '' : parent);
+	var text = String(html == null ? '' : html);
+	if (sel === '' || text === '') return;
+	var opts = named_args(Array.prototype.slice.call(arguments, 3));
+	var ms = parseInt(duration, 10);
+	var nodes = [];
+	try {
+		var doc = new window.DOMParser().parseFromString(as_html(text), 'text/html');
+		while (doc.body && doc.body.firstChild)
+			nodes.push(document.adoptNode(doc.body.firstChild));
+	} catch (e) { return; }
+	if (!nodes.length) return;
+	var added = [];
+	var put = function (target, list) {
+		for (var i = 0; i < list.length; i++) {
+			target.appendChild(list[i]);
+			if (!isNaN(ms)) added.push(list[i]);
+		}
+	};
+	var append = function () {
+		var targets;
+		try { targets = document.querySelectorAll(sel); } catch (e) { return true; }
+		if (!targets.length) return false;
+		var limit = Math.min(targets.length, parseInt(opts.limit, 10) || 1) - 1;
+		for (var i = 0; i < limit; i++)
+			put(targets[i], nodes.map(function (n) { return n.cloneNode(true); }));
+		put(targets[limit], nodes);
+		if (added.length)
+			window.setTimeout(function () {
+				for (var j = 0; j < added.length; j++)
+					if (added[j].parentNode) added[j].parentNode.removeChild(added[j]);
+			}, ms);
+		return true;
+	};
+	var start = function () {
+		if (append()) return;
+		var obs = new window.MutationObserver(function () {
+			if (append()) obs.disconnect();
+		});
+		obs.observe(document, { childList: true, subtree: true, attributes: /[#.[]/.test(sel) });
+	};
+	start();
 };
 
 // --- the anti-anti-adblock shims -------------------------------------------
@@ -3166,6 +3233,7 @@ const catalog_entry k_entries[] = {
 	{ "trusted-set-local-storage-item",  0,      0,      true  },
 	{ "trusted-set-session-storage-item", 0,     0,      true  },
 	{ "trusted-replace-outbound-text",   1 << 1, 0,      true  },
+	{ "trusted-create-html",             0,      1 << 0, true  },
 	{ "trusted-set-attr",                0,      1 << 0, true  },
 	{ "trusted-set-cookie",              0,      0,      true  },
 	// Two patterns: what to look for, and which url to look in.

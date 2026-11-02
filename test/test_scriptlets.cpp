@@ -924,8 +924,8 @@ int main(int argc, char **argv) {
 		// 54 since `xml-prune` and `m3u-prune`, which need an XML parser
 		// and a network and so are run by `try_prune` in a real engine; 58
 		// with the session-storage pair and the set-attr pair.
-		check(scriptlets::names().size() == 60,
-		       QString("sixty scriptlets in the catalog (%1)")
+		check(scriptlets::names().size() == 61,
+		       QString("sixty-one scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 		// The trusted four, named here rather than counted: the question a
 		// reader has is which scriptlets can act on a page's behalf, and a
