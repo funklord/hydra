@@ -35923,9 +35923,17 @@ rule does not name. `try_scriptlets` serves a page under Trusted Types
 that looks for its slot, and finds it filled (42). Parsing the plain
 string instead fails that check, and the page's CSP is told.
 
+**`trusted-suppress-native-method`** (16 rules) makes a call to a
+native method do nothing, or throw with `abort`. It applies when the
+arguments match a `|`-separated signature and, optionally, when the
+call stack matches a needle. The stack matching `abort-on-stack-trace`
+already had is now a shared `stack_matcher`, and both use it.
+`test_scriptlets` (413) covers a pattern signature, an exact-value
+signature and `abort`.
+
 `trusted-click-element` stays refused on its merits; see *The one
-refused on its merits*. What remains unported is about 40 rules,
-the largest `trusted-suppress-native-method` (16).
+refused on its merits*. What remains unported is about 25 rules across
+a dozen names, none with more than 11.
 
 ### Two engine limits that were silently disabling whole scriptlets
 

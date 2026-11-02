@@ -1843,24 +1843,24 @@ C['href-sanitizer'] = function (selector, source) {
 // rules are written against.
 //
 // A leading `!` inverts the test, as it does elsewhere.
-C['abort-on-stack-trace'] = function (chain, needle) {
-	if (!chain) return;
-	var raw = String(needle == null ? '' : needle);
-	// uBlock only logs when the needle is empty; nothing is installed here
-	// rather than aborting on every read.
-	if (raw === '') return;
-	var negated = raw.charAt(0) === '!';
-	var want = matcher(negated ? raw.slice(1) : raw);
+// **Whether the call stack right now matches a needle**, uBlock's
+// `matchesStackTraceFn`: `!` inverts it. Shared by `abort-on-stack-trace` and
+// `trusted-suppress-native-method`. Answers null for an empty needle, which
+// both read as "always".
+var stack_matcher = function (raw) {
+	var text = String(raw == null ? '' : raw);
+	if (text === '') return null;
+	var negated = text.charAt(0) === '!';
+	var want = matcher(negated ? text.slice(1) : text);
 	// Random, and naming nobody: a page that sets V8's
 	// `Error.prepareStackTrace` sees the message of every error made.
 	var token = String.fromCharCode(Date.now() % 26 + 97) +
 	            Math.floor(Math.random() * 982451653 + 982451653).toString(36);
-
 	var here = '';
 	// `location` rather than `window.location`: the same object in a page,
 	// and the spelling the dispatcher already uses.
 	try { here = String(location.href || '').split('#')[0]; } catch (e) {}
-	var stack_matches = function () {
+	return function () {
 		var stack = '';
 		try { stack = String(new Error(token).stack || ''); } catch (e) {}
 		if (!stack) return false;
@@ -1887,9 +1887,16 @@ C['abort-on-stack-trace'] = function (chain, needle) {
 			if (fn.indexOf('at') === 0) fn = fn.slice(2).replace(/^\s+/, '');
 			out.push((fn + ' ' + url + m[3] + ':1').replace(/^\s+/, ''));
 		}
-		return want(out.join('\n'));
+		return want(out.join('\n')) !== negated;
 	};
+};
 
+C['abort-on-stack-trace'] = function (chain, needle) {
+	if (!chain) return;
+	// uBlock only logs when the needle is empty; nothing is installed here
+	// rather than aborting on every read.
+	var stack_matches = stack_matcher(needle);
+	if (!stack_matches) return;
 	var at = owner_of(chain);
 	if (!at) return;
 	var held;
@@ -1897,18 +1904,58 @@ C['abort-on-stack-trace'] = function (chain, needle) {
 	try {
 		Object.defineProperty(at.o, at.k, {
 			get: function () {
-				if (stack_matches() !== negated)
-					throw new ReferenceError(token);
+				if (stack_matches()) throw new ReferenceError(exception_token());
 				return held;
 			},
 			set: function (v) {
-				if (stack_matches() !== negated)
-					throw new ReferenceError(token);
+				if (stack_matches()) throw new ReferenceError(exception_token());
 				held = v;
 			},
 			configurable: true
 		});
 	} catch (e) {}
+};
+
+// trusted-suppress-native-method(path, signature, how, stack): a call to a
+// native method whose arguments match the signature -- `|`-separated, each a
+// `"pattern"`, a `/re/`, `true`, `false`, `null`, `undefined`, or anything
+// else to match any value -- from a stack the needle matches, does nothing,
+// or with `abort` throws. uBlock's `trustedSuppressNativeMethod`
+// (`scriptlets.js`, read at 2be6e29e4a92, 2026-11-02), 16 rules in the
+// lists. With no signature uBlock only logs, so this installs nothing.
+C['trusted-suppress-native-method'] = function (path, signature, how, stack) {
+	if (!path) return;
+	var sig = String(signature == null ? '' : signature);
+	if (sig === '') return;
+	var mode = String(how == null ? '' : how);
+	if (mode === 'debug') return;
+	var tests = sig.split(/\s*\|\s*/).map(function (v) {
+		if (/^".*"$/.test(v)) return { re: re_of(v.slice(1, -1), '', false) };
+		if (/^\/.+\/$/.test(v)) return { re: re_of(v, '', false) };
+		if (v === 'false') return { exact: false };
+		if (v === 'true') return { exact: true };
+		if (v === 'null') return { exact: null };
+		if (v === 'undefined') return { exact: undefined, is_undefined: true };
+		return null;
+	});
+	var from_stack = stack_matcher(stack);
+	wrap_method(path, function (call, self, args) {
+		for (var i = 0; i < tests.length; i++) {
+			var t = tests[i];
+			if (!t) continue;
+			var arg = i < args.length ? args[i] : undefined;
+			if (t.re !== undefined) {
+				if (!t.re) return call(self, args);
+				t.re.lastIndex = 0;
+				if (!t.re.test(String(arg))) return call(self, args);
+			} else if (arg !== t.exact) {
+				return call(self, args);
+			}
+		}
+		if (from_stack && !from_stack()) return call(self, args);
+		if (mode === 'abort') throw new ReferenceError(exception_token());
+		return undefined;
+	});
 };
 
 // --- refusing a request outright -------------------------------------------
@@ -3234,6 +3281,7 @@ const catalog_entry k_entries[] = {
 	{ "trusted-set-session-storage-item", 0,     0,      true  },
 	{ "trusted-replace-outbound-text",   1 << 1, 0,      true  },
 	{ "trusted-create-html",             0,      1 << 0, true  },
+	{ "trusted-suppress-native-method",  0,      0,      true  },
 	{ "trusted-set-attr",                0,      1 << 0, true  },
 	{ "trusted-set-cookie",              0,      0,      true  },
 	// Two patterns: what to look for, and which url to look in.

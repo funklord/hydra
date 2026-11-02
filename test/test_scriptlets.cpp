@@ -924,8 +924,8 @@ int main(int argc, char **argv) {
 		// 54 since `xml-prune` and `m3u-prune`, which need an XML parser
 		// and a network and so are run by `try_prune` in a real engine; 58
 		// with the session-storage pair and the set-attr pair.
-		check(scriptlets::names().size() == 61,
-		       QString("sixty-one scriptlets in the catalog (%1)")
+		check(scriptlets::names().size() == 62,
+		       QString("sixty-two scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 		// The trusted four, named here rather than counted: the question a
 		// reader has is which scriptlets can act on a page's behalf, and a
@@ -1312,6 +1312,34 @@ int main(int argc, char **argv) {
 		check(ask(&eng, "(function () { var e = window.mk('d', 'post'); e.innerHTML = 'x';"
 		                " return e.innerHTML; })()") == "x",
 		      "and reading goes through the engine's own getter");
+	}
+
+	section("trusted-suppress-native-method: a call with matching arguments does nothing");
+	{
+		const char *page =
+		  "window.__made = [];"
+		  "window.doc = { create: function (t, o) { window.__made.push(String(t)); return {}; } };";
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(page);
+		const QStringList args = { "doc.create", "\"script\"", "prevent" };
+		check(run_one(&eng, "trusted-suppress-native-method", args, true).isEmpty(),
+		      "it installs");
+		eng.evaluate("window.doc.create('script'); window.doc.create('div');");
+		check(ask(&eng, "window.__made.join(',')") == "div",
+		      "a matching call is suppressed, another goes through: " +
+		        ask(&eng, "window.__made.join(',')"));
+		QJSEngine ex;
+		give_page(&ex);
+		ex.evaluate(page);
+		run_one(&ex, "trusted-suppress-native-method",
+		        QStringList({ "doc.create", "/^ifr/|true", "abort" }), true);
+		check(ask(&ex, "(function(){try{window.doc.create('iframe', true);return 'ran';}"
+		               "catch(e){return 'threw';}})()") == "threw" &&
+		        ask(&ex, "(function(){try{window.doc.create('iframe', false);return 'ran';}"
+		                 "catch(e){return 'threw';}})()") == "ran",
+		      "every position must match, an exact one included, and abort throws");
+		check(scriptlets::requires_trust("trusted-suppress-native-method"), "it needs trust");
 	}
 
 	section("set-attr: an attribute given, and only a value that carries no code");
