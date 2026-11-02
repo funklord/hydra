@@ -41765,3 +41765,15 @@ the banner in all four AI dialogs. It reads the same snapshot `gate_send`
 does, since both are taken when the dialog is built. `test_send_gate`
 holds the reason present when the provider is not ready and absent once
 it is.
+
+### The extractor offered Send to a model that was not there
+
+Once the banner gave the not-ready reason, shot 12 showed it beside an
+enabled Send. The extractor probes candidate addresses when it opens, and
+the probe-completion handler re-enabled Send unconditionally. That undid
+`gate_send`, so pressing Send produced the failure the gate exists to
+prevent. It now calls `gate_send` there. The other `setEnabled(true)`
+calls in the three dialogs all follow a send, which already needed a
+ready provider. `try_look` now fails a settled dialog whose banner says
+the provider cannot answer while Send is enabled. With the fix reverted
+it reported exactly that on extractor-loaded; with the fix in, nothing.

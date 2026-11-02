@@ -767,7 +767,7 @@ void extractor_dialog::probe_candidates() {
 				return;
 
 			rebuild_payload();
-			m_send->setEnabled(true);
+			gate_send(m_send, m_provider);
 			int found = 0;
 			for (const QString &v : std::as_const(m_served))
 				if (!v.contains("not established")) ++found;

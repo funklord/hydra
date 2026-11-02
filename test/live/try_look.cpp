@@ -277,6 +277,21 @@ static void audit(QWidget *w, const QString &name) {
 			             qPrintable(note->text().left(60)));
 			++g_problems;
 		}
+		// **And Send agrees with it once the dialog has settled.** The note
+		// carries the provider's not-ready reason on a line of its own, and
+		// the extractor used to re-enable Send when its address probes
+		// finished, undoing `gate_send` -- so the banner said the model was
+		// missing beside a Send that would fail (2026-11-02). Asked here
+		// because only a settled surface shows it.
+		const bool not_ready = note->text().contains("<br>");
+		for (QAbstractButton *b : w->findChildren<QAbstractButton *>()) {
+			if (b->text() == "&Send" && not_ready && b->isEnabled()) {
+				std::printf("    ! %s: Send is enabled while the banner "
+				             "says the provider cannot answer\n",
+				             qPrintable(name));
+				++g_problems;
+			}
+		}
 	}
 
 	// **A button whose own text does not fit it**, which the label rule above
