@@ -31,15 +31,18 @@ static void section(const char *n) { std::printf("\n== %s ==\n", n); }
 // "passed through" rather than only observing that nothing exploded.
 static const char *k_page_stubs = R"JS(
 window.__ran = [];
+window.__ran_fn = [];   // the callbacks the real timers were handed
 window.__fetched = [];
 window.__opened = [];
 window.__store = {};
 window.setTimeout = function (fn, ms) {
 	window.__ran.push(['t', String(ms)]);
+	window.__ran_fn.push(fn);
 	return 1;
 };
 window.setInterval = function (fn, ms) {
 	window.__ran.push(['i', String(ms)]);
+	window.__ran_fn.push(fn);
 	return 2;
 };
 window.fetch = function (u) {
@@ -1017,11 +1020,13 @@ int main(int argc, char **argv) {
 		// shown, which is the engine's doing and not the scriptlet's.
 		eng.evaluate("window.setTimeout(function showAd(){ 1; }, 500);");
 		eng.evaluate("window.setTimeout(function playVideo(){ 1; }, 500);");
-		check(ask(&eng, "window.__ran.length") == "1",
-		       QString("the matching callback never reached the real timer "
-		                "(%1)").arg(ask(&eng, "window.__ran.length")));
-		check(ask(&eng, "String(window.__ran[0][1])") == "500",
-		       "and the other one did");
+		// **As uBlock does it**: both timers are set, so the page holds a
+		// real id it can clear, and the matching one is handed an empty
+		// callback in place of its own.
+		const QString handed = ask(&eng, "window.__ran_fn.map(function (f) {"
+		                                 " return f.name || 'empty'; }).join(',')");
+		check(handed == "empty,playVideo",
+		      "the matching callback never reached the real timer; an empty one did: " + handed);
 
 		// With a delay named, only that delay is dropped.
 		QJSEngine eng2;
@@ -1030,9 +1035,34 @@ int main(int argc, char **argv) {
 		          .isEmpty(), "prevent-setInterval with a delay evaluates");
 		eng2.evaluate("window.setInterval(function beacon(){ 1; }, 1000);");
 		eng2.evaluate("window.setInterval(function beacon(){ 1; }, 250);");
-		check(ask(&eng2, "window.__ran.length") == "1",
+		check(ask(&eng2, "window.__ran_fn.map(function (f) {"
+		                 " return f.name || 'empty'; }).join(',')") == "empty,beacon",
 		       QString("only the one at that delay is dropped (%1)")
-		           .arg(ask(&eng2, "window.__ran.length")));
+		           .arg(ask(&eng2, "window.__ran_fn.map(function (f) {"
+		                           " return f.name || 'empty'; }).join(',')")));
+
+		// uBlock's ranges, and a needle that is negated.
+		const auto handed_to = [&](const QStringList &args, const char *calls) {
+			QJSEngine e;
+			give_page(&e);
+			run_one(&e, "nostif", args);
+			e.evaluate(QString::fromLatin1(calls));
+			return ask(&e, "window.__ran_fn.map(function (f) {"
+			               " return f.name || 'empty'; }).join(',')");
+		};
+		const char *three = "window.setTimeout(function a(){}, 100);"
+		                    "window.setTimeout(function b(){}, 1000);"
+		                    "window.setTimeout(function c(){}, 5000);";
+		check(handed_to({ "", "1000-" }, three) == "a,empty,empty",
+		      "1000- drops 1000 and above: " + handed_to({ "", "1000-" }, three));
+		check(handed_to({ "", "-1000" }, three) == "empty,empty,c",
+		      "-1000 drops 1000 and below: " + handed_to({ "", "-1000" }, three));
+		check(handed_to({ "", "!1000" }, three) == "empty,b,empty",
+		      "!1000 drops all but 1000: " + handed_to({ "", "!1000" }, three));
+		check(handed_to({ "!b" }, three) == "empty,b,empty",
+		      "a needle with ! drops all that do not match: " + handed_to({ "!b" }, three));
+		check(handed_to({}, three) == "a,b,c",
+		      "and a rule naming neither drops nothing: " + handed_to({}, three));
 	}
 
 	section("answering a fetch instead of sending it");
@@ -1843,6 +1873,27 @@ int main(int argc, char **argv) {
 		          "('click', function () {})").toUtf8().constData())
 		          == "click",
 		       "and leaves the others alone");
+		// **The whole name, as uBlock reads it** (2026-11-02): it was a
+		// substring here, so `load` took `unload` too and `click` took
+		// `dblclick`.
+		check(ask(&only_type, (QString::fromLatin1(add) +
+		          "('unload', function () {})").toUtf8().constData())
+		          == "click/unload",
+		       "and a type that only contains the name is not that type");
+		QJSEngine re_type;
+		give_page(&re_type);
+		run_one(&re_type, "prevent-addEventListener", { "/^(?:click|mousedown)$/" });
+		check(ask(&re_type, (QString::fromLatin1(add) + "('mousedown', 'x')").toUtf8().constData())
+		          .isEmpty() &&
+		        ask(&re_type, (QString::fromLatin1(add) + "('dblclick', 'x')").toUtf8().constData())
+		          == "dblclick",
+		      "a /re/ type is matched as written");
+		QJSEngine on_window;
+		give_page(&on_window);
+		run_one(&on_window, "prevent-addEventListener", { "load", "", "elements", "window" });
+		check(ask(&on_window, (QString::fromLatin1(add) + "('load', 'x')").toUtf8().constData())
+		          == "load",
+		      "elements, window: a listener added elsewhere is kept");
 	}
 
 	section("a defuser naming neither a type nor a handler is refused");

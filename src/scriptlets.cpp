@@ -593,23 +593,54 @@ C['abort-current-script'] = function (path, needle) {
 	} catch (e) {}
 };
 
-// prevent-setTimeout / prevent-setInterval: drop a timer whose callback's own
-// source matches, optionally only at one delay. The timer still returns an id,
-// because a page that stores it and clears it later must not break.
+// A delay test, uBlock's `RangeParser` (`prevent-settimeout.js`, read at
+// 2be6e29e4a92): `1000` exactly, `1000-` and `-1000` open-ended, `500-2000`
+// between, and a leading `!` for anything else. Empty matches every delay.
+var delay_range = function (raw) {
+	var s = String(raw == null ? '' : raw);
+	var not = s.charAt(0) === '!';
+	if (not) s = s.slice(1);
+	var min, max;
+	if (s !== '') {
+		var dash = s.indexOf('-');
+		if (dash !== 0) min = max = parseInt(s, 10) || 0;
+		if (dash !== -1) max = parseInt(s.slice(dash + 1), 10) || Number.MAX_SAFE_INTEGER;
+	}
+	return {
+		unbound: min === undefined && max === undefined,
+		test: function (v) {
+			var n = Math.min(Math.max(Number(v) || 0, 0), Number.MAX_SAFE_INTEGER);
+			if (min === max) return (min === undefined || n === min) !== not;
+			if (min === undefined) return (n <= max) !== not;
+			if (max === undefined) return (n >= min) !== not;
+			return (n >= min && n <= max) !== not;
+		}
+	};
+};
+
+// prevent-setTimeout / prevent-setInterval: a timer whose callback's source
+// matches, at a delay the range accepts, runs nothing. Ported from uBlock:
+// the callback is swapped for an empty one and the real timer still set,
+// so the page gets a real id it can clear; a leading `!` inverts the
+// needle; and a rule naming neither needle nor delay prevents nothing,
+// where until 2026-11-02 it prevented every timer on the page.
 var prevent_timer = function (which) {
 	return function (needle, delay) {
 		var real = window[which];
 		if (typeof real !== 'function') return;
-		var hit = matcher(needle);
-		var want = (delay === undefined || delay === null ||
-		             String(delay) === '') ? null : Number(delay);
-		var fake = 0;
+		var raw = String(needle == null ? '' : needle);
+		var not = raw.charAt(0) === '!';
+		var hit = matcher(not ? raw.slice(1) : raw);
+		var range = delay_range(delay);
+		if (raw === '' && range.unbound) return;
 		window[which] = disguise(function (fn, ms) {
 			var source = '';
 			try { source = String(fn); } catch (e) {}
-			var delay_matches = (want === null) || (Number(ms) === want);
-			if (source && hit(source) && delay_matches)
-				return ++fake;
+			if (hit(source) !== not && range.test(ms)) {
+				var args = Array.prototype.slice.call(arguments);
+				args[0] = function () {};
+				return real.apply(this, args);
+			}
 			return real.apply(this, arguments);
 		}, real);
 	};
@@ -897,8 +928,36 @@ C['prevent-addEventListener'] = function (type, pattern) {
 	if (!ET || !ET.prototype ||
 	    typeof ET.prototype.addEventListener !== 'function')
 		return;
-	var want_type = matcher(type);
-	var want_handler = matcher(pattern);
+	var t_raw = String(type == null ? '' : type);
+	var p_raw = String(pattern == null ? '' : pattern);
+	// **As uBlock reads them** (`prevent-addeventlistener.js`, read at
+	// 2be6e29e4a92, 2026-11-02): the type is the whole name or a `/re/` --
+	// it was a substring here until then, so the 174 `load` rules in the
+	// lists also took `unload` and `loadeddata` listeners, and the `click`
+	// ones `dblclick` -- and a rule naming neither does nothing, where here
+	// it refused every listener on the page.
+	if (t_raw === '' && p_raw === '') return;
+	var want_type = t_raw === '' ? function () { return true; } : (function () {
+		var re = re_of(t_raw, '', true);
+		return function (t) { return !!re && re.test(t); };
+	})();
+	var want_handler = matcher(p_raw);
+	// `elements, <selector>` -- or `window`, `document` -- narrows it to
+	// listeners added to what the selector names.
+	var opts = {};
+	var extras = Array.prototype.slice.call(arguments, 2);
+	for (var i = 0; i + 1 < extras.length; i += 2)
+		opts[String(extras[i])] = extras[i + 1];
+	var only = opts.elements === undefined ? null : String(opts.elements);
+	var on_target = function (el) {
+		if (only === null) return true;
+		if (only === 'window') return el === window;
+		if (only === 'document') return el === document;
+		try {
+			if (el && el.matches && el.matches(only)) return true;
+			return Array.prototype.indexOf.call(document.querySelectorAll(only), el) >= 0;
+		} catch (e) { return false; }
+	};
 	var real = ET.prototype.addEventListener;
 	ET.prototype.addEventListener = disguise(function (t, h) {
 		var ts = '', hs = '';
@@ -912,7 +971,7 @@ C['prevent-addEventListener'] = function (type, pattern) {
 		// function, a bound one -- stringifies to something short rather
 		// than throwing, so the handler test simply does not match and the
 		// listener is kept, which is the safe direction.
-		if (want_type(ts) && want_handler(hs))
+		if (want_type(ts) && want_handler(hs) && on_target(this))
 			return;
 		return real.apply(this, arguments);
 	}, real);

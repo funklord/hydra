@@ -35743,6 +35743,35 @@ was clicked. That run was on a machine at load 74, and so were the
 others, and the committed code passed once in between. This is recorded
 as unreproduced rather than explained.
 
+### The timer and listener defusers, held to uBlock's source (2026-11-02)
+
+The same audit, against `prevent-settimeout.js` and
+`prevent-addeventlistener.js` at uBlock `2be6e29e4a92`. Together these
+cover 977 and 677 rules in the holder's lists.
+
+**`prevent-setTimeout`/`-setInterval`** returned a made-up id and set no
+timer. uBlock sets the real timer with an empty callback, so the page
+holds an id it can clear, and hydra now does the same. The delay is
+uBlock's range: `1000`, `1000-`, `-1000`, `500-2000`, or `!` before
+any of them. A needle may start with `!` as well. Hydra had read only an
+exact number, so a range or a negation never matched. That was 9 rules.
+A rule naming neither a needle nor a delay used to drop every timer on
+the page; it now drops nothing, as uBlock's does. No list carries one
+today.
+
+**`prevent-addEventListener`** matched the event type as a substring.
+So the 174 `load` rules also refused `unload` and `loadeddata`
+listeners whose source matched, and the 132 `click` rules refused
+`dblclick` listeners too. The type is now the whole name, or a `/re/`.
+uBlock's `elements` option, used by 13 rules, is read: only listeners
+added to what the selector names (or `window`, or `document`) are
+refused.
+
+`test_scriptlets` (389 passed) records the callback each real timer was
+handed, and covers the ranges, the negations, a type that only contains
+the name, and `elements`. Against the old catalog, nine of those checks
+fail. `try_scriptlets` still passes (39).
+
 ### Two engine limits that were silently disabling whole scriptlets
 
 Both found by a test failing on code that was right, and both are real
