@@ -38,6 +38,7 @@
 #include <QScrollBar>
 #include <QDir>
 #include <QLabel>
+#include <QTest>
 #include <QListWidget>
 #include <QSettings>
 #include <QStackedWidget>
@@ -190,6 +191,25 @@ int main(int argc, char **argv) {
 		      "and nothing matching hides the list rather than leaving it stale");
 		search->clear();
 		cats->setCurrentRow(0);
+	}
+
+	section("a tap on a check box's title toggles the box");
+	{
+		// A phone's 20-pixel box is a hard target; the row's words are not.
+		QLabel *title = nullptr;
+		for (QLabel *l : dlg.findChildren<QLabel *>())
+			if (l->text() == "Load tabs before you open them") { title = l; break; }
+		auto *box = title ? qobject_cast<QCheckBox *>(title->buddy()) : nullptr;
+		check(title && box, "the row and its check box are found");
+		if (title && box) {
+			const bool was = box->isChecked();
+			QTest::mouseClick(title, Qt::LeftButton, {}, title->rect().center());
+			QApplication::processEvents();
+			check(box->isChecked() != was, "a click on the title flips it");
+			QTest::mouseClick(title, Qt::LeftButton, {}, title->rect().center());
+			QApplication::processEvents();
+			check(box->isChecked() == was, "and a second puts it back");
+		}
 	}
 
 	section("every per-site feature is reachable here");

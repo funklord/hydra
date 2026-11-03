@@ -41936,3 +41936,17 @@ filter in `touch_scroll.h` takes a combo's press and opens the popup on
 the release, after the touch has ended. The same filter gives every item
 view the list scroller. A combo's own popup list is excluded, because
 giving it one stopped it opening at all.
+
+### A check box setting's whole row is its target
+
+On the phone, the Tabs page's check box and the spin box arrows beside it
+are about 20 pixels, a sixth of the 48 dp Android asks of a touch
+target. Tapped exactly, both work on the emulator: the arrow took 8 to
+9 and the box toggled. But a tap on the setting's title did nothing,
+and a finger is not exact. `settings_row` now gives a check box's title
+and description a filter that clicks the box, as a phone's own settings
+treat the whole row. A description containing a link is left alone, so
+the link keeps its clicks. `try_settings_ui` checks that a click on the
+title flips the box and a second puts it back. With the filter removed
+it failed (94 of 95). The spin box arrows are still small; the number
+can be typed.

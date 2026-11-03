@@ -46,6 +46,7 @@
 #include <QMessageBox>
 #include <QGuiApplication>
 #include <QListWidget>
+#include <QMouseEvent>
 #include <QPointer>
 #include <QStackedWidget>
 #include "policy_engine.h"
@@ -958,6 +959,31 @@ QWidget *section_heading(const QString &text, QWidget *parent) {
 	return holder;
 }
 
+// **A tap on a check box's words is a tap on the box.** On a phone the box is
+// about 20 pixels -- a sixth of the 48 dp Android asks of a touch target --
+// and on the emulator a tap on the row's title changed nothing (2026-11-03).
+// A whole row being the target is what a phone's own settings do, and a
+// desktop toggles a check box from its label too. A description holding a
+// link keeps its clicks for the link.
+class tap_toggles : public QObject {
+public:
+	tap_toggles(QAbstractButton *box, QObject *parent)
+	  : QObject(parent), m_box(box) {}
+
+protected:
+	bool eventFilter(QObject *, QEvent *e) override {
+		if (e->type() != QEvent::MouseButtonRelease || !m_box ||
+		    !m_box->isEnabled() ||
+		    static_cast<QMouseEvent *>(e)->button() != Qt::LeftButton)
+			return false;
+		m_box->click();
+		return true;
+	}
+
+private:
+	QPointer<QAbstractButton> m_box;
+};
+
 // One row. `control` is adopted; `help` may be empty for settings whose name is
 // the whole story.
 // `wide` is for controls that hold text rather than a choice -- a path, a
@@ -976,9 +1002,18 @@ QWidget *settings_row(const QString &title, const QString &help,
 	auto *name = new QLabel(title, row);
 	name->setWordWrap(true);
 	text_col->addWidget(name);
-	if (!help.isEmpty())
-		text_col->addWidget(dim_label(help, row));
+	QLabel *help_label = nullptr;
+	if (!help.isEmpty()) {
+		help_label = dim_label(help, row);
+		text_col->addWidget(help_label);
+	}
 	h->addLayout(text_col, wide ? 1 : 2);
+	if (auto *box = qobject_cast<QCheckBox *>(control)) {
+		auto *toggles = new tap_toggles(box, row);
+		name->installEventFilter(toggles);
+		if (help_label && !help.contains(QLatin1String("href")))
+			help_label->installEventFilter(toggles);
+	}
 
 	// The control keeps to its own width and sits against the right edge, so a
 	// column of them lines up however long the descriptions are -- unless it is
