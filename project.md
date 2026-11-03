@@ -42154,3 +42154,23 @@ The check accepts either state now. The first run passing it was luck.
 `make hull-keepass` also rebuilt only `try_keepass` and never
 `try_autofill`, which the payload runs. So a source change was tested on a
 stale binary, which passes or fails for the wrong reason. It builds both now.
+
+### The same shape in the permission prompt: looked for, and absent
+
+The save prompt's fault was this: a modal opened from a signal that can
+fire again while it is open, with the "already asked" memory written only
+when it closes. The permission decider in `main_window` has the same code
+shape: `m_session_permissions` is written after `permission_dialog::exec`
+returns. So it was tested (2026-11-03) rather than fixed on reading.
+
+`try_permissions` was given a case that holds the first dialog open while
+a second request arrives. That was tried two ways: one page calling
+`Notification.requestPermission()` twice, and two tabs on one host each
+calling it once, the second opened from a timer while the first dialog was
+up. Both answered correctly with one dialog, **and stayed so with an
+in-flight guard written and then removed**. QtWebEngine 6.8.2 does not hand
+the shell a second permission request, from either tab, until the first is
+answered. Neither the guard nor the case was kept: a check that cannot fail
+is not a test, and a guard against something the engine never does is
+unproven code. If a backend ever delivers requests concurrently (Android's
+is the one not measured), this is where it would show.
