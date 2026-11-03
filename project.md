@@ -28022,16 +28022,13 @@ carried along as amendments to a list item.
    costs are in that section. The pin is now asserted in `test_model`, so the
    repair fails loudly rather than quietly.
 
-12. **KeePassXC support is broken and needs the account that has a working
-   set up.** See *KeePassXC: the socket path, settled before the session that
-   can test it* above. The socket path is fixed and ruled out for an ordinary
-   desktop; what is untested is everything after it — framing, key exchange,
-   association — because the bridge has never met a real KeePassXC. Run
-   `HYDRA_KEEPASS_INTERACTIVE=1 QT_QPA_PLATFORM=offscreen
-   ./test/build-make/try_keepass` from that account, against a throwaway
-   KeePassXC rather than the real vault. If that set up is a Flatpak, try the
-   `app/org.keepassxc.KeePassXC/` socket variant first — it is the one thing
-   about the path still unverified.
+12. **KeePassXC works end to end, measured in a hull machine** (2026-11-03,
+   `make hull-keepass`). The bridge had never met a real KeePassXC, and the
+   one on the holder's account is a real vault, which the holder said not to
+   pair with; their word was to test the integration in hull instead. See
+   *KeePassXC, end to end, in a hull machine* below. What a machine cannot
+   show is the fill in a real page with the holder's own KeePassXC, which
+   stays theirs to try.
 
 13. **Three features a 2026-09-18 session left unbuilt, recorded only in its
    transcript until now.** Its closing summary named them as not done, and
@@ -42029,3 +42026,47 @@ came from the drawer closing with focus inside it and no open tab left,
 which hands focus to the address bar. That is the existing behaviour
 for an empty window. A focus dump showed the X itself leaves the focus
 on the tree.
+
+## KeePassXC, end to end, in a hull machine
+
+`test/hull/keepass` is a hull spec and payload, run by `make hull-keepass`.
+The image is Debian 13 with KeePassXC 2.7.10, Xvfb, xdotool, gnome-keyring
+and the Qt libraries the host-built `try_keepass` links. Inside the machine
+the payload:
+
+- makes a throwaway vault with `keepassxc-cli`, holding `alice` at
+  `http://127.0.0.1:9931`;
+- starts KeePassXC on it with browser integration on;
+- starts a D-Bus session with an unlocked keyring of its own;
+- answers the one association dialog with xdotool;
+- runs `try_keepass` with pairing and writing enabled;
+- runs it again with nobody to answer, to show the stored pairing is
+  accepted as it is.
+
+The machine has its own HOME and runtime directory and `(network none)`.
+The browser socket lives in the runtime directory, so it cannot reach the
+holder's KeePassXC.
+
+**Measured: 22 passed, then 15 passed with no dialog.** The 22 cover the
+socket, the key exchange, the not-associated path, pairing, the stored
+pairing, a login request returning the vault's entry with the reply matched
+by the incremented nonce, an empty answer for an unknown url, and a save then
+an update that keeps one entry.
+
+**One real defect, found by the first run.** KeePassXC answers a saved login
+with `"success": "true"` and `"error": "success"` together, and
+`keepass_protocol::is_error` treated any `error` key as a failure. Every save
+was reported refused while the entry was in the vault. An explicit success
+now wins. `test_autofill`'s set-login test used to leave the `error` key out
+of its success fixture, and its comment explained why: the bug, described and
+sidestepped. It now carries the real reply, `"error": ""` and
+`success: "false"` beside it (93).
+
+**Two things learned about the rig.** Without a Secret Service the pairing
+is not stored and "the next run needs no dialog" fails. That is the
+environment, so the machine runs its own keyring rather than the check being
+excused. On the first run no association dialog appeared within the loop's 90
+seconds, and every run since has shown it at once. That cause is not
+established. The loop now waits 150 seconds, inside `try_keepass`'s own
+three minutes, and lists the open windows every ten seconds while it
+waits, so a repeat says what was on the screen.

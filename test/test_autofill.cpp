@@ -415,14 +415,27 @@ int main(int argc, char **argv) {
 
 	section("set-login: parsing the reply");
 	{
-		// No "error" key at all -- is_error() treats the key's mere presence as
-		// failure regardless of its value (see the "code travels as a string"
-		// test above), which a real reply's own `"error": ""` would trip if
-		// this test copied it verbatim. A success reply this codebase already
-		// agrees is a success looks like the "fine" object further up.
+		// **The reply KeePassXC 2.7.10 actually sends**, copied rather than
+		// tidied. This test used to leave the "error" key out, on the grounds
+		// that is_error() treated its mere presence as failure and a real
+		// reply would trip that -- which is to say it described the bug and
+		// sidestepped it. A real save, in a hull machine against a real
+		// KeePassXC, came back `"error": "success"` beside `"success": "true"`,
+		// and the bridge reported the save refused with the entry in the vault.
 		QJsonObject ok;
 		ok.insert("success", "true");
-		check(keepass_protocol::parse_set_login(ok), "a success reply parses ok");
+		ok.insert("error", "success");
+		check(keepass_protocol::parse_set_login(ok),
+		      "the reply a real save gets -- success true, error \"success\" -- parses ok");
+		QJsonObject ok_empty;
+		ok_empty.insert("success", "true");
+		ok_empty.insert("error", "");
+		check(keepass_protocol::parse_set_login(ok_empty),
+		      "and so does an empty error field");
+		QJsonObject said_false;
+		said_false.insert("success", "false");
+		check(!keepass_protocol::parse_set_login(said_false),
+		      "while success \"false\" with no error field is still a failure");
 
 		QJsonObject refused;
 		refused.insert("error", "public key not found");

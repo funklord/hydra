@@ -331,7 +331,7 @@ endif
 # after a source change and never reproducible afterwards, with nothing kept.
 FAILED_DIR = $(TESTS_DIR)/failed
 
-.PHONY: all run test test-one test-sanitize drivers sweep replay deb deb-check version-check android android-build android-aab install uninstall clean veryclean distclean help style style-docs style-source check hooks jni seam \
+.PHONY: all run test test-one test-sanitize drivers hull-keepass hull-keepass-image sweep replay deb deb-check version-check android android-build android-aab install uninstall clean veryclean distclean help style style-docs style-source check hooks jni seam \
         resources manifest deps desktop doc policy cli-check
 
 # Always delegates, never compares timestamps itself. The first version made
@@ -564,6 +564,22 @@ test-sanitize:
 
 # Separate from `test` because it is a different order of cost: each driver
 # compiles the whole app and links WebEngine, and they want a real display.
+# **KeePassXC, end to end, in a machine hull runs** (test/hull/keepass). The
+# bridge pairs with a throwaway vault inside the machine -- never the user's,
+# whose KeePassXC answers on this account's runtime directory, which the
+# machine does not share. `hull` is a sibling checkout rather than vendored,
+# so HULL is a variable, as netcfgd's is. The image is built once and needs
+# the network; the run needs none.
+HULL ?= $(HOME)/src/hull/build/hull
+
+hull-keepass-image:
+	$(HULL) build -f test/hull/keepass/hull.conf hydra/keepass
+
+hull-keepass:
+	@$(MAKE) --no-print-directory -C test build-make/try_keepass
+	@$(HULL) images | grep -q '^hydra/keepass ' || $(MAKE) --no-print-directory hull-keepass-image
+	$(HULL) run -f test/hull/keepass/hull.conf
+
 drivers:
 	@$(MAKE) --no-print-directory -C test -j$(JOBS) all
 	@echo "live drivers built. Run one: $(HEADLESS) ./$(TESTS_DIR)/try_cookies"

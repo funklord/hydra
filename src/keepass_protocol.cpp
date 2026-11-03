@@ -138,8 +138,19 @@ reply_match match_reply(const QList<pending_request> &pending, const QString &ac
 }
 
 bool is_error(const QJsonObject &reply, QString *message) {
-	// Two shapes in the wild: an explicit error field, or success == "false".
-	if (reply.contains("error")) {
+	// **An explicit success is a success, whatever else the reply carries.**
+	// KeePassXC 2.7.10 answers a saved login with `"success": "true"` and
+	// `"error": "success"` together, so "an error key means failure" read
+	// every save as refused -- measured against a real KeePassXC in a hull
+	// machine, 2026-11-03, where the entry was in the vault and the bridge
+	// had said it was not.
+	const QJsonValue success = reply.value("success");
+	if (success.isString() && success.toString() == "true")
+		return false;
+	// Then the two failure shapes: an error field with something in it, or
+	// success == "false". An empty error field is not an error.
+	if ((reply.contains("error") && !reply.value("error").toString().isEmpty()) ||
+	    error_code(reply) != 0) {
 		if (message) {
 			const int code = reply.value("errorCode").toString().toInt();
 			*message = reply.value("error").toString();
@@ -148,8 +159,7 @@ bool is_error(const QJsonObject &reply, QString *message) {
 		}
 		return true;
 	}
-	const QJsonValue success = reply.value("success");
-	if (success.isString() && success.toString() != "true") {
+	if (success.isString()) {
 		if (message)
 			*message = "KeePassXC reported failure.";
 		return true;
