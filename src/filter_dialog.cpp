@@ -1,4 +1,6 @@
 #include "filter_dialog.h"
+
+#include <QPointer>
 #include "list_columns.h"
 #include "ai_provider.h"
 #include "filter_signals.h"
@@ -253,6 +255,7 @@ void filter_dialog::on_reply(const QString &text) {
 void filter_dialog::show_proposals(const QList<filter_rule> &rules) {
 	m_rules->clear();
 	m_accepted.clear();
+	const int generation = ++m_generation;
 
 	const QStringList observed = m_signals->observed_for(m_site);
 	int rejected = 0;
@@ -328,6 +331,28 @@ void filter_dialog::show_proposals(const QList<filter_rule> &rules) {
 		for (const auto &c : collateral)
 			for (const QString &u : c.second)
 				new QTreeWidgetItem(row, QStringList{QString("on %1: %2").arg(c.first, u)});
+
+		// The cosmetic half of the same check: what this selector would hide
+		// on the other pages loaded now. Asked, because only a page can
+		// answer it; the row is found again by position when the answer
+		// comes, and only if this list is still the one on screen.
+		const int hash = r.text.indexOf(QLatin1String("##"));
+		if (r.cosmetic && m_probe && hash >= 0) {
+			const int index = m_rules->indexOfTopLevelItem(row);
+			QPointer<filter_dialog> self(this);
+			m_probe(r.text.mid(hash + 2), r.scope,
+			        [self, generation, index](const QStringList &hits) {
+				if (!self || hits.isEmpty() || generation != self->m_generation)
+					return;
+				QTreeWidgetItem *item = self->m_rules->topLevelItem(index);
+				if (!item)
+					return;
+				item->setText(1, item->text(1) + "; and would hide elements on "
+				                                  "other pages you have open: " +
+				                     hits.join(", "));
+				item->setCheckState(0, Qt::Unchecked);
+			});
+		}
 		m_accepted << r;
 	}
 

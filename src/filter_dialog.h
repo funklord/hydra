@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include "filter_list.h"
 
 #include <QDialog>
@@ -49,6 +51,13 @@ public:
 	// `reorganize_dialog` has always done this and these two never did.
 	~filter_dialog() override;
 
+	// **Asked what a cosmetic rule would hide on the other pages open now**
+	// -- `main_window::probe_cosmetic`. Unset, cosmetic rules are judged
+	// against the picked element alone, as before.
+	using cosmetic_probe = std::function<void(const QString &selector, const QString &scope,
+	                                          std::function<void(const QStringList &)>)>;
+	void set_cosmetic_probe(cosmetic_probe probe) { m_probe = std::move(probe); }
+
 private slots:
 	void on_send();
 	void on_reply(const QString &text);
@@ -68,6 +77,10 @@ private:
 	QString         m_site;
 	picked_element  m_picked;
 	bool            m_ads_allowed = false;
+	cosmetic_probe  m_probe;
+	// Bumped each time proposals are shown, so a probe answer for a list
+	// that has since been replaced finds nothing to write on.
+	int             m_generation = 0;
 
 	QStackedWidget *m_pages   = nullptr;
 	QPlainTextEdit *m_payload = nullptr;

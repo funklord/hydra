@@ -9,6 +9,9 @@
 // removed a permission for.
 #include "main_window.h"
 #include "node.h"
+#include "tab_tree_model.h"
+#include "tab_tree_view.h"
+#include "tree_sort_proxy.h"
 #include "policy_engine.h"
 #include "qtwebengine_factory.h"
 #include "request_filter.h"
@@ -20,6 +23,8 @@
 #include <QFile>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QTimer>
 #include <QToolBar>
 #include <cstdio>
@@ -195,6 +200,64 @@ int main(int argc, char *argv[]) {
 		check(saw, "the question was put");
 		check(!confirm->isVisible(),
 		      "closing it means 'stop asking', not 'ask me again'");
+	}
+
+	// **What a cosmetic rule would hide on the other tabs, asked of real
+	// pages** (sec 12's known-clean set). Three pages from one local server,
+	// on two host names: two in background tabs, one in front. Each page
+	// carries visible `.ad-banner` elements -- how many is its path -- and
+	// one hidden, which must not count.
+	section("a selector is counted on the other tabs, not the one in front");
+	{
+		QTcpServer server;
+		QObject::connect(&server, &QTcpServer::newConnection, [&server] {
+			QTcpSocket *s = server.nextPendingConnection();
+			QObject::connect(s, &QTcpSocket::readyRead, s, [s] {
+				const QByteArray req = s->readAll();
+				const int n = req.mid(5, 1).toInt();   // "GET /3 ..."
+				QByteArray body = "<!doctype html><html><body>";
+				for (int i = 0; i < n; ++i)
+					body += "<div class=ad-banner>ad</div>";
+				body += "<div class=ad-banner style='display:none'>hidden</div>"
+				        "</body></html>";
+				s->write("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n"
+				         "Content-Length: " + QByteArray::number(body.size()) +
+				         "\r\nConnection: close\r\n\r\n" + body);
+				s->disconnectFromHost();
+			});
+		});
+		check(server.listen(QHostAddress::LocalHost, 0), "the pages are served");
+		const quint16 port = server.serverPort();
+		auto open_tab = [&](const QString &url) {
+			node *n = w.m_model->add_tab(nullptr, "probe", url);
+			emit w.m_tree->activated(
+			  w.m_proxy->mapFromSource(w.m_model->index_for_node(n)));
+			spin(2500);
+		};
+		open_tab(QString("http://127.0.0.1:%1/2").arg(port));
+		open_tab(QString("http://localhost:%1/3").arg(port));
+		open_tab(QString("http://127.0.0.1:%1/5").arg(port));   // in front
+
+		auto ask = [&](const QString &scope) {
+			QStringList got;
+			bool done = false;
+			w.probe_cosmetic(".ad-banner", scope, [&](const QStringList &h) {
+				got = h;
+				done = true;
+			});
+			for (int i = 0; i < 40 && !done; ++i)
+				spin(100);
+			return got;
+		};
+		const QStringList all = ask(QString());
+		check(all.contains("127.0.0.1 (2)") && all.contains("localhost (3)") &&
+		          all.size() == 2,
+		      QString("a generic rule: each other tab, visible elements only, and "
+		              "not the page in front (%1)").arg(all.join(", ")));
+		const QStringList scoped = ask("localhost");
+		check(scoped == QStringList{ "localhost (3)" },
+		      QString("a rule for one site asks only that site's tabs (%1)")
+		          .arg(scoped.join(", ")));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

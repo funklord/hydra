@@ -42318,8 +42318,22 @@ unticked even when it blocks the ad it was asked for**. `test_rotation` holds
 the naming, the untick and the listing, and all three fail with the
 cross-site dry run removed.
 
-What it does not do: re-load those pages, or say anything about a cosmetic
-rule's hide. Both need a page in front of a view. A generic cosmetic rule is
-left to the static rejection in `filter_list::evaluate`. And the set is the
-session's, not a list somebody keeps; a vouched list of pages that persists
-is the step after this, if the dry run proves too narrow.
+**The cosmetic half asks the pages that are loaded now** (same day). A
+cosmetic rule's selector goes to every live tab except the one in front,
+and only to the tabs its domain scope covers (`filter_list::scope_matches`,
+`~` exclusions included). Each tab is asked, in the isolated world, how many
+*visible* elements the selector matches: an element already hidden is not
+one the rule would take away. `main_window::probe_cosmetic` collects the
+answers until all have come in or three seconds pass, since a tab that
+closes never answers. The dialog adds "and would hide elements on other
+pages you have open: news.example (3)" to the row and unticks it, even when
+it hides the element that was picked. `test_rotation` holds the dialog side,
+and its untick check fails with the untick removed. `try_confirm` holds the
+probe against a real engine: three local pages on two host names, a
+generic rule counted on both background tabs and not the one in front, a
+scoped one only on its own site (19).
+
+What it still does not do: re-load pages that are not open, or keep a list
+of vouched pages between runs. The set is what this session saw and what is
+loaded now; a persistent vouched list is the step after this, if that
+proves too narrow.

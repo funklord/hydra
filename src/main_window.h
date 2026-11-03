@@ -608,6 +608,15 @@ protected:
 
 public:
 
+	// **What a cosmetic selector would hide on the other tabs loaded now**
+	// (sec 12's known-clean set, its cosmetic half). Every live view except
+	// the one in front, and only those `scope` applies to (empty: all), is
+	// asked how many visible elements match; `done` gets "host (n)" for each
+	// with any, once all have answered or after three seconds. A view that
+	// closes meanwhile is simply not counted.
+	void probe_cosmetic(const QString &selector, const QString &scope,
+	                    std::function<void(const QStringList &)> done);
+
 	static constexpr int k_drawer_threshold = 620;   // logical px
 
 	// **The narrowest the address bar is allowed to get**, in logical px.

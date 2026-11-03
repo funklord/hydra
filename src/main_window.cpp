@@ -150,6 +150,9 @@
 #include <QSet>
 
 #include <memory>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QMap>
 
 namespace {
 
@@ -3067,6 +3070,10 @@ void main_window::open_filter_evolution() {
 	                   m_policy && m_policy->is_allowed(policy::feature::ads,
 	                                                     host),
 	                   this);
+	dlg.set_cosmetic_probe([this](const QString &selector, const QString &scope,
+	                              std::function<void(const QStringList &)> done) {
+		probe_cosmetic(selector, scope, std::move(done));
+	});
 	if (dlg.exec() != QDialog::Accepted)
 		return;
 	if (!m_filters_path.isEmpty())
@@ -3120,6 +3127,68 @@ void main_window::offer_confirmation(const QStringList &added,
 	             "toolbar can undo them.")
 	        .arg(added.size()).arg(added.size() == 1 ? "" : "s").arg(host),
 	    9000);
+}
+
+void main_window::probe_cosmetic(const QString &selector, const QString &scope,
+                                 std::function<void(const QStringList &)> done) {
+	struct tally {
+		int waiting = 0;
+		bool finished = false;
+		QMap<QString, int> hits;   // host -> elements, summed over its tabs
+		std::function<void(const QStringList &)> done;
+		void finish() {
+			if (finished)
+				return;
+			finished = true;
+			QStringList out;
+			for (auto it = hits.cbegin(); it != hits.cend(); ++it)
+				out << QString("%1 (%2)").arg(it.key()).arg(it.value());
+			done(out);
+		}
+	};
+	auto t = std::make_shared<tally>();
+	t->done = std::move(done);
+
+	// Counted visible, because an element already hidden -- by this list or
+	// the page -- is not one the rule would take away. Isolated world, like
+	// every other question asked of a page here, so it cannot answer for show.
+	const QString quoted = QString::fromUtf8(
+	  QJsonDocument(QJsonArray{ selector }).toJson(QJsonDocument::Compact));
+	const QString js = QString(
+	  "(function(){try{var n=0;document.querySelectorAll(%1[0]).forEach("
+	  "function(e){var r=e.getBoundingClientRect();"
+	  "if(r.width>0&&r.height>0)n++;});return String(n);}"
+	  "catch(e){return '';}})()").arg(quoted);
+
+	web_view_backend *front = current_view();
+	QList<web_view_backend *> asked;
+	for (web_view_backend *v : std::as_const(m_views_by_id)) {
+		if (!v || v == front || asked.contains(v))
+			continue;
+		const QString host = v->url().host();
+		if (host.isEmpty() || (!scope.isEmpty() && !filter_list::scope_matches(scope, host)))
+			continue;
+		asked << v;
+	}
+	t->waiting = int(asked.size());
+	if (asked.isEmpty()) {
+		t->finish();
+		return;
+	}
+	for (web_view_backend *v : asked) {
+		const QString host = v->url().host();
+		v->run_probe(js, [t, host](const QString &answer) {
+			bool ok = false;
+			const int n = answer.toInt(&ok);
+			if (ok && n > 0)
+				t->hits[host] += n;
+			if (--t->waiting == 0)
+				t->finish();
+		});
+	}
+	// A view destroyed before it answers never calls back (run_probe's
+	// contract), so the question has a deadline as well as a count.
+	QTimer::singleShot(3000, this, [t] { t->finish(); });
 }
 
 void main_window::confirm_rules() {

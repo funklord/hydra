@@ -3667,6 +3667,46 @@ int main(int argc, char **argv) {
 		check(listed == 2, QString("with the requests it would block there listed (%1)").arg(listed));
 	}
 
+	// The cosmetic half: a selector is put to the other pages open now, and
+	// a rule that would hide something there says where and is unticked.
+	section("a proposed cosmetic rule says what it would hide on the other pages open");
+	{
+		filter_signals sig;
+		filter_list list;
+		stub_ai prov;
+		prov.reply = "site.example##.ad-banner";
+		// The element the rule was asked for, so it would be pre-ticked as
+		// proven -- which is what makes "unticked" a result of the probe.
+		picked_element picked;
+		picked.selector = "div.ad-banner";
+		picked.tag = "div";
+		picked.classes = QStringList{ "ad-banner" };
+		filter_dialog dlg(&sig, &list, &prov, "site.example", picked);
+		QString asked_selector, asked_scope;
+		dlg.set_cosmetic_probe([&](const QString &selector, const QString &scope,
+		                           std::function<void(const QStringList &)> done) {
+			asked_selector = selector;
+			asked_scope = scope;
+			QTimer::singleShot(20, [done] { done({ "news.site.example (3)" }); });
+		});
+		for (QPushButton *b : dlg.findChildren<QPushButton *>())
+			if (b->text().contains("Send"))
+				b->setEnabled(true), b->click();
+		spin(200);
+		check(asked_selector == ".ad-banner" && asked_scope == "site.example",
+		      QString("the probe is asked the selector and its scope (%1, %2)")
+		          .arg(asked_selector, asked_scope));
+		auto *rules = dlg.findChild<QTreeWidget *>();
+		QTreeWidgetItem *row = rules && rules->topLevelItemCount()
+		                         ? rules->topLevelItem(0) : nullptr;
+		check(row && row->text(1).contains("hides the element you picked") &&
+		          row->text(1).contains("news.site.example (3)") &&
+		          row->checkState(0) == Qt::Unchecked,
+		      QString("and the answer is on the row, which is unticked though it "
+		              "hides the picked ad (%1)")
+		          .arg(row ? row->text(1) : QString("(no row)")));
+	}
+
 	// **A rule accepted for a site whose ads are allowed does nothing.** The
 	// interceptor skips the whole imported list for such a site, and the
 	// cosmetic half was taught the same switch earlier today -- so everything
