@@ -98,15 +98,23 @@ inline const char *source() {
   // involved -- said plainly rather than left to be discovered, because "the
   // save prompt did not appear" is otherwise indistinguishable from a bug.
   function watchSubmits(af) {
+    // A submit button in a form fires both watchers below, so the same login
+    // is reported twice within one turn of the event loop; the second is
+    // dropped here. The controller refuses a second offer while its prompt
+    // is open as well, so this only spares the round trip.
+    let last = null;
     const report = function () {
       for (const pw of passwordFields()) {
         const user = usernameFor(pw);
         // Nothing typed, nothing to offer. A prompt on an empty form is worse
         // than no prompt: it teaches people to dismiss it.
         if (!pw.value) continue;
-        af.offer_to_save(String(location.origin),
-                         user ? String(user.value || '') : '',
-                         String(pw.value));
+        const login = user ? String(user.value || '') : '';
+        const key = login + '\n' + String(pw.value);
+        if (key === last) return;
+        last = key;
+        setTimeout(function () { last = null; }, 1000);
+        af.offer_to_save(String(location.origin), login, String(pw.value));
         return;
       }
     };

@@ -114,6 +114,15 @@ void autofill_controller::offer_to_save(const QString &origin,
 	}
 	if (password.isEmpty())
 		return;   // nothing to store; not worth a prompt
+	// **One question at a time.** A submit button in a form reports twice --
+	// the script watches the click and the submit both, since either can be
+	// the only one a page fires -- and the prompt is modal, so the second
+	// offer arrives inside the first prompt's loop and opened a second prompt
+	// over it. Every ordinary login asked twice. The open prompt's answer is
+	// the answer; a different login arriving meanwhile waits for the next
+	// submit rather than replacing what the person is reading.
+	if (!m_offered.password.isEmpty())
+		return;
 
 	m_offered        = credential{ QString(), login, password, QString() };
 	m_offered_origin = m_origin;

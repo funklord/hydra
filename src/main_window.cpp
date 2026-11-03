@@ -2213,9 +2213,21 @@ QMenuBar *main_window::build_menu_bar() {
 	// browser that hands out passwords because a script requested one is a
 	// browser with a new attack surface for no benefit. The shell asks, and the
 	// injected script puts the answer in the field that wanted it.
+	//
+	// **KeePassXC answers with a window of its own, not with a password.**
+	// From 2.7 its generator opens on its side and the reply comes only once
+	// somebody presses Apply Password there (measured against 2.7.10 in the
+	// hull rig, where nothing came back until the rig pressed it). So the
+	// status bar says where the next step is, or the menu reads as having
+	// done nothing. Said BEFORE asking, so a refusal -- which the controller
+	// reports at once, through the status bar too -- replaces it rather than
+	// being replaced by it.
 	QAction *kpg = pw_menu->addAction("&Generate Password", this, [this] {
-		if (autofill_controller *af = current_autofill())
+		if (autofill_controller *af = current_autofill()) {
+			m_status->showMessage("Choose a password in KeePassXC's generator "
+			                      "and press Apply Password there.", 15000);
 			af->request_generated_password(af->page_origin());
+		}
 	});
 	kpg->setStatusTip("Ask KeePassXC for a password and put it in this page's "
 	                   "new-password field");
@@ -3329,6 +3341,14 @@ void main_window::wire_autofill(autofill_controller *c) {
 		    QString("Save the password for %1 at %2?").arg(who, host)) ==
 		    QMessageBox::Yes;
 		c->confirm_save(yes);
+	});
+	// Only to retire the "press Apply Password there" line; the password
+	// itself goes to the page on the controller's own channel, as above.
+	connect(c, &autofill_controller::generated_password, this,
+	         [this, c](const QString &) {
+		if (c == current_autofill())
+			m_status->showMessage("KeePassXC's password is in the new-password "
+			                      "field.", 6000);
 	});
 	connect(c, &autofill_controller::save_finished, this,
 	         [this](bool, const QString &message) {

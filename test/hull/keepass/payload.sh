@@ -23,7 +23,8 @@ export GNOME_KEYRING_CONTROL
 Xvfb :99 -screen 0 1280x800x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &
 xvfb=$!
 kp=
-trap 'echo "--- keepassxc log:"; cat /tmp/keepassxc.log 2>/dev/null; kill $kp $xvfb 2>/dev/null || true' EXIT
+gen=
+trap 'echo "--- keepassxc log:"; cat /tmp/keepassxc.log 2>/dev/null; kill $kp $xvfb $gen 2>/dev/null || true' EXIT
 
 # A fixture, not a secret: the database exists for this run and dies with it.
 pw=throwaway-hull-vault
@@ -110,10 +111,31 @@ echo "ok    the second run took the stored pairing, and nobody was asked"
 # item as try_keepass, so it inherits that pairing and asks nobody.
 echo
 echo "=== the shell against the vault ==="
+# **KeePassXC's generator is a window on its side**, and from 2.7 it replies
+# to generate-password only when somebody presses Apply Password there
+# (Ctrl+Return is its shortcut). So a second hand, for that window, for as
+# long as the shell runs: bounded by its own count, and killed by the trap.
+(
+	i=0
+	while [ $i -lt 300 ]; do
+		w=$(xdotool search --name '^Generate Password$' 2>/dev/null | head -1 || true)
+		if [ -n "$w" ]; then
+			xdotool windowactivate --sync "$w" 2>/dev/null || true
+			xdotool key ctrl+Return
+			echo "  (rig) applied KeePassXC's generated password"
+			sleep 2
+		fi
+		sleep 1
+		i=$((i + 1))
+	done
+) &
+gen=$!
 HYDRA_VAULT=1 HYDRA_SECRET_KIND=keepassxc-association-try-keepass \
 	QT_QPA_PLATFORM=offscreen QTWEBENGINE_DISABLE_SANDBOX=1 \
 	HYDRA_TEST_OUT=/tmp/autofill \
-	timeout 300 /mnt/repo/test/build-make/try_autofill
+	timeout 300 /mnt/repo/test/build-make/try_autofill || shell=$?
+kill $gen 2>/dev/null || true
+[ "${shell:-0}" -eq 0 ] || { echo "FAIL  try_autofill exited ${shell}"; exit 1; }
 # Read back by the vault's own tool, not by the bridge that wrote it.
 printf '%s\n' "$pw" | keepassxc-cli search -q "$db" 127.0.0.1:9934 | grep -q . || {
 	echo "FAIL  keepassxc-cli does not find the saved login"; exit 1; }

@@ -28045,7 +28045,9 @@ carried along as amendments to a list item.
    `make hull-keepass`). The bridge had never met a real KeePassXC, and the
    one on the holder's account is a real vault, which the holder said not to
    pair with; their word was to test the integration in hull instead. See
-   *KeePassXC, end to end, in a hull machine* below. What a machine cannot
+   *KeePassXC, end to end, in a hull machine* below. The shell half passes
+   there too now -- fill, generate and save through a real page, 35 checks
+   -- so the holder's installed hydra can be paired. What a machine cannot
    show is the fill in a real page with the holder's own KeePassXC, which
    stays theirs to try.
 
@@ -30296,8 +30298,6 @@ is not a technical question. Recorded here rather than put in a message,
 because the same question reaches whoever reads this next and a message is the
 copy that does not get re-read.
 
-Nothing about the refusal is provisional in the meantime. It names the audio,
-it happens at the moment the manifest is read, and it is what the assembler's
 **Who is in that population is small, measured 2026-11-03.** The assembler
 is reached only for a player without `native_streams`, and in
 `player_launcher`'s table that is mplayer and mplayer2 (and a custom
@@ -30305,6 +30305,8 @@ command); mpv, VLC, SMPlayer and ffplay are handed the manifest and read the
 split audio themselves. So the decision is about mplayer users meeting a
 split-audio MPD, not about Watch on DASH in general.
 
+Nothing about the refusal is provisional in the meantime. It names the audio,
+it happens at the moment the manifest is read, and it is what the assembler's
 own comment says it is -- the alternative being a file that plays perfectly
 and is silent.
 
@@ -42100,32 +42102,55 @@ established. The loop now waits 150 seconds, inside `try_keepass`'s own
 three minutes, and lists the open windows every ten seconds while it
 waits, so a repeat says what was on the screen.
 
-### Next: the shell against the vault, written and not yet run whole
+### The shell against the vault: passes, after three faults
 
-**Handover, 2026-11-03, the session stopped here on the holder's word.**
-Committed, and not yet seen to pass:
+`make hull-keepass` now runs `try_autofill` as a third step (2026-11-03).
+**Measured: 22, then 15, then 35 passed**, and `keepassxc-cli search`
+finds the login the shell saved. The shell pairs on the stored pairing
+through Passwords > Connect, fills `alice` and her 16-character password
+into `http://127.0.0.1:9931/login`, puts a KeePassXC-generated password
+into a `new-password` field, and saves a login submitted at `:9934`.
 
-- `try_autofill` has vault sections under `HYDRA_VAULT=1`. They pair the
-  shell through Passwords > Connect on the stored pairing, then:
-  - fill `http://127.0.0.1:9931/login` from the Key, expecting `alice`
-    and a 16-character password;
-  - put a generated password into a new-password field at `/signup`;
-  - submit a new login at `:9934`, answer the save prompt yes, and look
-    the entry up through the bridge.
+The first run failed twice and hung once. One fault was the rig's, one the
+driver's, and one was hydra's -- a real defect the holder's vault would have
+met.
 
-  Without the variable they are skipped and say so; the default run
-  passes 22.
-- The image now carries QtWebEngine, its helper process, the Qt platform
-  plugins, libtorrent and a font. `make hull-keepass-image` built it.
-- `payload.sh` runs `try_autofill` after `try_keepass`'s two runs,
-  sharing their keyring item, with `QTWEBENGINE_DISABLE_SANDBOX=1`. It
-  then confirms the saved login with `keepassxc-cli search`.
+**Every ordinary login asked to be saved twice, and saved twice.** The page
+script watches a submit button's click and the form's submit, because a
+page may fire only one of them. A button in a form fires both, so the login
+was offered twice. The save prompt is modal, so the second offer arrived
+inside the first prompt's loop and opened a second prompt over it. In the
+rig nobody answered that one, and `try_autofill` hit its five-minute
+`timeout`. Fixed twice. `autofill_controller::offer_to_save` refuses an
+offer while its prompt is open, and the script drops the same login offered
+again within a second. The driver now keeps answering prompts to the end of
+the section and counts them. **Sabotage, both fixes removed: 2 prompts and
+2 entries for `bob` in the vault.** So answering yes twice wrote a
+duplicate entry, and the next fill on that site would have asked which one.
+Restored: 1 and 1.
 
-**What the next session does:** `make hull-keepass`, then read the
-"=== the shell against the vault ===" part. Expect the first run to need
-fixing: the engine in a chroot machine has never been run, and neither
-has the shell's fill path against a vault. Each failure there is a kink
-the holder's installed hydra would otherwise meet in their real vault,
-which is why this is tested in hull first (the holder's rule; see the
-section above). Until it passes, the holder should not pair their
-installed hydra for filling or saving.
+**KeePassXC 2.7 answers `generate-password` with a window, not a
+password.** Read in its 2.7.10 source (`BrowserAction::handleGeneratePassword`
+then `BrowserService::showPasswordGenerator`): it opens its own *Generate
+Password* window and replies only when somebody presses Apply Password. If
+the window is closed without that, the reply is the cancelled error. The
+bridge was right. The rig had nobody to press the button, and the shell
+gave no hint that the answer was in another program's window. The payload
+now runs a second xdotool loop that presses Ctrl+Return, the window's own
+shortcut, for as long as the shell runs. The menu entry now says on the
+status bar, *before* it asks, "Choose a password in KeePassXC's generator and
+press Apply Password there". A refusal, which the controller reports at once,
+replaces that line rather than being hidden by it. When the password arrives
+the line is replaced again. Measured: 20 characters in the field.
+
+**The key's icon was 0x0 because the image had no SVG plugins.** That was
+the rig: `qt6-svg-plugins` is in the image now.
+
+**And the driver raced the design.** A paired shell fills on load (sec 13.2:
+the script asks as soon as it sees a password field), so with a fast vault
+the key went from "has a login form" to "filled" before the check looked.
+The check accepts either state now. The first run passing it was luck.
+
+`make hull-keepass` also rebuilt only `try_keepass` and never
+`try_autofill`, which the payload runs. So a source change was tested on a
+stale binary, which passes or fails for the wrong reason. It builds both now.

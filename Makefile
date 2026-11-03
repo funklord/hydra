@@ -576,7 +576,7 @@ hull-keepass-image:
 	$(HULL) build -f test/hull/keepass/hull.conf hydra/keepass
 
 hull-keepass:
-	@$(MAKE) --no-print-directory -C test build-make/try_keepass
+	@$(MAKE) --no-print-directory -C test build-make/try_keepass build-make/try_autofill
 	@$(HULL) images | grep -q '^hydra/keepass ' || $(MAKE) --no-print-directory hull-keepass-image
 	$(HULL) run -f test/hull/keepass/hull.conf
 

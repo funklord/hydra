@@ -453,8 +453,15 @@ int main(int argc, char *argv[]) {
 
 		section("a login form is filled from the vault");
 		web_view_backend *login = open_url("http://127.0.0.1:9931/login");
+		// **Either state is the key coming alive**, because a paired shell
+		// fills on load (sec 13.2: the script asks as soon as it sees a
+		// password field). With a vault that answers fast the key can pass
+		// "has a login form" and reach "filled" before this looks -- the
+		// second hull run did, and the check failed on a fill that worked.
+		// Pressing it then is "fill again", which is still the path tested.
 		const bool asked = wait_for([&] {
-			return key->isEnabled() && key->toolTip().contains("login form");
+			return key->isEnabled() && (key->toolTip().contains("login form") ||
+			                            key->text().contains("✓"));
 		}, 15000);
 		check(asked, QString("the key comes alive for a vault site (%1)").arg(key->toolTip()));
 		if (paired && asked) {
@@ -489,22 +496,26 @@ int main(int argc, char *argv[]) {
 		section("a login typed into a page is offered to the vault, and saved");
 		web_view_backend *fresh = open_url("http://127.0.0.1:9934/login");
 		spin(2500);
-		// The prompt is modal, so it is answered from inside its own loop.
-		bool prompted = false;
+		// The prompt is modal, so it is answered from inside its own loop --
+		// and the answerer runs to the end of the section rather than stopping
+		// at the first prompt, so a second one is counted instead of hanging
+		// the run. The first hull run did hang there: the click and the submit
+		// watchers each offered the login, and the second prompt opened inside
+		// the first's loop with nobody left to answer it.
+		int prompts = 0;
 		QTimer answer;
 		answer.setInterval(200);
 		QObject::connect(&answer, &QTimer::timeout, [&] {
 			auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
 			if (!box || !box->text().contains("Save the password")) return;
-			prompted = true;
+			++prompts;
 			if (QAbstractButton *yes = box->button(QMessageBox::Yes)) yes->click();
 		});
 		answer.start();
 		run(fresh, "document.querySelector('input[name=user]').value='bob';"
 		           "document.querySelector('input[type=password]').value='typed-by-try-autofill';"
 		           "document.querySelector('button').click();");
-		const bool offered = wait_for([&] { return prompted; }, 15000);
-		answer.stop();
+		const bool offered = wait_for([&] { return prompts > 0; }, 15000);
 		check(offered, "submitting the form asks whether to save it");
 		bool listed = false;
 		QList<credential> found;
@@ -519,6 +530,9 @@ int main(int argc, char *argv[]) {
 			bridge->request_logins("http://127.0.0.1:9934", 99);
 			wait_for([&] { return listed; }, 15000);
 		}
+		answer.stop();
+		check(prompts == 1, QString("once, though the button's click and the "
+		                            "form's submit both report it (%1)").arg(prompts));
 		check(listed && found.size() == 1 && found.first().login == "bob",
 		      QString("and the vault then has it (%1 entr%2%3)")
 		          .arg(found.size()).arg(found.size() == 1 ? "y" : "ies")
