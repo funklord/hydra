@@ -42249,7 +42249,13 @@ generator) has been read by then and is answered later. `test_autofill`
 holds it with a stand-in server that records each read. Three requests made
 together arrive as three whole reads and are all answered, in about 20 ms.
 With the queue removed, the stand-in gets two reads, one unparseable, and
-answers none: the same failure, reproduced offline.
+answers none: the same failure, reproduced offline. **KeePassXC's own notices
+do not count as an answer.** It sends `database-locked` and
+`database-unlocked` whenever the vault changes, whether anything was asked.
+If one released the queue, the next request could land beside one still
+unread. The stand-in sends one before each reply. With the notices counted
+as answers, it receives three reads, one holding two requests, and two of
+the three go unanswered.
 
 **And a refusal nobody asked for no longer goes to the status bar.** A page
 asks for logins by itself on load, and the shell put every refusal on the

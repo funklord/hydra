@@ -299,8 +299,13 @@ void keepass_bridge::on_readable() {
 void keepass_bridge::handle(const QJsonObject &reply) {
 	const QString action = reply.value("action").toString();
 	// Something came back, so whatever was written has been read: the next
-	// frame may go. Released before handling, since handling may send.
-	if (m_awaiting) {
+	// frame may go. Released before handling, since handling may send. Not
+	// for KeePassXC's own notices, which it sends when the vault locks or
+	// unlocks whether anything was asked: one arriving while a request is
+	// still unread would let the next write land beside it.
+	const bool notice = action == QLatin1String("database-locked") ||
+	                    action == QLatin1String("database-unlocked");
+	if (m_awaiting && !notice) {
 		m_awaiting = false;
 		QTimer::singleShot(0, this, [this] { pump(); });
 	}

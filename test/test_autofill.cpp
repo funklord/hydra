@@ -811,6 +811,15 @@ int main(int argc, char **argv) {
 				// Answered the way KeePassXC answers: a key for the key
 				// exchange, "nothing stored" for a lookup. A read it could
 				// not parse gets nothing, as from KeePassXC.
+				// A notice first, as KeePassXC sends when the vault locks:
+				// it answers nothing, so it must not let the next request
+				// go out beside this one.
+				if (action == "get-logins") {
+					QJsonObject n;
+					n.insert("action", "database-locked");
+					s->write(QJsonDocument(n).toJson(QJsonDocument::Compact));
+					s->flush();
+				}
 				if (action == "change-public-keys") {
 					QJsonObject r;
 					r.insert("action", "change-public-keys");
