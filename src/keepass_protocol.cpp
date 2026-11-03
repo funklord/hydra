@@ -167,6 +167,16 @@ bool is_error(const QJsonObject &reply, QString *message) {
 	return false;
 }
 
+QString describe_login_failure(const QJsonObject &reply) {
+	if (error_code(reply) == database_not_opened)
+		return QStringLiteral("KeePassXC's database is locked. Unlock it, then "
+		                      "press the key again.");
+	QString err;
+	is_error(reply, &err);
+	return err.isEmpty() ? QStringLiteral("KeePassXC could not look this site up.")
+	                     : QStringLiteral("KeePassXC could not look this site up: ") + err;
+}
+
 int error_code(const QJsonObject &reply) {
 	// The wire carries it as a string, which is why this is not a plain
 	// toInt() on the value: a numeric read of a JSON string is 0, and 0 is the

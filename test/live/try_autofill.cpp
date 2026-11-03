@@ -29,6 +29,7 @@
 #include "node.h"
 
 #include <QAction>
+#include <QProcess>
 #include <QImage>
 #include <QPixmap>
 #include <QApplication>
@@ -568,6 +569,22 @@ int main(int argc, char *argv[]) {
 		      QString("and the vault then has it (%1 entr%2%3)")
 		          .arg(found.size()).arg(found.size() == 1 ? "y" : "ies")
 		          .arg(found.isEmpty() ? QString() : ", " + found.first().login));
+
+		section("a locked vault is said to be locked, on the key");
+		// Locked the way the holder's would be, from KeePassXC itself; its
+		// D-Bus method rather than a keystroke, which needs a window manager
+		// this machine has not got.
+		const int rc = QProcess::execute("dbus-send",
+		  { "--session", "--print-reply", "--dest=org.keepassxc.KeePassXC.MainWindow",
+		    "/keepassxc", "org.keepassxc.KeePassXC.MainWindow.lockAllDatabases" });
+		check(rc == 0, QString("KeePassXC was asked to lock (dbus-send %1)").arg(rc));
+		open_url("http://127.0.0.1:9931/login");
+		const bool said_locked = wait_for([&] {
+			return key->toolTip().contains("locked");
+		}, 15000);
+		check(said_locked, QString("the key says the vault is locked rather than "
+		                           "offering a fill that cannot come (%1, %2)")
+		                       .arg(key->text(), key->toolTip()));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

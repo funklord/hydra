@@ -28,6 +28,13 @@ autofill_controller::autofill_controller(keepass_bridge *bridge, policy_engine *
   : QObject(parent), m_bridge(bridge), m_policy(policy) {
 	if (m_bridge) {
 		connect(m_bridge, &keepass_bridge::logins, this, &autofill_controller::on_logins);
+		connect(m_bridge, &keepass_bridge::logins_failed, this,
+		        [this](int tag, const QString &reason) {
+			if (tag != m_pending || m_pending == 0)
+				return;
+			m_pending = 0;
+			emit refused(reason);
+		});
 		connect(m_bridge, &keepass_bridge::login_saved, this,
 		        [this](int tag, bool ok, const QString &message) {
 			if (tag != m_save_tag || m_save_tag == 0)

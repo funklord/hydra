@@ -42129,7 +42129,7 @@ waits, so a repeat says what was on the screen.
 ### The shell against the vault: passes, after three faults
 
 `make hull-keepass` now runs `try_autofill` as a third step (2026-11-03).
-**Measured: 22, then 15, then 35 passed** (37 since the next fix), and `keepassxc-cli search`
+**Measured: 22, then 15, then 35 passed** (39 with the fixes below), and `keepassxc-cli search`
 finds the login the shell saved. The shell pairs on the stored pairing
 through Passwords > Connect, fills `alice` and her 16-character password
 into `http://127.0.0.1:9931/login`, puts a KeePassXC-generated password
@@ -42189,6 +42189,22 @@ cleared on navigation. A changed password still asks, because it is the
 update case. **Measured: 37 passed. With the check removed, "submitting
 the filled login does not ask" and "submitting it again does not ask
 again" both fail, one prompt each.**
+
+**A locked vault was invisible on the key.** Measured first, in a scratch
+copy of the rig with the database locked through KeePassXC's own D-Bus
+method (`lockAllDatabases`; a Ctrl+L keystroke needs a window manager the
+machine has not got). KeePassXC 2.7.10 refuses at once, "Database not opened"
+with code 1, rather than holding the request while somebody unlocks. The
+bridge put that on the status bar and gave the page's controller nothing, so
+the key went on saying "This page has a login form. Click to fill it" for a
+fill that could not come. `keepass_bridge::logins_failed` now carries any
+refusal of `get-logins` other than "nothing stored" to the controller, which
+refuses with `keepass_protocol::describe_login_failure`'s words: for code 1,
+"KeePassXC's database is locked. Unlock it, then press the key again".
+`error()` fires first, so those words are what the status bar is left
+showing. **Measured: 39 passed, with the last section locking the vault and
+reading the key. With the signal removed, that check fails on the old
+tooltip.** `test_autofill` holds the wording (95).
 
 `make hull-keepass` also rebuilt only `try_keepass` and never
 `try_autofill`, which the payload runs. So a source change was tested on a

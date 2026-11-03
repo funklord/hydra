@@ -331,6 +331,15 @@ void keepass_bridge::handle(const QJsonObject &reply) {
 			emit logins(tag, {});
 			return;
 		}
+		// Any other refusal of a login request is said to whoever asked, so
+		// the page's key can say why instead of waiting for an answer that
+		// is not coming. error() goes first, so the words a person can act
+		// on are what the status bar is left showing.
+		if (action == "get-logins") {
+			emit error(err);
+			emit logins_failed(tag, keepass_protocol::describe_login_failure(inner));
+			return;
+		}
 		if (action == "test-associate") {
 			// The stored pairing is deliberately *not* dropped here. A refused
 			// test-associate means "this KeePassXC does not accept it now",

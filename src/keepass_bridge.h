@@ -87,6 +87,10 @@ signals:
 	void ready();                                   // handshake done
 	void associated_changed(bool ok, const QString &message);
 	void logins(int request_tag, const QList<credential> &entries);
+	// A login request KeePassXC refused (a locked vault, most often), with
+	// the reason in words for the person. "Nothing stored" is not this; it
+	// arrives as an empty `logins`.
+	void logins_failed(int request_tag, const QString &reason);
 	void login_saved(int request_tag, bool ok, const QString &message);
 	void password_generated(int request_tag, const QString &password);
 	void error(const QString &message);

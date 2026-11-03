@@ -159,6 +159,16 @@ int error_code(const QJsonObject &reply);
 // reachable without a human.
 constexpr int no_logins_found = 15;
 
+// **A locked vault answers at once, and says so in a code.** Measured against
+// KeePassXC 2.7.10 in the hull rig, with the database locked over D-Bus: a
+// request is refused straight away with "Database not opened" and code 1,
+// rather than held while somebody unlocks it.
+constexpr int database_not_opened = 1;
+
+// What to tell a person when a request for this page's logins failed, in
+// words that say what to do. `reply` is the decrypted error reply.
+QString describe_login_failure(const QJsonObject &reply);
+
 // Which stored entry a save should UPDATE rather than add beside, by matching
 // the login being saved against what the vault already returned for this site.
 // Empty means add a new entry, which is also what an unrecognised login means.

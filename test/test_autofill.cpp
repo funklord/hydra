@@ -662,6 +662,26 @@ int main(int argc, char **argv) {
 		      "and an action nothing asked for matches nothing");
 	}
 
+	section("a refused login request says what to do about it");
+	{
+		// The reply KeePassXC 2.7.10 gives with the database locked, as the
+		// hull rig received it: refused at once, code 1.
+		QJsonObject locked;
+		locked.insert("action", "get-logins");
+		locked.insert("error", "Database not opened");
+		locked.insert("errorCode", "1");
+		const QString said = keepass_protocol::describe_login_failure(locked);
+		check(said.contains("locked") && said.contains("Unlock"),
+		      QString("a locked vault is called locked, with the way out (%1)").arg(said));
+		QJsonObject other;
+		other.insert("error", "Something else");
+		other.insert("errorCode", "9");
+		const QString other_said = keepass_protocol::describe_login_failure(other);
+		check(other_said.contains("Something else") && !other_said.contains("locked"),
+		      QString("and any other refusal keeps KeePassXC's own words (%1)")
+		          .arg(other_said));
+	}
+
 	section("a save updates the entry it came from, rather than adding beside it");
 	{
 		// `set_login_request` has taken a uuid since it was written, documented
