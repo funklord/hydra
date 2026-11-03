@@ -470,6 +470,32 @@ static void measure(QWidget *dlg, const QString &name) {
 		}
 		pages->setCurrentRow(0);
 	}
+	// **And the way a phone actually changes section: the dropdown.** The
+	// walk above sets the hidden list directly, so nothing had ever pressed
+	// the combo that replaces it at this width -- and on the emulator a tap
+	// on it opened nothing, while a combo inside the page opened (2026-11-03).
+	if (auto *pick = dlg->findChild<QComboBox *>("categories_narrow");
+	    pick && pick->isVisible() && pick->count() > 2) {
+		auto *pages = dlg->findChild<QListWidget *>("categories");
+		QTest::mouseClick(pick, Qt::LeftButton, {}, pick->rect().center());
+		QApplication::processEvents();
+		shell::spin(300);
+		const bool open = pick->view() && pick->view()->isVisible();
+		verdict(open, QString("%1: a click on the section dropdown opens its list")
+		                  .arg(name));
+		if (open) {
+			const QModelIndex third = pick->model()->index(2, 0);
+			const QRect r = pick->view()->visualRect(third);
+			QTest::mouseClick(pick->view()->viewport(), Qt::LeftButton, {}, r.center());
+			QApplication::processEvents();
+			shell::spin(300);
+			verdict(pages && pages->currentRow() == 2,
+			        QString("%1: and a click on an entry goes to that section (row %2)")
+			            .arg(name).arg(pages ? pages->currentRow() : -1));
+			if (pages)
+				pages->setCurrentRow(0);
+		}
+	}
 
 	// **Spare height has to go somewhere, and a paragraph is the wrong
 	// somewhere.** A dialog handed the whole screen has more height than its

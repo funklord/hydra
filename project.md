@@ -41913,3 +41913,26 @@ would accept: never the row itself, anything inside it, or the folder
 it is already in. Two folders with the same path are numbered so the
 second can be picked. `test_model` covers the move, its refusals and
 the targets (410).
+
+### On a phone, a dropdown outside a scroll area never opened
+
+Found while checking that the lists' new scroller left taps working.
+The Settings section picker, the dropdown that replaces the category list
+at phone width, opened nothing on the emulator. That held for a quick tap,
+a 600 ms press, a second tap and a tap on its arrow. The tree's Sort
+dropdown behaved the same. A combo inside the Settings page opened in the
+same session, so the taps were landing. The build before any of today's
+touch changes failed identically, so the fault is older than them. On a
+phone, Settings could not change section. `try_phone` had walked the
+sections through the hidden list, never through the dropdown, and now
+clicks the dropdown too. On the desktop the list opens; picking an entry
+by a scripted click is known to be unreliable there.
+
+The combos that did open sit in a scroll area whose `QScroller`
+re-delivers the press itself. The working explanation: a popup raised
+in the middle of a touch is cancelled by that touch on Android. It is
+not established which layer does it. So on Android the application
+filter in `touch_scroll.h` takes a combo's press and opens the popup on
+the release, after the touch has ended. The same filter gives every item
+view the list scroller. A combo's own popup list is excluded, because
+giving it one stopped it opening at all.

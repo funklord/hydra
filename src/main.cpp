@@ -28,6 +28,7 @@
 #endif
 
 #include "main_window.h"
+#include "touch_scroll.h"
 #include "settings_dialog.h"   // settings_store
 #include "theme.h"
 #ifdef Q_OS_ANDROID
@@ -431,6 +432,8 @@ int main(int argc, char *argv[]) {
 	// it -- which is most of what the back and forward arrows look like, since
 	// they are unavailable more often than not.
 	theme::install_icon_style();
+	// Before any widget, so every list is polished with it in place.
+	install_touch_scroll_for_lists();
 
 	if (const QString icons = theme::apply_icon_theme(
 	        theme::resolve(settings_store::appearance()));
