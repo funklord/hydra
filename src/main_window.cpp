@@ -1253,8 +1253,10 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		// re-opening the last picker, or caching the entries -- and both mean
 		// holding credentials for longer than the fill that asked for them.
 		// Re-asking costs one round trip to a local socket and keeps sec 13.3.
-		if (autofill_controller *af = current_autofill())
+		if (autofill_controller *af = current_autofill()) {
+			m_autofill_asked = af;
 			af->request_credentials(af->page_origin());
+		}
 	});
 
 	// **On the toolbar rather than in a menu, and that is the whole design.**
@@ -2229,6 +2231,7 @@ QMenuBar *main_window::build_menu_bar() {
 		if (autofill_controller *af = current_autofill()) {
 			m_status->showMessage("Choose a password in KeePassXC's generator "
 			                      "and press Apply Password there.", 15000);
+			m_autofill_asked = af;
 			af->request_generated_password(af->page_origin());
 		}
 	});
@@ -3414,7 +3417,14 @@ void main_window::wire_autofill(autofill_controller *c) {
 			m_key_action->setText("Key ✕");
 			m_key_action->setToolTip(why);
 		}
-		m_status->showMessage(why, 6000);
+		// **On the status bar only when somebody asked.** A page asks by
+		// itself on load, so this used to flash on every login page -- "KeePassXC
+		// is not connected" for everybody who does not use it, and on Android,
+		// where there is nothing to connect to. The key carries it either way.
+		if (c == m_autofill_asked) {
+			m_autofill_asked = nullptr;
+			m_status->showMessage(why, 6000);
+		}
 	});
 	connect(c, &autofill_controller::save_offered, this,
 	         [this, c](const QString &login, const QString &host) {
@@ -3430,6 +3440,8 @@ void main_window::wire_autofill(autofill_controller *c) {
 	// itself goes to the page on the controller's own channel, as above.
 	connect(c, &autofill_controller::generated_password, this,
 	         [this, c](const QString &) {
+		if (c == m_autofill_asked)
+			m_autofill_asked = nullptr;
 		if (c == current_autofill())
 			m_status->showMessage("KeePassXC's password is in the new-password "
 			                      "field.", 6000);
@@ -3440,6 +3452,8 @@ void main_window::wire_autofill(autofill_controller *c) {
 	});
 	connect(c, &autofill_controller::credentials_ready, this,
 	         [this, c](const QString &) {
+		if (c == m_autofill_asked)
+			m_autofill_asked = nullptr;
 		if (c != current_autofill() || !m_key_action)
 			return;
 		m_key_action->setEnabled(true);

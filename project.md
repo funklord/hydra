@@ -42210,8 +42210,8 @@ fill that could not come. `keepass_bridge::logins_failed` now carries any
 refusal of `get-logins` other than "nothing stored" to the controller, which
 refuses with `keepass_protocol::describe_login_failure`'s words: for code 1,
 "KeePassXC's database is locked. Unlock it, then press the key again".
-`error()` fires first, so those words are what the status bar is left
-showing. **Measured: 39 passed, with the last section locking the vault and
+(The status bar half of this was later narrowed to refusals somebody asked
+for; see below.) **Measured: 39 passed, with the last section locking the vault and
 reading the key. With the signal removed, that check fails on the old
 tooltip.** `test_autofill` holds the wording (95).
 
@@ -42245,6 +42245,18 @@ holds it with a stand-in server that records each read. Three requests made
 together arrive as three whole reads and are all answered, in about 20 ms.
 With the queue removed, the stand-in gets two reads, one unparseable, and
 answers none: the same failure, reproduced offline.
+
+**And a refusal nobody asked for no longer goes to the status bar.** A page
+asks for logins by itself on load, and the shell put every refusal on the
+status bar. So every login page flashed "Autofill is limited to HTTPS",
+"KeePassXC is not connected" for everybody who does not use KeePassXC, and
+on Android, where there is nothing to connect to, the same. The key carries
+the reason either way. The status bar now says it only after a key press or
+Generate Password (`main_window::m_autofill_asked`). The bridge no longer
+also sends a `get-logins` refusal to `error()`, which would have flashed a
+locked vault's code on every load. `try_autofill` checks both halves: the
+status bar is left alone on load, and is used after a press. The first check
+failed before the change.
 
 `make hull-keepass` also rebuilt only `try_keepass` and never
 `try_autofill`, which the payload runs. So a source change was tested on a

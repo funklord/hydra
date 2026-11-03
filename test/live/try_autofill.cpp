@@ -29,6 +29,7 @@
 #include "node.h"
 
 #include <QAction>
+#include <QStatusBar>
 #include <QProcess>
 #include <QImage>
 #include <QPixmap>
@@ -307,6 +308,15 @@ int main(int argc, char *argv[]) {
 		check(shown && key->text().contains("✕"),
 		      QString("and it reads as a refusal rather than a success (%1)")
 		          .arg(key->text()));
+		// **Said on the key, not on the status bar.** The page asks by itself
+		// on load, so a refusal there answers a question nobody put; on the
+		// status bar it flashed on every login page -- "KeePassXC is not
+		// connected" for everybody who does not use it, and on Android, where
+		// there is nothing to connect to.
+		auto *bar = w.findChild<QStatusBar *>();
+		check(bar && !bar->currentMessage().contains("HTTPS"),
+		      QString("and the status bar is left alone, since nobody asked (%1)")
+		          .arg(bar ? bar->currentMessage() : QString("(no status bar)")));
 	}
 
 	section("clicking it asks again, and gets the same honest answer");
@@ -320,6 +330,10 @@ int main(int argc, char *argv[]) {
 		const bool answered =
 		  wait_for([&] { return key->toolTip().contains("HTTPS"); });
 		check(answered, "the click produces a fresh answer rather than nothing");
+		auto *bar = w.findChild<QStatusBar *>();
+		check(bar && bar->currentMessage().contains("HTTPS"),
+		      QString("and a refusal somebody asked for is said on the status bar "
+		              "too (%1)").arg(bar ? bar->currentMessage() : QString()));
 	}
 
 	section("navigating away puts it down");

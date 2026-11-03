@@ -1056,6 +1056,11 @@ public:
 	// default to unchecked without condemning anyone to answering forever.
 	QHash<QString, bool> m_session_permissions;
 
+	// The page's autofill controller a person just asked something of, by
+	// the key or Generate Password; its next refusal is said on the status
+	// bar, and the page's own asking on load is not.
+	QPointer<autofill_controller> m_autofill_asked;
+
 	// **Which refusals have already been said out loud**, keyed the same way as
 	// the answers above and for the same reason: a page may ask in a loop, and a
 	// browser that narrates every attempt is one whose status bar nobody reads.
