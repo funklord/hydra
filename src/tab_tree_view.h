@@ -40,6 +40,9 @@ public:
 	// which is what a hand reaches for. A shell wanting it on a toolbar would
 	// use the same entry.
 	void edit_properties(node *n);
+	// Ask which folder to move a node into, by path, and move it. Public for
+	// the same reason as the others: a test presses what a person presses.
+	void choose_folder_for(node *n);
 	// Ask before removing a node, and remove it if the answer is yes. Public
 	// because both ways of asking for a deletion -- this view's context menu
 	// and the window's Edit menu, which also owns the Delete key -- must put

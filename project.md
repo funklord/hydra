@@ -41899,3 +41899,17 @@ entry. That was right for a short tree, but it made a long tree
 unscrollable and every scroll attempt a move. The menu has Move Up,
 Move Down, Move Out and Group, but nothing puts a tab into an existing
 folder. That is the gap the change opens on a phone.
+
+### Move into Folder, for the move a phone lost
+
+The tree's context menu now has **Move into Folder...**. It lists every
+folder the row could go into by its path, plus the top level when the
+row is nested, and puts the row at the end of the chosen folder.
+`tab_tree_model::move_into` builds the payload a drag carries and hands
+it to `dropMimeData`, so a menu move keeps every rule a drop keeps:
+locks, the ring check, renumbering, and leaving a mirror. It cannot
+drift from a dragged one. `move_targets` offers only what the move
+would accept: never the row itself, anything inside it, or the folder
+it is already in. Two folders with the same path are numbered so the
+second can be picked. `test_model` covers the move, its refusals and
+the targets (410).

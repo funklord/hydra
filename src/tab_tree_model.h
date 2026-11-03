@@ -219,6 +219,18 @@ public:
 	// reparent) and a node already at the top level. Returns success.
 	bool move_out(node *n);
 
+	// Put a node at the end of a folder's children -- the menu's way of doing
+	// what a drop onto that folder does, for a phone, where a finger drag in
+	// the tree scrolls instead. Goes through `dropMimeData`, so it keeps the
+	// drop's rules: a locked node does not move, a folder cannot go inside
+	// itself, and a row taken out of a mirror stops belonging to it. A null
+	// `folder` means the top level. Returns success.
+	bool move_into(node *n, node *folder);
+
+	// The folders `move_into` would accept for `n`, in tree order: every
+	// folder that is not `n`, not inside `n`, and not where `n` already is.
+	QList<node *> move_targets(const node *n) const;
+
 	// Pin or unpin a node (architecture doc sec 5.5). Returns whether anything
 	// changed, for the same reason `set_page_title` does: the caller saves the
 	// tree on a change and should not write the file for a no-op.

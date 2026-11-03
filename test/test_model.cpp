@@ -667,6 +667,54 @@ int main(int argc, char **argv) {
 		holds(m, "moving out is refused at the top level and f");
 	}
 
+	section("moving into a folder puts a row at the end of that folder");
+	{
+		tab_tree_model m;
+		node *work = m.add_folder(m.root(), "work");
+		node *kept = m.add_tab(work, "kept", "http://k/");
+		node *loose = m.add_tab(m.root(), "loose", "http://l/");
+		check(m.move_into(loose, work), "a top-level tab moves into a folder");
+		check(loose->parent == work && work->children.last() == loose &&
+		          kept->parent == work,
+		      "at the end, beside what was already there");
+		check(m.move_into(loose, nullptr) && loose->parent == m.root(),
+		      "and a null folder is the top level");
+		holds(m, "moving into a folder puts a row at the end");
+	}
+
+	section("moving into a folder keeps the drop's refusals");
+	{
+		tab_tree_model m;
+		node *outer = m.add_folder(m.root(), "outer");
+		node *inner = m.add_folder(outer, "inner");
+		node *tab = m.add_tab(m.root(), "tab", "http://t/");
+		check(!m.move_into(outer, inner), "a folder does not go inside itself");
+		check(inner->parent == outer && outer->parent == m.root(),
+		      "and nothing moved");
+		check(!m.move_into(tab, tab), "nor a row into itself");
+		tab->locked = true;
+		check(!m.move_into(tab, outer) && tab->parent == m.root(),
+		      "a locked row stays where it is");
+		check(!m.move_into(inner, outer), "nor is it moved to where it already is");
+		holds(m, "moving into a folder keeps the drop's refusals");
+	}
+
+	section("the folders offered are the ones a move would accept");
+	{
+		tab_tree_model m;
+		node *a = m.add_folder(m.root(), "a");
+		node *a1 = m.add_folder(a, "a1");
+		node *b = m.add_folder(m.root(), "b");
+		node *t = m.add_tab(a, "t", "http://t/");
+		const QList<node *> for_t = m.move_targets(t);
+		check(!for_t.contains(a) && for_t.contains(a1) && for_t.contains(b),
+		      "a tab is offered every folder but the one it is in");
+		const QList<node *> for_a = m.move_targets(a);
+		check(!for_a.contains(a) && !for_a.contains(a1) && for_a.contains(b),
+		      "a folder is not offered itself or anything inside it");
+		check(!m.move_targets(t).contains(t), "and a tab is never a target");
+	}
+
 	section("recently closed remembers each tab newest-first and reopens any");
 	{
 		tab_tree_model m;

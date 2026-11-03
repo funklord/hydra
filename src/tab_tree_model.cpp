@@ -765,6 +765,42 @@ bool tab_tree_model::move_out(node *n) {
 	return true;
 }
 
+bool tab_tree_model::move_into(node *n, node *folder) {
+	if (!folder)
+		folder = m_root;
+	if (!n || n->locked || n == folder || n->parent == folder)
+		return false;
+	if (folder != m_root && !folder->is_folder())
+		return false;
+	// The drag's own payload and the drag's own drop, so a menu move cannot
+	// drift from a dragged one: one code path for renumbering, the mirror
+	// mark and the ring check.
+	QMimeData *payload = mimeData({ index_for_node(n) });
+	if (!payload)
+		return false;
+	const QModelIndex at = folder == m_root ? QModelIndex() : index_for_node(folder);
+	const bool moved = dropMimeData(payload, Qt::MoveAction, -1, 0, at);
+	delete payload;
+	return moved;
+}
+
+QList<node *> tab_tree_model::move_targets(const node *n) const {
+	QList<node *> out;
+	if (!n)
+		return out;
+	std::function<void(node *)> walk = [&](node *p) {
+		for (node *k : p->children) {
+			if (k == n)
+				continue;   // nor anything inside it
+			if (k->is_folder() && k != n->parent)
+				out << k;
+			walk(k);
+		}
+	};
+	walk(m_root);
+	return out;
+}
+
 node *tab_tree_model::add_tab(node *parent, const QString &title,
                                const QString &url) {
 	if (!parent)

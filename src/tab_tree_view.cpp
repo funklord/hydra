@@ -19,6 +19,7 @@
 #include <QLabel>
 #include <QLocale>
 #include <QListWidget>
+#include <QInputDialog>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
@@ -552,6 +553,16 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 	QAction *out_a = nullptr;
 	if (n && n->parent && n->parent->parent && !n->locked)
 		out_a = menu.addAction("Move &Out of Folder");
+	// **Into a folder, from the menu.** On a phone a finger drag scrolls the
+	// tree, so this is how a tab gets into a folder that already exists;
+	// the other moves only go up, down or out. On a desktop it is the same
+	// move a drop makes, for anyone who would rather pick than drag.
+	QAction *into_a = nullptr;
+	if (n && !n->locked && m) {
+		const bool top_level = n->parent && !n->parent->parent;
+		if (!m->move_targets(n).isEmpty() || !top_level)
+			into_a = menu.addAction("Move &into Folder…");
+	}
 
 	QAction *del_a = nullptr, *props_a = nullptr;
 	if (n) {
@@ -589,6 +600,7 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 	else if (chosen == up_a)        m->move_sibling(n, -1);
 	else if (chosen == down_a)      m->move_sibling(n, 1);
 	else if (chosen == out_a)       m->move_out(n);
+	else if (chosen == into_a)      choose_folder_for(n);
 	else if (chosen == lock_a)      emit lock_requested(n);
 	else if (chosen == folder_a) {
 		if (node *f = add_folder_here(n))
@@ -751,6 +763,51 @@ void tab_tree_view::keyPressEvent(QKeyEvent *event) {
 // What a node *is*, as opposed to where it sits. The id is shown and not
 // editable: it keys `state/<id>.blob` and the outline file, so retyping it
 // would orphan a tab's history with no warning.
+// A folder named by its path, so two folders called "Work" in different
+// places can be told apart in the list.
+static QString folder_path(const node *f) {
+	QStringList parts;
+	for (const node *p = f; p && p->parent; p = p->parent)
+		parts.prepend(p->title.isEmpty() ? QStringLiteral("(untitled)") : p->title);
+	return parts.join(QStringLiteral(" / "));
+}
+
+void tab_tree_view::choose_folder_for(node *n) {
+	tab_tree_model *m = source_model();
+	if (!m || !n)
+		return;
+	const QList<node *> targets = m->move_targets(n);
+	QStringList labels;
+	QList<node *> picks;
+	// The top level first, when the row is not already there. Move Out goes
+	// one level; this is the way all the way out.
+	if (n->parent && n->parent->parent) {
+		labels << QStringLiteral("(Top level)");
+		picks << nullptr;
+	}
+	for (node *f : targets) {
+		// Two folders with one path would be one label, and the second could
+		// never be picked; number the repeats.
+		QString label = folder_path(f);
+		for (int k = 2; labels.contains(label); ++k)
+			label = QString("%1 (%2)").arg(folder_path(f)).arg(k);
+		labels << label;
+		picks << f;
+	}
+	if (labels.isEmpty())
+		return;
+	bool ok = false;
+	const QString title = n->title.isEmpty() ? n->url : n->title;
+	const QString pick = QInputDialog::getItem(
+	  this, QStringLiteral("Move into Folder"),
+	  QString("Move \"%1\" into:").arg(title), labels, 0, false, &ok);
+	if (!ok)
+		return;
+	const int i = labels.indexOf(pick);
+	if (i >= 0)
+		m->move_into(n, picks.at(i));
+}
+
 void tab_tree_view::edit_properties(node *n) {
 	tab_tree_model *m = source_model();
 	if (!n || !m)
