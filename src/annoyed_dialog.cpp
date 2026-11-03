@@ -1,4 +1,5 @@
 #include "annoyed_dialog.h"
+#include "empty_state.h"
 
 #include "flow_layout.h"
 
@@ -134,7 +135,12 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 		// the network: nothing at all.
 		const bool same_host = !report.patches.isEmpty() ||
 		                       !report.detected.isEmpty();
-		m_suspects->addItem(!same_host
+		//
+		// **In the viewport, not as a row**, because a row does not wrap: on
+		// a phone the sentence ran off the edge after "so this is li", with a
+		// scrollbar under it, the same fault Readings had (2026-11-03).
+		auto *note = new empty_state(m_suspects, this);
+		note->set_text(!same_host
 		  ? QStringLiteral("Nothing on the network looked ad-shaped — so this "
 		                    "is likely cosmetic, a consent banner, or the site "
 		                    "itself.")
@@ -142,7 +148,6 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 		                    "served from the site's own host, such as a video "
 		                    "pre-roll, looks like this — what the page showed "
 		                    "and the page patches are what reach it."));
-		m_suspects->setEnabled(false);
 	}
 	box->addWidget(m_suspects, 1);
 

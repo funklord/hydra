@@ -41950,3 +41950,13 @@ the link keeps its clicks. `try_settings_ui` checks that a click on the
 title flips the box and a second puts it back. With the filter removed
 it failed (94 of 95). The spin box arrows are still small; the number
 can be typed.
+
+### The Annoyed report cut its own explanation off on a phone
+
+When nothing on the network looked ad-shaped, the report window put
+its one sentence of explanation into the suspects list as a row. A row
+does not wrap, so on the emulator it ended at "so this is li" with a
+horizontal scrollbar under it, the same fault Readings had. It is now
+an `empty_state` in the list's viewport and wraps. `test_annoyance`
+reads it from there (82). A search for other sentences added as rows,
+or placeholder items disabled to look like text, found none.

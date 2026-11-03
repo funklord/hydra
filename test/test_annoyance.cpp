@@ -327,10 +327,12 @@ int main(int argc, char **argv) {
 		check(evo && evo->isEnabled(),
 		       "and Propose Filter Rules is offered on it alone");
 		auto *sus = with.findChild<QListWidget *>("suspects");
-		check(sus && sus->count() == 1 &&
-		          sus->item(0)->text().contains("own host"),
-		       QString("and the empty list says what that likely means (%1)")
-		           .arg(sus && sus->count() ? sus->item(0)->text() : "none"));
+		auto *note = sus ? sus->viewport()->findChild<QLabel *>() : nullptr;
+		check(sus && sus->count() == 0 && note &&
+		          note->text().contains("own host") && note->wordWrap(),
+		       QString("and the empty list says what that likely means, "
+		               "wrapped in the list rather than as a row (%1)")
+		           .arg(note ? note->text().left(40) : "none"));
 
 		auto *seen = with.findChild<QListWidget *>("detected");
 		check(seen && seen->count() == 1 &&
