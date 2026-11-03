@@ -4274,7 +4274,14 @@ bool main_window::eventFilter(QObject *watched, QEvent *event) {
 		// Only presses that land on this window: a press in a dialog or a menu
 		// over the top is that widget's business, not the drawer's.
 		const bool ours = hit && (hit == this || isAncestorOf(hit));
-		if (ours && !in_drawer) {
+		// **Not the status bar**, which the drawer does not cover and which
+		// holds controls a person reaches for while it is open: the Undo
+		// offered after deleting a tab from the drawer was the first, and on
+		// the emulator the tap on it closed the drawer instead and the offer
+		// ran out (2026-11-03).
+		const bool in_status = hit && m_status &&
+		                       (hit == m_status || m_status->isAncestorOf(hit));
+		if (ours && !in_drawer && !in_status) {
 			set_drawer_open(false);
 			return true;
 		}

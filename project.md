@@ -42002,3 +42002,22 @@ default with no modal, Undo through the menu and the status bar, and the
 X: shown on the hovered row only, a click deletes, Undo restores. It
 also saves a picture of the hovered row. Not yet checked on the emulator:
 the X on a phone's current row.
+
+**On the phone, measured on the emulator the same day.** The X on the
+current row deletes it, and "Deleted ..." with Undo appears on the status
+bar. Two faults turned up on the way:
+
+- The tap on Undo closed the drawer instead. A press outside an open
+  drawer closes it and is consumed, and the status bar counted as
+  outside. The status bar is not under the drawer and holds controls
+  meant for that moment, so it is exempt now. A temporary log showed
+  `undo_delete` was never called before the fix, and returned 1 after it.
+- After a delete the next row became current, with its X exactly where
+  the finger had been. That row was a folder, so a second tap would have
+  taken the folder and everything in it. A delete from the X now leaves
+  no row current.
+
+The emulator's accessibility dump did not list the restored row, but
+the screenshot shows it back in the tree. Seen on the emulator and not
+yet fixed: the address bar read "htthttp://..." after the open tab was
+deleted, and once opened its full-screen editor.

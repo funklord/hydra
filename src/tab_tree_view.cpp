@@ -814,7 +814,14 @@ void tab_tree_view::mousePressEvent(QMouseEvent *event) {
 		if (delete_button_rect(at).contains(p)) {
 			if (node *n = node_at_index(at)) {
 				m_hover = QPersistentModelIndex();
-				confirm_and_remove(n);
+				// **No X under the finger afterwards.** On a phone the X sits
+				// on the current row, and after a delete the next row became
+				// current with its X exactly where the finger was -- on the
+				// emulator a folder, so a second tap would have taken a folder
+				// and everything in it (2026-11-03). Nothing is current until
+				// somebody picks a row.
+				if (confirm_and_remove(n) && selectionModel())
+					selectionModel()->clearCurrentIndex();
 			}
 			event->accept();
 			return;
