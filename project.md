@@ -42129,7 +42129,7 @@ waits, so a repeat says what was on the screen.
 ### The shell against the vault: passes, after three faults
 
 `make hull-keepass` now runs `try_autofill` as a third step (2026-11-03).
-**Measured: 22, then 15, then 35 passed**, and `keepassxc-cli search`
+**Measured: 22, then 15, then 35 passed** (37 since the next fix), and `keepassxc-cli search`
 finds the login the shell saved. The shell pairs on the stored pairing
 through Passwords > Connect, fills `alice` and her 16-character password
 into `http://127.0.0.1:9931/login`, puts a KeePassXC-generated password
@@ -42174,6 +42174,21 @@ the rig: `qt6-svg-plugins` is in the image now.
 the script asks as soon as it sees a password field), so with a fast vault
 the key went from "has a login form" to "filled" before the check looked.
 The check accepts either state now. The first run passing it was luck.
+
+**And a filled login was offered for saving every time it was used.** The
+vault's answer was kept with its passwords stripped, which the
+uuid-for-update work needed, so nothing could recognise a submit of what
+had just been filled. Every sign-in through the key ended in "Save the
+password for alice?" about a password already in the vault. The controller
+now keeps a digest of each login and password pair the vault returned for
+the page: an HMAC-SHA256 under a key that is random per process, so no
+password is held and a digest is useless outside the run. An offer matching
+one is dropped. A login KeePassXC confirms it stored is added, so
+submitting it twice asks once. It has the same lifetime as `m_known` and is
+cleared on navigation. A changed password still asks, because it is the
+update case. **Measured: 37 passed. With the check removed, "submitting
+the filled login does not ask" and "submitting it again does not ask
+again" both fail, one prompt each.**
 
 `make hull-keepass` also rebuilt only `try_keepass` and never
 `try_autofill`, which the payload runs. So a source change was tested on a

@@ -476,6 +476,27 @@ int main(int argc, char *argv[]) {
 			      QString("and its password, %1 characters, not shown here")
 			          .arg(field(login, "input[type=password]").size()));
 			check(key->text().contains("✓"), QString("and the key says so (%1)").arg(key->text()));
+
+			// **Signing in with what was filled is not a new login.** It used
+			// to be offered for saving, on every sign-in, because what the
+			// vault returned was kept without its passwords and so could not
+			// be recognised. Any prompt is dismissed and counted.
+			int asked_again = 0;
+			QTimer refuse;
+			refuse.setInterval(200);
+			QObject::connect(&refuse, &QTimer::timeout, [&] {
+				auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+				if (!box || !box->text().contains("Save the password")) return;
+				++asked_again;
+				if (QAbstractButton *no = box->button(QMessageBox::No)) no->click();
+			});
+			refuse.start();
+			run(login, "document.querySelector('button').click();");
+			spin(4000);
+			refuse.stop();
+			check(asked_again == 0,
+			      QString("and submitting the filled login does not ask to save "
+			              "what the vault already has (%1 prompts)").arg(asked_again));
 		}
 
 		section("a new-password field gets a generated password");
@@ -530,9 +551,19 @@ int main(int argc, char *argv[]) {
 			bridge->request_logins("http://127.0.0.1:9934", 99);
 			wait_for([&] { return listed; }, 15000);
 		}
-		answer.stop();
 		check(prompts == 1, QString("once, though the button's click and the "
 		                            "form's submit both report it (%1)").arg(prompts));
+		// And the same login submitted again, once KeePassXC has said it is
+		// stored, is not asked about a second time.
+		const int saved_prompts = prompts;
+		if (offered) {
+			run(fresh, "document.querySelector('button').click();");
+			spin(4000);
+		}
+		answer.stop();
+		check(offered && prompts == saved_prompts,
+		      QString("and submitting it again does not ask again (%1 more)")
+		          .arg(prompts - saved_prompts));
 		check(listed && found.size() == 1 && found.first().login == "bob",
 		      QString("and the vault then has it (%1 entr%2%3)")
 		          .arg(found.size()).arg(found.size() == 1 ? "y" : "ies")

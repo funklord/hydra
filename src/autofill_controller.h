@@ -4,6 +4,7 @@
 
 #include <QHash>
 #include <QObject>
+#include <QSet>
 #include <QString>
 
 class keepass_bridge;
@@ -158,6 +159,20 @@ private:
 	// that asked" is not weakened by keeping them until the page moves.
 	QList<credential> m_known;
 	QString m_known_origin;
+
+	// **Which login and password pairs the vault already holds here**, as
+	// keyed digests rather than passwords, so a submit of what was just
+	// filled is not offered for saving as though it were new. Without it
+	// every sign-in with a filled login asked "Save the password?" about a
+	// password already in the vault, and a prompt that is always wrong is
+	// one people learn to dismiss, the real ones included. The key is random
+	// per process, so a digest is no use outside this run. Same lifetime and
+	// origin as `m_known`.
+	QSet<QByteArray> m_known_secrets;
+	QByteArray secret_digest(const QString &login, const QString &password) const;
+	// The digest of the login being saved, added to the set once KeePassXC
+	// says it stored it, so submitting it again does not ask again.
+	QByteArray m_saving_secret;
 	// A credential a page offered, held until a person answers the prompt. Same
 	// discipline as `m_waiting`: cleared on navigation, on answer, and never
 	// written anywhere until confirmed.

@@ -2,12 +2,26 @@
 #include "keepass_bridge.h"
 #include "policy_engine.h"
 
+#include <QCryptographicHash>
 #include <QJsonArray>
+#include <QMessageAuthenticationCode>
+#include <QRandomGenerator>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QUrl>
 
 int autofill_controller::s_next_tag = 1;
+
+QByteArray autofill_controller::secret_digest(const QString &login,
+                                              const QString &password) const {
+	static const QByteArray key = [] {
+		QByteArray k(32, '\0');
+		QRandomGenerator::system()->generate(k.begin(), k.end());
+		return k;
+	}();
+	return QMessageAuthenticationCode::hash(
+	  login.toUtf8() + '\0' + password.toUtf8(), key, QCryptographicHash::Sha256);
+}
 
 autofill_controller::autofill_controller(keepass_bridge *bridge, policy_engine *policy,
                                           QObject *parent)
@@ -19,6 +33,9 @@ autofill_controller::autofill_controller(keepass_bridge *bridge, policy_engine *
 			if (tag != m_save_tag || m_save_tag == 0)
 				return;
 			m_save_tag = 0;
+			if (ok && !m_saving_secret.isEmpty())
+				m_known_secrets.insert(m_saving_secret);
+			m_saving_secret.clear();
 			emit save_finished(ok, ok ? QStringLiteral("Saved to KeePassXC.")
 			                          : message);
 		});
@@ -56,6 +73,7 @@ void autofill_controller::set_page_origin(const QString &origin) {
 	// that has gone. Keeping it would offer to update an entry belonging to
 	// somewhere else the moment a login happens to share a username.
 	m_known.clear();
+	m_known_secrets.clear();
 	m_known_origin.clear();
 }
 
@@ -123,6 +141,10 @@ void autofill_controller::offer_to_save(const QString &origin,
 	// submit rather than replacing what the person is reading.
 	if (!m_offered.password.isEmpty())
 		return;
+	// Nothing new: the vault already has exactly this for this site.
+	if (m_known_origin == m_origin &&
+	    m_known_secrets.contains(secret_digest(login, password)))
+		return;
 
 	m_offered        = credential{ QString(), login, password, QString() };
 	m_offered_origin = m_origin;
@@ -156,6 +178,7 @@ void autofill_controller::confirm_save(bool yes) {
 	                       ? keepass_protocol::uuid_for_login(m_known, offered.login)
 	                       : QString();
 	m_save_tag = s_next_tag++;
+	m_saving_secret = secret_digest(offered.login, offered.password);
 	m_bridge->save_login(origin, offered.login, offered.password, uuid, m_save_tag);
 }
 
@@ -203,8 +226,11 @@ void autofill_controller::on_logins(int tag, const QList<credential> &entries) {
 	// here rather than at the single-or-many split, because a site with one
 	// stored login is exactly the site whose password gets changed.
 	m_known.clear();
+	m_known_secrets.clear();
 	m_known_origin = m_origin;
 	for (const credential &c : entries) {
+		if (!c.password.isEmpty())
+			m_known_secrets.insert(secret_digest(c.login, c.password));
 		if (c.uuid.isEmpty())
 			continue;
 		m_known.push_back(credential{ c.name, c.login, QString(), c.uuid });
