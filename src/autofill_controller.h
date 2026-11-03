@@ -60,6 +60,19 @@ public slots:
 	// --- Reachable from injected page scripts. Treat every argument as hostile.
 	void request_credentials(const QString &origin);
 
+	// **The first step of a multi-step sign-in** (sec 13.2): a page asking
+	// who you are before it asks for a password. Gated exactly like a fill,
+	// and answered with the login alone -- no password crosses to a page that
+	// has nowhere to put one.
+	void request_identifier(const QString &origin);
+
+	// That first step was submitted with this login. Kept for the next page
+	// on the same origin, for ten minutes, so step two fills from the right
+	// entry and a save there names whose password it is. A page can only
+	// name a login for its own origin, and what it names only chooses between
+	// that site's own entries.
+	void note_login(const QString &origin, const QString &login);
+
 	// A login form was submitted. The page is *offering* -- nothing is stored
 	// until a person says so, and the same origin gate applies: a page may
 	// offer a credential for the site it is actually on and for nothing else.
@@ -177,6 +190,15 @@ private:
 	// per process, so a digest is no use outside this run. Same lifetime and
 	// origin as `m_known`.
 	QSet<QByteArray> m_known_secrets;
+
+	// The pending fill is for an identifier-only page: deliver the login, not
+	// the password.
+	bool    m_identifier_only = false;
+	// The login a first step was submitted with (see `note_login`).
+	QString m_step_login;
+	QString m_step_origin;
+	qint64  m_step_at = 0;   // ms since the epoch
+	bool    step_applies() const;
 	QByteArray secret_digest(const QString &login, const QString &password) const;
 	// The digest of the login being saved, added to the set once KeePassXC
 	// says it stored it, so submitting it again does not ask again.

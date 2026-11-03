@@ -3,6 +3,7 @@
 #include "policy_engine.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QJsonArray>
 #include <QMessageAuthenticationCode>
 #include <QRandomGenerator>
@@ -121,8 +122,30 @@ void autofill_controller::request_credentials(const QString &origin) {
 		emit refused(why);
 		return;
 	}
+	m_identifier_only = false;
 	m_pending = s_next_tag++;
 	m_bridge->request_logins(m_origin, m_pending);
+}
+
+void autofill_controller::request_identifier(const QString &origin) {
+	request_credentials(origin);
+	// After, because request_credentials clears it; only a request that went
+	// out is marked.
+	if (m_pending)
+		m_identifier_only = true;
+}
+
+void autofill_controller::note_login(const QString &origin, const QString &login) {
+	if (origin.isEmpty() || origin != m_origin || login.isEmpty() || login.size() > 512)
+		return;
+	m_step_login  = login;
+	m_step_origin = origin;
+	m_step_at     = QDateTime::currentMSecsSinceEpoch();
+}
+
+bool autofill_controller::step_applies() const {
+	return !m_step_login.isEmpty() && m_step_origin == m_origin &&
+	       QDateTime::currentMSecsSinceEpoch() - m_step_at < 10 * 60 * 1000;
 }
 
 void autofill_controller::offer_to_save(const QString &origin,
@@ -148,14 +171,17 @@ void autofill_controller::offer_to_save(const QString &origin,
 	// submit rather than replacing what the person is reading.
 	if (!m_offered.password.isEmpty())
 		return;
+	// A step-two page has a password and no username field; whose password
+	// it is was said on step one.
+	const QString who = login.isEmpty() && step_applies() ? m_step_login : login;
 	// Nothing new: the vault already has exactly this for this site.
 	if (m_known_origin == m_origin &&
-	    m_known_secrets.contains(secret_digest(login, password)))
+	    m_known_secrets.contains(secret_digest(who, password)))
 		return;
 
-	m_offered        = credential{ QString(), login, password, QString() };
+	m_offered        = credential{ QString(), who, password, QString() };
 	m_offered_origin = m_origin;
-	emit save_offered(login, QUrl(m_origin).host());
+	emit save_offered(who, QUrl(m_origin).host());
 }
 
 void autofill_controller::confirm_save(bool yes) {
@@ -212,7 +238,9 @@ void autofill_controller::deliver(const credential &c) {
 	QJsonObject o;
 	o.insert("name", c.name);
 	o.insert("login", c.login);
-	o.insert("password", c.password);
+	// An identifier-only page is given the login alone (sec 13.3: a
+	// password goes only where it is going to be filled).
+	o.insert("password", m_identifier_only ? QString() : c.password);
 	QJsonArray arr;
 	arr.append(o);
 	emit credentials_ready(QString::fromUtf8(
@@ -249,6 +277,26 @@ void autofill_controller::on_logins(int tag, const QList<credential> &entries) {
 		// key icon is where the difference belongs.
 		emit refused("No credentials stored for this site.");
 		return;
+	}
+
+	// Step two of a multi-step sign-in, where step one already said who:
+	// that login's entry, without asking again -- and **not somebody else's
+	// when the vault has none for it.** Filling the site's only entry there
+	// would put another account's password under the login just typed.
+	if (step_applies() && !m_identifier_only) {
+		const credential *only = nullptr;
+		int matches = 0;
+		for (const credential &c : entries)
+			if (c.login == m_step_login) { only = &c; ++matches; }
+		if (matches == 1) {
+			deliver(*only);
+			return;
+		}
+		if (matches == 0) {
+			emit refused(QString("Nothing is stored for %1 on this site.")
+			               .arg(m_step_login));
+			return;
+		}
 	}
 
 	if (entries.size() == 1) {

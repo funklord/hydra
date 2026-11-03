@@ -42242,3 +42242,43 @@ answered. Neither the guard nor the case was kept: a check that cannot fail
 is not a test, and a guard against something the engine never does is
 unproven code. If a backend ever delivers requests concurrently (Android's
 is the one not measured), this is where it would show.
+
+### Multi-step sign-ins, which sec 13.2 names and nothing served
+
+Built 2026-11-03. Before this the page script looked once at load, and only
+for a password field. That left three common sign-ins unserved:
+
+- **Identifier first** (Google, Microsoft, most banks): page one asks only
+  who you are. There was no password field, so there was no request and the
+  key did nothing.
+- **The same page, second step**: the username field is replaced by a
+  password field without a load. The script had already looked and never
+  saw it.
+- **Saving step two**: page two has a password and no username, so the save
+  prompt said "Save the password for this login", and the entry would have
+  had no login.
+
+Now the script recognises an identifier-only page: no password field, and a
+field that says it is a username or an email (`autocomplete`, `type=email`,
+or its name). Any visible text box would include search boxes, and a login
+filled into one goes to a search engine. On such a page it asks with
+`request_identifier`, and the controller sends **the login without the
+password**. A `MutationObserver` re-looks at most every 300 ms, until the
+password step has been asked for or five minutes pass. A submitted page one
+reports its login (`note_login`). The tab's controller keeps that login for
+ten minutes for the same origin. There it chooses page two's entry among
+several without the picker, and it names the login of a step-two save.
+
+**One decision taken in the building.** If page one named a login the vault
+has no entry for, page two is left empty: "Nothing is stored for dave on
+this site". It used to be filled with the site's only entry, which is
+another account's password under the login just typed. A page can name
+only a login for its own origin, and what it names only chooses among that
+site's own entries.
+
+The memory is per tab, because a sign-in moves to step two in the same tab;
+the driver's first version opened step two in a new tab and failed for
+that reason. **Measured in the hull rig: 46 passed.** With the identifier
+fill, the re-look and the step memory removed together, six checks fail, one
+per mechanism; step two for alice still passes, because she is that site's
+only entry.

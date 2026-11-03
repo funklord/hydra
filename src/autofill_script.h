@@ -58,6 +58,31 @@ inline const char *source() {
     return best || pool[0] || null;
   }
 
+  // **The first page of a sign-in that asks who you are before it asks for a
+  // password** -- Google, Microsoft and most banks (sec 13.2's multi-step
+  // flows). Only where there is no password field, and only a field that
+  // says it is a username or an email: a search box is a visible text input
+  // too, and filling a login into one would put it into a search engine.
+  function identifierField() {
+    if (passwordFields().length) return null;
+    const cands = Array.from(document.querySelectorAll('input')).filter(function (el) {
+      const t = (el.type || 'text').toLowerCase();
+      return isVisible(el) && ['text', 'email', 'tel', ''].indexOf(t) >= 0;
+    });
+    for (const el of cands) {
+      const ac = (el.autocomplete || '').toLowerCase();
+      if (/\b(username|email)\b/.test(ac)) return el;
+    }
+    for (const el of cands) {
+      if ((el.type || '').toLowerCase() === 'email') return el;
+      const hay = ((el.name || '') + ' ' + (el.id || '') + ' ' +
+                   (el.getAttribute('aria-label') || '')).toLowerCase();
+      if (/user|login|email|identifier|account/.test(hay) && !/search|query/.test(hay))
+        return el;
+    }
+    return null;
+  }
+
   function setValue(el, value) {
     if (!el) return;
     // Assign through the native setter so frameworks that watch the property
@@ -79,6 +104,10 @@ inline const char *source() {
     // someone wanted, which is not a guess a page script gets to make.
     if (entries.length > 1) return;
     const e = entries[0];
+    // The first step of a multi-step sign-in: the login only. The shell sent
+    // no password for this page, and there is nowhere to put one.
+    const id = identifierField();
+    if (id) { setValue(id, e.login); return; }
     for (const pw of passwordFields()) {
       // A new-password field is a registration form, not a login — filling it
       // with the existing password is wrong.
@@ -117,6 +146,11 @@ inline const char *source() {
         af.offer_to_save(String(location.origin), login, String(pw.value));
         return;
       }
+      // No password on this page: the first step of a multi-step sign-in.
+      // Who is signing in is kept for the next step, where it fills from the
+      // right entry and names the login a save is for.
+      const id = identifierField();
+      if (id && id.value) af.note_login(String(location.origin), String(id.value));
     };
     document.addEventListener('submit', report, true);
     // And the button, because a form that never fires submit is common enough
@@ -144,13 +178,29 @@ inline const char *source() {
       af.credentials_ready.connect(function (json) {
         try { fill(JSON.parse(json)); } catch (err) { /* malformed; ignore */ }
       });
-      window.__hydraRequestFill = function () {
-        af.request_credentials(String(location.origin));
+      // What kind of sign-in page this is now: 'password', 'identifier'
+      // (the first step of a multi-step one), or 'none'.
+      const kind = function () {
+        return passwordFields().length ? 'password'
+             : identifierField() ? 'identifier' : 'none';
       };
-      // Only where there is a password field to submit. A page with no login
+      window.__hydraRequestFill = function () {
+        if (kind() === 'identifier') af.request_identifier(String(location.origin));
+        else af.request_credentials(String(location.origin));
+      };
+      // Only where there is a login form to submit. A page with no login
       // form does not need a submit watcher, and not installing one is cheaper
       // than filtering its reports later.
-      if (passwordFields().length) watchSubmits(af);
+      let watching = false;
+      let seen = 'none';
+      const look = function () {
+        const k = kind();
+        if (k === seen) return;
+        seen = k;
+        if (k === 'none') return;
+        if (!watching) { watching = true; watchSubmits(af); }
+        window.__hydraRequestFill();
+      };
       // A generated password goes into the field that asked for it.
       af.generated_password.connect(function (pw) {
         if (!pw) return;
@@ -158,7 +208,28 @@ inline const char *source() {
           if ((f.autocomplete || '').toLowerCase() === 'new-password' ||
               passwordFields().length === 1) { setValue(f, pw); break; }
       });
-      if (passwordFields().length) window.__hydraRequestFill();
+      look();
+      // **A password field that arrives later is a sign-in too.** One-page
+      // multi-step sign-ins replace the username field with a password
+      // field without loading anything, and a script that looked once at
+      // load never saw the second step. Re-looked on change, at most every
+      // 300 ms, and only until the password step has been asked for or five
+      // minutes have passed -- what stops it.
+      let pending = null;
+      const observer = new MutationObserver(function () {
+        if (pending) return;
+        pending = setTimeout(function () {
+          pending = null;
+          look();
+          if (seen === 'password') observer.disconnect();
+        }, 300);
+      });
+      if (seen !== 'password' && document.documentElement) {
+        observer.observe(document.documentElement,
+                         { childList: true, subtree: true, attributes: true,
+                           attributeFilter: ['type', 'style', 'class', 'hidden'] });
+        setTimeout(function () { observer.disconnect(); }, 300000);
+      }
     });
   }
 

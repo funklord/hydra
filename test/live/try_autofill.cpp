@@ -109,7 +109,30 @@ public:
 		connect(s, &QTcpSocket::readyRead, this, [s] {
 			const QByteArray req = s->readAll();
 			const bool signup = req.startsWith("GET /signup");
-			const QByteArray body = signup
+			// The two pages of an identifier-first sign-in, and the one-page
+			// kind that swaps its username field for a password field.
+			const QByteArray step1 =
+			  "<!doctype html><html><body><h1>Who are you</h1>"
+			  "<form onsubmit='return false'>"
+			  "<input type=text name=user autocomplete=username>"
+			  "<button type=submit>Next</button></form></body></html>";
+			const QByteArray step2 =
+			  "<!doctype html><html><body><h1>Password</h1>"
+			  "<form onsubmit='return false'>"
+			  "<input type=password name=pass autocomplete=current-password>"
+			  "<button type=submit>Sign in</button></form></body></html>";
+			const QByteArray onepage =
+			  "<!doctype html><html><body><h1>Sign in</h1>"
+			  "<form id=f onsubmit='return false'>"
+			  "<input type=email name=user id=u>"
+			  "<button type=button id=next onclick=\"var f=document.getElementById('f');"
+			  "f.innerHTML='<input type=password name=pass>"
+			  "<button type=submit>Sign in</button>';\">Next</button>"
+			  "</form></body></html>";
+			const QByteArray body = req.startsWith("GET /step1") ? step1
+			  : req.startsWith("GET /step2") ? step2
+			  : req.startsWith("GET /onepage") ? onepage
+			  : signup
 			  ? QByteArray("<!doctype html><html><body><h1>Sign up</h1>"
 			               "<form><input type=text name=user autocomplete=username>"
 			               "<input type=password name=pass autocomplete=new-password>"
@@ -569,6 +592,116 @@ int main(int argc, char *argv[]) {
 		      QString("and the vault then has it (%1 entr%2%3)")
 		          .arg(found.size()).arg(found.size() == 1 ? "y" : "ies")
 		          .arg(found.isEmpty() ? QString() : ", " + found.first().login));
+
+		// ---- Multi-step sign-ins (sec 13.2) ---------------------------------
+		//
+		// Every modal from here to the lock is answered and counted, so a
+		// picker that should not appear is a failure rather than a hang: a
+		// save prompt is answered yes and its words kept, and anything else
+		// -- the "Which login?" picker -- is cancelled.
+		int pickers = 0;
+		QStringList save_texts;
+		QTimer sweep;
+		sweep.setInterval(200);
+		QObject::connect(&sweep, &QTimer::timeout, [&] {
+			QWidget *m = QApplication::activeModalWidget();
+			if (!m) return;
+			if (auto *box = qobject_cast<QMessageBox *>(m)) {
+				if (box->text().contains("Save the password")) {
+					save_texts << box->text();
+					if (QAbstractButton *yes = box->button(QMessageBox::Yes)) yes->click();
+					return;
+				}
+			}
+			if (m->windowTitle().contains("Which login")) {
+				++pickers;
+				qobject_cast<QDialog *>(m)->reject();
+			}
+		});
+		sweep.start();
+
+		// Step two in the SAME tab, as a sign-in does it: what page one said
+		// is kept by that tab's controller, and a new tab has its own.
+		auto go = [&](web_view_backend *v, const QString &path) {
+			run(v, QString("location.href='%1';").arg(path));
+			spin(3000);
+		};
+
+		section("a sign-in that asks who you are first");
+		web_view_backend *step1 = open_url("http://127.0.0.1:9931/step1");
+		const bool id_filled = wait_for([&] {
+			return field(step1, "input[name=user]") == "alice";
+		}, 20000);
+		check(id_filled, QString("the username page is filled with the login (%1)")
+		                     .arg(field(step1, "input[name=user]")));
+		run(step1, "document.querySelector('button').click();");
+		spin(1500);
+		go(step1, "/step2");
+		web_view_backend *step2 = step1;
+		const bool pw_filled = wait_for([&] {
+			return field(step2, "input[type=password]").size() == 16;
+		}, 20000);
+		check(pw_filled, QString("and the password page after it with the password "
+		                         "(%1 characters, not shown here)")
+		                     .arg(field(step2, "input[type=password]").size()));
+
+		section("one page that swaps the username for a password");
+		web_view_backend *one = open_url("http://127.0.0.1:9931/onepage");
+		const bool one_id = wait_for([&] {
+			return field(one, "input[name=user]") == "alice";
+		}, 20000);
+		check(one_id, QString("the username is filled (%1)").arg(field(one, "input[name=user]")));
+		run(one, "document.getElementById('next').click();");
+		const bool one_pw = wait_for([&] {
+			return field(one, "input[type=password]").size() == 16;
+		}, 20000);
+		check(one_pw, QString("and the password field that replaces it, without a "
+		                      "reload (%1 characters, not shown here)")
+		                  .arg(field(one, "input[type=password]").size()));
+
+		section("a two-page sign-in is saved under the login from page one");
+		web_view_backend *d1 = open_url("http://127.0.0.1:9934/step1");
+		spin(2500);
+		run(d1, "document.querySelector('input[name=user]').value='dave';"
+		        "document.querySelector('button').click();");
+		spin(1500);
+		go(d1, "/step2");
+		web_view_backend *d2 = d1;
+		// The vault holds bob here and nobody called dave yet, so page two
+		// must stay empty rather than take bob's password.
+		check(field(d2, "input[type=password]").isEmpty() &&
+		          key->toolTip().contains("dave"),
+		      QString("page two is not filled with another account's password "
+		              "(%1 characters; %2)")
+		          .arg(field(d2, "input[type=password]").size()).arg(key->toolTip()));
+		run(d2, "document.querySelector('input[type=password]').value='typed-for-dave';"
+		        "document.querySelector('button').click();");
+		const bool dave_asked = wait_for([&] { return !save_texts.isEmpty(); }, 15000);
+		check(dave_asked && save_texts.first().contains("dave"),
+		      QString("the save prompt names the login typed on page one (%1)")
+		          .arg(save_texts.value(0)));
+
+		section("and page two fills the account page one named, of several");
+		// The vault holds bob and now dave for :9934, so page two has a
+		// choice to make; page one has already made it.
+		spin(2000);
+		web_view_backend *e1 = open_url("http://127.0.0.1:9934/step1");
+		spin(2500);
+		// The picker for page one's own fill is expected and cancelled; the
+		// count that matters is page two's.
+		run(e1, "document.querySelector('input[name=user]').value='dave';"
+		        "document.querySelector('button').click();");
+		spin(1500);
+		const int pickers_before = pickers;
+		go(e1, "/step2");
+		web_view_backend *e2 = e1;
+		const bool dave_filled = wait_for([&] {
+			return field(e2, "input[type=password]") == "typed-for-dave";
+		}, 20000);
+		check(dave_filled && pickers == pickers_before,
+		      QString("dave's password, without asking which (%1 pickers)")
+		          .arg(pickers - pickers_before));
+		sweep.stop();
 
 		section("a locked vault is said to be locked, on the key");
 		// Locked the way the holder's would be, from KeePassXC itself; its
