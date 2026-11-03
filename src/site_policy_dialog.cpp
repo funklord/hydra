@@ -1,4 +1,5 @@
 #include "site_policy_dialog.h"
+#include "touch_scroll.h"
 #include "policy_engine.h"
 #include "policy.h"
 
@@ -290,6 +291,7 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 	scroll->setWidget(rows);
 	scroll->setWidgetResizable(true);
 	scroll->setFrameShape(QFrame::NoFrame);
+	enable_touch_scroll(scroll);
 	scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	outer->addWidget(scroll, 1);
 

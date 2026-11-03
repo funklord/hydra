@@ -41862,3 +41862,18 @@ before this change. The shell was right and the driver's premise had
 moved, so the driver now turns the warm-up off in its own settings
 under `~/.qttest`: every count it makes is of views it opened itself.
 14 passed.
+
+### A finger could not scroll Settings on a phone
+
+On the emulator, a swipe up the Settings page left it exactly where it
+was. Qt Widgets delivers a touch as a mouse drag, and a mouse drag over
+a scroll area's contents scrolls nothing, so the only way down was a
+scrollbar a few pixels wide at the edge. Nothing in the tree used
+`QScroller`. `enable_touch_scroll` (`touch_scroll.h`) now grabs the
+flick gesture on Android for the three `QScrollArea`s: the Settings
+pages, the shield, and the passkey list. Overshoot is off, because a
+Widgets page drawn bouncing reads as a glitch.
+
+It deliberately leaves item views and editors alone. There a drag
+already means something: moving a tab in the tree, or selecting text.
+A tap that does not move still reaches the control under it.

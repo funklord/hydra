@@ -1,4 +1,5 @@
 #include "webauth_dialog.h"
+#include "touch_scroll.h"
 
 #include <QAbstractButton>
 #include <QButtonGroup>
@@ -157,6 +158,7 @@ webauth_dialog::webauth_dialog(const QString &relying_party, QWidget *parent)
 	m_accounts_area->setObjectName("webauth_accounts_area");
 	m_accounts_area->setWidgetResizable(true);
 	m_accounts_area->setWidget(m_accounts);
+	enable_touch_scroll(m_accounts_area);
 	// Stretch 1, so that when the list is on screen it is the thing that grows.
 	// It competes with the spacer below, which is set to nothing in that state.
 	column->addWidget(m_accounts_area, 1);

@@ -1,4 +1,5 @@
 #include "model_tally.h"
+#include "touch_scroll.h"
 #include "settings_dialog.h"
 #include "claude_provider.h"
 #include "download_manager.h"
@@ -687,6 +688,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 		area->setWidget(page);
 		area->setWidgetResizable(true);
 		area->setFrameShape(QFrame::NoFrame);
+		enable_touch_scroll(area);
 		// Never sideways. Everything on these pages wraps or is a control, so a
 		// horizontal scrollbar can only ever mean the layout is a few pixels
 		// out -- and that is exactly how it appeared: the vertical scrollbar
