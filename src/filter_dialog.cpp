@@ -95,6 +95,16 @@ filter_dialog::filter_dialog(filter_signals *signals_source, filter_list *list,
 		for (const QString &p : patches)
 			payload += "  " + p + "\n";
 	}
+	// **What was undone here before**, so the model is told rather than left
+	// to propose it again. The dialog refuses such a rule anyway (below);
+	// this is so the one proposal a person sees is a new one.
+	const QStringList undone = m_list ? m_list->undone_for(m_site) : QStringList();
+	if (!undone.isEmpty()) {
+		payload += "\nRules the user undid because they broke this site -- "
+		           "do not propose these again:\n";
+		for (const QString &u : undone)
+			payload += "  " + u + "\n";
+	}
 	m_payload->setPlainText(payload);
 
 	if (suspects.isEmpty() && !m_picked.is_valid() && patches.isEmpty() &&
@@ -248,7 +258,14 @@ void filter_dialog::show_proposals(const QList<filter_rule> &rules) {
 	int rejected = 0;
 
 	for (const filter_rule &r : rules) {
-		const dry_run sim = filter_list::evaluate(r, observed, m_site, m_picked);
+		dry_run sim = filter_list::evaluate(r, observed, m_site, m_picked);
+		// Undone before because it broke a site: the person has already
+		// answered this one (sec 12's negative signal).
+		const QString broke = m_list ? m_list->undone_on(r.text) : QString();
+		if (!broke.isEmpty() && !sim.rejected) {
+			sim.rejected = true;
+			sim.reason = QString("you undid it before, because it broke %1").arg(broke);
+		}
 
 		auto *row = new QTreeWidgetItem(m_rules);
 		row->setText(0, r.text);
@@ -256,8 +273,9 @@ void filter_dialog::show_proposals(const QList<filter_rule> &rules) {
 		row->setFlags(row->flags() | Qt::ItemIsUserCheckable);
 
 		if (sim.rejected) {
-			// Statically unsafe: shown so the user can see what was proposed
-			// and why it was refused, but not selectable (sec 12.4).
+			// Statically unsafe, or undone before: shown so the user can see
+			// what was proposed and why it was refused, but not selectable
+			// (sec 12.4).
 			++rejected;
 			row->setText(1, "rejected — " + sim.reason);
 			row->setCheckState(0, Qt::Unchecked);
@@ -291,7 +309,7 @@ void filter_dialog::show_proposals(const QList<filter_rule> &rules) {
 	m_rules->resizeColumnToContents(1);
 	m_pages->setCurrentIndex(1);
 	m_apply->setEnabled(!m_accepted.isEmpty());
-	say(QString("%1 rule(s) proposed, %2 rejected as unsafe. "
+	say(QString("%1 rule(s) proposed, %2 rejected. "
 	                          "Expand a row to see what it would block.")
 	                      .arg(rules.size()).arg(rejected));
 }

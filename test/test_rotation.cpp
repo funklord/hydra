@@ -45,6 +45,7 @@
 #include "address_input.h"
 #include "find_bar.h"
 #include "filter_dialog.h"
+#include <QPlainTextEdit>
 #include "filter_signals.h"
 #include "filter_list.h"
 #include "ai_provider.h"
@@ -3581,6 +3582,49 @@ int main(int argc, char **argv) {
 		check(rules && rules->topLevelItemCount() == 0,
 		      QString("nothing is proposed from it (%1 row(s))")
 		          .arg(rules ? rules->topLevelItemCount() : -1));
+	}
+
+	// **An undone rule is not offered again** (sec 12: "this rule broke the
+	// site" feeds back as a negative signal). The revert removed the rule
+	// and forgot it, so the same proposal came back as new.
+	section("a rule undone because it broke a site is not proposed again");
+	{
+		const QString path = QDir::temp().filePath(
+		  QString("hydra-undone-%1.txt").arg(QCoreApplication::applicationPid()));
+		{
+			filter_list keep;
+			keep.mark_undone("||ads.example.com^", "site.example");
+			check(keep.save(path), "the list with the record saves");
+		}
+		filter_list list;
+		check(list.load(path), "and loads");
+		QFile::remove(path);
+		check(list.undone_on("||ads.example.com^") == "site.example" &&
+		          list.undone_for("site.example") == QStringList{"||ads.example.com^"},
+		      QString("and still knows which rule broke which site (%1)")
+		          .arg(list.undone_on("||ads.example.com^")));
+		check(!list.contains("||ads.example.com^"),
+		      "without the undone rule coming back as a rule");
+
+		stub_ai prov;   // replies with exactly that rule
+		filter_signals sig;
+		filter_dialog dlg(&sig, &list, &prov, "site.example");
+		auto *payload = dlg.findChild<QPlainTextEdit *>();
+		check(payload && payload->toPlainText().contains("do not propose these again") &&
+		          payload->toPlainText().contains("||ads.example.com^"),
+		      "the model is told what was undone on this site");
+		for (QPushButton *b : dlg.findChildren<QPushButton *>())
+			if (b->text().contains("Send"))
+				b->setEnabled(true), b->click();
+		spin(150);
+		auto *rules = dlg.findChild<QTreeWidget *>();
+		QTreeWidgetItem *row = rules && rules->topLevelItemCount()
+		                         ? rules->topLevelItem(0) : nullptr;
+		check(row && row->text(1).contains("rejected") &&
+		          row->text(1).contains("site.example") &&
+		          !(row->flags() & Qt::ItemIsEnabled),
+		      QString("and when it proposes it anyway, it is refused, naming the "
+		              "site it broke (%1)").arg(row ? row->text(1) : QString("(no row)")));
 	}
 
 	// **A rule accepted for a site whose ads are allowed does nothing.** The

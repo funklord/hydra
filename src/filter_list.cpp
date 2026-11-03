@@ -727,10 +727,20 @@ bool filter_list::load(const QString &path) {
 	m_regex.clear();
 	m_by_token.clear();
 	m_untokenised.clear();
+	m_undone.clear();
 	QTextStream in(&f);
 	while (!in.atEnd()) {
+		const QString line = in.readLine();
+		static const QString undone_tag = QStringLiteral("! hydra-undone ");
+		if (line.startsWith(undone_tag)) {
+			const QString rest = line.mid(undone_tag.size()).trimmed();
+			const int sp = rest.indexOf(' ');
+			if (sp > 0)
+				m_undone.insert(rest.mid(sp + 1).trimmed(), rest.left(sp));
+			continue;
+		}
 		filter_rule r;
-		if (parse_rule(in.readLine(), &r)) {
+		if (parse_rule(line, &r)) {
 			m_rules.push_back(r);
 			index_one(m_rules.size() - 1);
 		}
@@ -766,6 +776,33 @@ bool filter_list::save(const QString &path) const {
 				out << "! " << r.note << "\n";
 			out << r.text << "\n";
 		}
+		for (auto it = m_undone.cbegin(); it != m_undone.cend(); ++it)
+			out << "! hydra-undone " << it.value() << " " << it.key() << "\n";
 	}
 	return f.commit();
+}
+
+void filter_list::mark_undone(const QString &text, const QString &host) {
+	const QString t = text.trimmed();
+	const QString h = host.trimmed();
+	// A host with a space in it would not read back; neither is a real host.
+	if (t.isEmpty() || h.isEmpty() || h.contains(' '))
+		return;
+	QWriteLocker locker(&m_lock);
+	m_undone.insert(t, h);
+}
+
+QString filter_list::undone_on(const QString &text) const {
+	QReadLocker locker(&m_lock);
+	return m_undone.value(text.trimmed());
+}
+
+QStringList filter_list::undone_for(const QString &host) const {
+	QReadLocker locker(&m_lock);
+	QStringList out;
+	for (auto it = m_undone.cbegin(); it != m_undone.cend(); ++it)
+		if (it.value() == host)
+			out << it.key();
+	out.sort();
+	return out;
 }

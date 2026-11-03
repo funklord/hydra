@@ -3152,9 +3152,14 @@ void main_window::confirm_rules() {
 	QAbstractButton *answer = box.clickedButton();
 	if (answer == undo) {
 		int removed = 0;
-		for (const QString &text : std::as_const(m_unconfirmed_rules))
+		for (const QString &text : std::as_const(m_unconfirmed_rules)) {
 			if (m_filters && m_filters->remove(text))
 				++removed;
+			// And remembered as having broken this site, so the next proposal
+			// for it is refused rather than offered as new (sec 12).
+			if (m_filters)
+				m_filters->mark_undone(text, m_unconfirmed_host);
+		}
 		if (m_filters && !m_filters_path.isEmpty())
 			saved_or_said(m_filters->save(m_filters_path), "the filter list");
 		m_status->showMessage(

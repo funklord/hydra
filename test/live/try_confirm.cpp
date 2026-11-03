@@ -143,13 +143,23 @@ int main(int argc, char *argv[]) {
 		spin(1500);
 		check(saw, "the question was put");
 
-		const QString after = filters_text(filters);
-		check(!after.contains("||ads.example.com^"),
+		const QString text = filters_text(filters);
+		// The rules, not the comments: an undone rule is now recorded in a
+		// `! hydra-undone` comment line, which no filter reads as a rule.
+		QStringList rule_lines;
+		for (const QString &l : text.split('\n'))
+			if (!l.trimmed().isEmpty() && !l.startsWith('!'))
+				rule_lines << l.trimmed();
+		check(!rule_lines.contains("||ads.example.com^"),
 		      "the network rule is gone from the file the browser filters with");
-		check(!after.contains("example.com##.ad-banner"),
+		check(!rule_lines.contains("example.com##.ad-banner"),
 		      "and so is the cosmetic one");
-		check(after.contains("||keepme.example.com^"),
+		check(rule_lines.contains("||keepme.example.com^"),
 		      "while a rule nobody complained about is untouched");
+		check(text.contains("! hydra-undone example.com ||ads.example.com^") &&
+		          text.contains("! hydra-undone example.com example.com##.ad-banner"),
+		      "and both are remembered as having broken example.com, so they "
+		      "are not offered again");
 		check(!confirm->isVisible(), "and the question stops being asked");
 	}
 

@@ -80,6 +80,18 @@ public:
 	// such rule, so a caller can tell "removed" from "never there".
 	bool remove(const QString &text);
 
+	// **A rule somebody undid because it broke a site** (sec 12's "this rule
+	// broke the site" revert, which "feeds back as a negative signal"). The
+	// revert used to remove the rule and forget it, so the same proposal could
+	// come back for the same site and be offered as new. Kept in this list's
+	// file as `! hydra-undone <host> <rule>` -- a comment to every other
+	// reader of the format -- and consulted before a proposal is offered.
+	void mark_undone(const QString &text, const QString &host);
+	// The site it broke, or empty if it never was undone.
+	QString undone_on(const QString &text) const;
+	// Every rule undone on this host, for telling the model not to repeat them.
+	QStringList undone_for(const QString &host) const;
+
 	// Does this URL match any accepted network rule?
 	bool blocks(const QString &url, const QString &site_host) const;
 
@@ -229,4 +241,5 @@ private:
 	// added and removed on the UI thread while the interceptor asks blocks() on
 	// Qt WebEngine's. Mutable so the const read path can take it.
 	mutable QReadWriteLock m_lock;
+	QHash<QString, QString> m_undone;   // rule text -> the host it broke
 };

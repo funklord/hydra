@@ -42282,3 +42282,35 @@ that reason. **Measured in the hull rig: 46 passed.** With the identifier
 fill, the re-look and the step memory removed together, six checks fail, one
 per mechanism; step two for alice still passes, because she is that site's
 only entry.
+
+### An undone rule is not offered again (sec 12's negative signal)
+
+Sec 12 names two parts of regression feedback. One is a "this rule broke
+the site" revert that "feeds back as a negative signal". The revert existed
+("It Broke -- Undo Them"). The feedback did not: the rules were removed and
+forgotten, so the model could propose the same rule for the same site and
+the dialog would offer it as new, pre-ticked if it matched.
+
+Built 2026-11-03. An undone rule is recorded in the user's own filter file
+as `! hydra-undone <host> <rule>`. A `!` line is a comment to every reader of
+the format, so the file stays a valid filter list and nothing outside this
+browser reads it as a rule. `filter_dialog` refuses a proposal on that
+record, showing "rejected -- you undid it before, because it broke
+<host>", and the payload tells the model which rules were undone on that
+site. The record is keyed by the rule's text: a rule that broke one site is
+refused everywhere, which is the cautious way round for a list a person
+builds one accepted proposal at a time.
+
+`test_rotation` holds the save and load, the payload and the refusal. The
+refusal check fails with the check in the dialog removed. `try_confirm`'s
+undo checks now read rule lines rather than the whole file, since the
+undone rules are still in it as comments, and it checks the records are
+written (16).
+
+**The other part, a known-clean page set re-run when filters change, is
+not built.** It needs a list of pages the person vouches for, and a run
+that loads them and compares something against an earlier load. What
+"broke" means on a page nobody is looking at -- a missing element, a
+failed request, a layout change -- is the design question, and the
+dry-run against evidence already captured is the cheaper half to build
+first.
