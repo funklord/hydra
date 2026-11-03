@@ -94,6 +94,15 @@ done
 | `~/Qt/6.12.0` | Qt online-installer kits: `gcc_64` (desktop, **with** WebEngine, Chromium 140) and `android_arm64_v8a` / `armv7` / `x86` / `x86_64`, plus wasm and harmonyos. **Measured 2026-09-04**, and it was `6.11.1` here until somebody looked: `ls ~/Qt` is the whole check, and the kit is discovered newest-Qt-first under `QT_ROOT` so the Android build did not notice the move |
 | `~/Android/Sdk/ndk/27.2.12479018` | NDK r27. **Measured 2026-09-04**; the `~/android-ndk-r29` this row named for a month is not on this machine |
 
+**From the second account on `ml350g6-01` (measured 2026-11-03)** the kit
+and SDK are found only by naming them, since `tool/android.mk` looks under
+`$HOME`: `QT_ANDROID_ROOT=/home/funk/Qt/6.12.0/android_x86_64
+ANDROID_SDK_ROOT=/home/funk/Android/Sdk`. And `/tmp` there is on `/`, not a
+tmpfs, at 93% with 4.5 GB free, so a full Android build with its Gradle cache
+into scratch is a real risk to the disk. The C++ half alone (qmake and make
+into scratch, 170 units) is 121 MB and is the check for whether a change
+compiles for Android.
+
 Both of those moved without anything breaking, and that is `tool/android.mk`
 working rather than luck: it takes the newest kit under `QT_ROOT` and the
 newest NDK under `$(ANDROID_SDK_ROOT)/ndk/`, so neither path is written down
