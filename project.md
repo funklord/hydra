@@ -42387,3 +42387,27 @@ What it still does not do: re-load pages that are not open, or keep a list
 of vouched pages between runs. The set is what this session saw and what is
 loaded now; a persistent vouched list is the step after this, if that
 proves too narrow.
+
+### Open: `try_autofill` segfaulted once at exit in the rig, unexplained
+
+On 2026-11-03, one run of `make hull-keepass` printed `48 passed, 0 failed`
+and then `Segmentation fault`, so `try_autofill` exited 139 after every check
+had passed. It was the first such exit in about a dozen vault runs that
+day, and the first after `4d03131` (lock notices no longer release the write
+queue). That commit is the prime suspect only because it was the last
+change: nothing in it runs at teardown that is known to. Six runs since have
+exited 0, four of them with the instrument below on, and it did not
+reproduce outside the machine either (three runs of the driver here, without
+a vault).
+
+**It is not called flaky.** Not reproducing is what an intermittent fault
+looks like. The machine had no debugger, and an image with gdb is a
+gigabyte the disk did not have (96% that evening). So the drivers now carry
+an opt-in crash handler in `test/watchdog.cpp`: with `HYDRA_TEST_BACKTRACE=1`,
+which the rig sets for `try_autofill`, a crash prints each frame as
+file+offset, and `addr2line -f -C -e <file> <offset>` resolves it on the host
+against the same binary. It was checked by sending a running driver SIGSEGV.
+The exit status stays 139 and the first frame resolves to the handler's own
+line. It is opt-in because the sanitizers install a SEGV handler of their
+own, which this would replace. **The next session that sees `test crash:` in
+a rig log has the backtrace this one did not.**

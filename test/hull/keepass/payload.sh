@@ -130,6 +130,9 @@ echo "=== the shell against the vault ==="
 	done
 ) &
 gen=$!
+# A crash here says where (`test/watchdog.cpp`): one run segfaulted at exit
+# after every check had passed, and the machine has no debugger.
+HYDRA_TEST_BACKTRACE=1 \
 HYDRA_VAULT=1 HYDRA_SECRET_KIND=keepassxc-association-try-keepass \
 	QT_QPA_PLATFORM=offscreen QTWEBENGINE_DISABLE_SANDBOX=1 \
 	HYDRA_TEST_OUT=/tmp/autofill \
