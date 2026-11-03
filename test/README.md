@@ -122,8 +122,20 @@ Start the helper, run the suite, stop the helper.
 
 ### Needs a running KeePassXC
 
-`try_keepass` drives the §13.1 bridge against a real KeePassXC. Set up one that
-touches nothing of yours — its own config, its own database:
+**Unattended, in a machine: `make hull-keepass`.** It runs `try_keepass`
+twice (pairing, then the stored pairing with nobody to ask) and then
+`try_autofill` against the shell, inside a hull machine that brings its own
+throwaway vault, KeePassXC, display, session bus and keyring, with no
+network (`test/hull/keepass`). The rig answers KeePassXC's association and
+generator windows with xdotool and locks the vault over KeePassXC's D-Bus
+for the last check. It needs `hull` at `$(HULL)` (default
+`~/src/hull/build/hull`); the image is built once, with the network, by
+`make hull-keepass-image`. This is the way to test against KeePassXC: it
+cannot reach your own vault, whose socket lives in a runtime directory the
+machine does not share.
+
+**By hand**, `try_keepass` drives the §13.1 bridge against a real KeePassXC.
+Set up one that touches nothing of yours — its own config, its own database:
 
 ```sh
 KP=/tmp/hydra-kp; mkdir -p $KP
