@@ -885,8 +885,6 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// phone apps that have this pattern put it -- Claude's among them -- and it
 	// is the position a thumb finds without looking.
 	//
-	// Only shown in drawer mode; on a wide window the tree is already visible
-	// and a button to reveal it would be a control that does nothing.
 	// **Named rather than drawn as a glyph, because the name is what a screen
 	// reader says.** This was `addAction()` with a hamburger glyph, U+2630, and
 	// an action's text is where
