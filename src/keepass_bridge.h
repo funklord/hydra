@@ -107,6 +107,23 @@ private:
 	bool send_plain(const QJsonObject &msg);
 	QByteArray next_nonce();
 
+	// **One message per read on KeePassXC's side, so one write at a time.**
+	// Its browser server parses each read of the socket as a single JSON
+	// document, and two requests written close together arrive as one read
+	// that it rejects -- "Failed to read proxy message: garbage at the end
+	// of the document" in its log -- and answers neither. Every tab asks for
+	// logins when it loads, so a few tabs loading together were enough to
+	// lose every request for the rest of a run (measured in the hull rig,
+	// 2026-11-03). So frames queue here, and the next is written only once
+	// the previous has been answered or a second has passed: a request that
+	// waits on a person (pairing, the generator) has been read by then, and
+	// is answered later.
+	void pump();
+	QList<QByteArray> m_outbox;
+	bool m_awaiting = false;
+	int  m_write_serial = 0;   // which write the release timer belongs to
+	static constexpr int k_release_ms = 1000;
+
 	QLocalSocket *m_socket = nullptr;
 	QByteArray m_our_public, m_our_secret, m_their_public;
 	QByteArray m_nonce;

@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QLocalSocket>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QUuid>
 
 namespace {
@@ -107,6 +108,8 @@ void keepass_bridge::start() {
 	}
 	m_nonce = box_crypto::random_nonce();
 	m_pending.clear();
+	m_outbox.clear();
+	m_awaiting = false;
 
 	if (!m_socket) {
 		m_socket = new QLocalSocket(this);
@@ -134,6 +137,8 @@ void keepass_bridge::disconnect_now() {
 		m_socket->disconnectFromServer();
 	m_handshaken = false;
 	m_their_public.clear();
+	m_outbox.clear();
+	m_awaiting = false;
 	// The nonce counter is re-randomised by the next `start`, so a request
 	// still outstanding here belongs to a sequence that will not exist any
 	// more: its reply cannot arrive, and leaving it behind would make a later
@@ -149,8 +154,28 @@ QByteArray keepass_bridge::next_nonce() {
 bool keepass_bridge::send_plain(const QJsonObject &msg) {
 	if (!connected())
 		return false;
-	const QByteArray raw = QJsonDocument(msg).toJson(QJsonDocument::Compact);
-	return m_socket->write(raw) == raw.size();
+	m_outbox.append(QJsonDocument(msg).toJson(QJsonDocument::Compact));
+	pump();
+	return true;
+}
+
+void keepass_bridge::pump() {
+	if (m_awaiting || m_outbox.isEmpty() || !connected())
+		return;
+	const QByteArray raw = m_outbox.takeFirst();
+	if (m_socket->write(raw) != raw.size()) {
+		emit error("Could not write to KeePassXC.");
+		return;
+	}
+	m_socket->flush();
+	m_awaiting = true;
+	const int serial = ++m_write_serial;
+	QTimer::singleShot(k_release_ms, this, [this, serial] {
+		if (serial != m_write_serial || !m_awaiting)
+			return;
+		m_awaiting = false;
+		pump();
+	});
 }
 
 bool keepass_bridge::send_encrypted(const QString &action, const QJsonObject &inner,
@@ -273,6 +298,12 @@ void keepass_bridge::on_readable() {
 
 void keepass_bridge::handle(const QJsonObject &reply) {
 	const QString action = reply.value("action").toString();
+	// Something came back, so whatever was written has been read: the next
+	// frame may go. Released before handling, since handling may send.
+	if (m_awaiting) {
+		m_awaiting = false;
+		QTimer::singleShot(0, this, [this] { pump(); });
+	}
 
 	if (action == "change-public-keys") {
 		m_their_public = unb64(reply.value("publicKey").toString());

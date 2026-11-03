@@ -42228,6 +42228,24 @@ refusal, so for one the message says only to unlock. A new one has to be
 asked for again. The wording is held by `test_autofill` (98). No machine run
 pairs against a locked vault yet; the rig's runs still pass (22, 15, 39).
 
+**Requests written together were lost together** (found 2026-11-03, the
+run after the multi-step work). In one run of the rig, every login request
+after pairing went unanswered: the fill, and then the locked-vault check
+minutes later. The next run passed whole. KeePassXC's own log said why:
+*"Failed to read proxy message: garbage at the end of the document"*. Its
+browser server parses each read of the socket as one JSON document. Two
+requests written close together can arrive as one read, which it rejects,
+answering neither. Every tab asks for logins when it loads, so a few tabs
+loading at once is enough. It is intermittent because it depends on how the
+kernel coalesces two writes. **So the bridge writes one frame at a time**
+(`keepass_bridge::pump`): the next goes when the previous has been answered,
+or after a second. A request that waits on a person (pairing, the
+generator) has been read by then and is answered later. `test_autofill`
+holds it with a stand-in server that records each read. Three requests made
+together arrive as three whole reads and are all answered, in about 20 ms.
+With the queue removed, the stand-in gets two reads, one unparseable, and
+answers none: the same failure, reproduced offline.
+
 `make hull-keepass` also rebuilt only `try_keepass` and never
 `try_autofill`, which the payload runs. So a source change was tested on a
 stale binary, which passes or fails for the wrong reason. It builds both now.

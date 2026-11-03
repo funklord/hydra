@@ -11,16 +11,26 @@
 #include "autofill_controller.h"
 #include "keepass_bridge.h"
 #include "keepass_protocol.h"
+#include "box_crypto.h"
 #include "policy_engine.h"
 
 #include <QCoreApplication>
+#include <QElapsedTimer>
+#include <QEventLoop>
+#include <QJsonDocument>
+#include <QLocalServer>
+#include <QLocalSocket>
+#include <QTemporaryDir>
+#include <QTimer>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <cstdio>
+#include <functional>
 
 // The reference the nonce increment is compared against -- see the section
 // that uses it for why a hand-written one is checked rather than trusted.
@@ -770,6 +780,95 @@ int main(int argc, char **argv) {
 		          << credential{ "No id", "alice", QString(), QString() };
 		check(keepass_protocol::uuid_for_login(none_last, "alice") == "abc123",
 		      "and it does not when it comes second either");
+	}
+
+	// **One message per read, on the far side.** KeePassXC parses each read
+	// of its socket as one JSON document; two requests arriving in one read
+	// are rejected together ("garbage at the end of the document") and
+	// neither is answered. Measured in the hull rig, where it lost every
+	// login request for the rest of a run. A stand-in server records what
+	// each read held while three requests are made back to back.
+	section("requests reach KeePassXC one per read, though they are made together");
+	{
+		QTemporaryDir runtime;
+		const QByteArray saved = qgetenv("XDG_RUNTIME_DIR");
+		qputenv("XDG_RUNTIME_DIR", runtime.path().toUtf8());
+		QFile::setPermissions(runtime.path(), QFileDevice::ReadOwner |
+		                      QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+		QByteArray their_public, their_secret;
+		box_crypto::keypair(&their_public, &their_secret);
+		QLocalServer server;
+		const bool listening = server.listen(keepass_bridge::socket_path());
+		check(listening, QString("a stand-in listens at %1").arg(keepass_bridge::socket_path()));
+		QList<QByteArray> reads;
+		QObject::connect(&server, &QLocalServer::newConnection, [&] {
+			QLocalSocket *s = server.nextPendingConnection();
+			QObject::connect(s, &QLocalSocket::readyRead, s, [&, s] {
+				const QByteArray chunk = s->readAll();
+				reads << chunk;
+				const QJsonObject o = QJsonDocument::fromJson(chunk).object();
+				const QString action = o.value("action").toString();
+				// Answered the way KeePassXC answers: a key for the key
+				// exchange, "nothing stored" for a lookup. A read it could
+				// not parse gets nothing, as from KeePassXC.
+				if (action == "change-public-keys") {
+					QJsonObject r;
+					r.insert("action", "change-public-keys");
+					r.insert("publicKey", QString::fromLatin1(their_public.toBase64()));
+					r.insert("success", "true");
+					s->write(QJsonDocument(r).toJson(QJsonDocument::Compact));
+				} else if (action == "get-logins") {
+					QJsonObject r;
+					r.insert("action", "get-logins");
+					r.insert("error", "No logins found");
+					r.insert("errorCode", "15");
+					// The request's nonce, incremented: what KeePassXC
+					// answers with, and how the bridge knows which of three
+					// outstanding lookups this is.
+					r.insert("nonce", QString::fromLatin1(keepass_protocol::increment_nonce(
+					  QByteArray::fromBase64(o.value("nonce").toString().toLatin1())).toBase64()));
+					s->write(QJsonDocument(r).toJson(QJsonDocument::Compact));
+				}
+			});
+		});
+		keepass_bridge bridge;
+		QSignalSpy ready(&bridge, &keepass_bridge::ready);
+		QSignalSpy answered(&bridge, &keepass_bridge::logins);
+		bridge.start();
+		auto wait = [&](const std::function<bool()> &f, int ms) {
+			QElapsedTimer t; t.start();
+			while (!f() && t.elapsed() < ms) {
+				QEventLoop l;
+				QTimer::singleShot(20, &l, &QEventLoop::quit);
+				l.exec();
+			}
+			return f();
+		};
+		check(wait([&] { return ready.count() == 1; }, 3000), "the key exchange completes");
+		bridge.set_association("stand-in-id", QString::fromLatin1(QByteArray(32, 'k').toBase64()));
+		QElapsedTimer took; took.start();
+		bridge.request_logins("https://a.example", 101);
+		bridge.request_logins("https://b.example", 102);
+		bridge.request_logins("https://c.example", 103);
+		wait([&] { return answered.count() == 3; }, 6000);
+		int whole = 0;
+		for (const QByteArray &r : reads) {
+			QJsonParseError e{};
+			QJsonDocument::fromJson(r, &e);
+			if (e.error == QJsonParseError::NoError)
+				++whole;
+		}
+		check(reads.size() == 4 && whole == 4,
+		      QString("every read is one whole message (%1 of %2 reads; 4 expected)")
+		          .arg(whole).arg(reads.size()));
+		check(answered.count() == 3,
+		      QString("and all three are answered (%1)").arg(answered.count()));
+		check(took.elapsed() < 2500,
+		      QString("without waiting out the fallback, since each reply lets the "
+		              "next go (%1 ms)").arg(took.elapsed()));
+		bridge.disconnect_now();
+		server.close();
+		qputenv("XDG_RUNTIME_DIR", saved);
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
