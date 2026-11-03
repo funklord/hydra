@@ -16,7 +16,7 @@ struct entry {
 	const char *mime;
 	const char *body;
 	int         size;    // for the binary ones; -1 for text
-	const char *file;    // read from here instead, a resource compiled in
+	const char *file = nullptr;   // read from here instead, a resource compiled in
 };
 
 // **Every resource, and nothing else.** uBlock's names and aliases, read from
