@@ -310,6 +310,7 @@ private:
 	QLineEdit    *m_claude_model = nullptr;
 	QSpinBox     *m_live_views   = nullptr;
 	QCheckBox    *m_preload_bg   = nullptr;
+	QCheckBox    *m_ask_delete   = nullptr;
 	QLineEdit    *m_claude_key   = nullptr;
 	QLabel       *m_ai_status    = nullptr;
 };
@@ -405,5 +406,9 @@ bool preload_background_tabs();
 bool ytdlp_auto_update();
 void set_ytdlp_auto_update(bool on);
 void set_preload_background_tabs(bool on);
+// Whether deleting a tab or folder asks first. Off unless turned on: a
+// delete is undoable.
+bool ask_before_delete();
+void set_ask_before_delete(bool on);
 
 }  // namespace settings_store

@@ -829,6 +829,14 @@ node *tab_tree_model::add_tab(node *parent, const QString &title,
 }
 
 bool tab_tree_model::remove_node(node *n, bool remember) {
+	// A new user delete starts a new undo group; an internal one leaves the
+	// last group alone, since it stashes nothing.
+	if (remember)
+		m_last_delete = 0;
+	return remove_one(n, remember);
+}
+
+bool tab_tree_model::remove_one(node *n, bool remember) {
 	// The root is the tree; removing it would leave the model pointing at
 	// nothing and the outline writer with no document to write.
 	if (!n || n == m_root || !n->parent)
@@ -853,6 +861,11 @@ bool tab_tree_model::remove_node(node *n, bool remember) {
 		                         [](const QString &id) { return id; },
 		                         /*keep_state=*/true);
 		m_closed.append({clone, parent->id, row});
+		// Counted here, before anything is announced: `structure_changed`
+		// below is what the shell reads Undo's enabled state from, and a count
+		// set after it was read a step late -- Undo stayed greyed after the
+		// delete it was for.
+		++m_last_delete;
 		const int cap = 25;
 		while (m_closed.size() > cap)
 			delete m_closed.takeFirst().tree;
@@ -916,6 +929,8 @@ node *tab_tree_model::reopen_closed_at(int index) {
 	// took before this was generalised, and still does through it.
 	if (index < 0 || index >= m_closed.size())
 		return nullptr;
+	// A reopen spends an entry the undo group may have counted.
+	m_last_delete = 0;
 	closed_entry e = m_closed.takeAt(m_closed.size() - 1 - index);
 	node *sub = e.tree;
 	// The folder it lived in may be gone; the root always answers.
@@ -1061,10 +1076,26 @@ QList<node *> tab_tree_model::top_level_only(const QList<node *> &nodes) {
 
 int tab_tree_model::remove_nodes(const QList<node *> &nodes, bool remember) {
 	int removed = 0;
+	if (remember)
+		m_last_delete = 0;
 	for (node *n : top_level_only(nodes))
-		if (remove_node(n, remember))
+		if (remove_one(n, remember))
 			++removed;
 	return removed;
+}
+
+int tab_tree_model::undo_delete() {
+	// The cap may have evicted the oldest of a large group; what is left of
+	// it is still the newest entries.
+	const int n = qMin(m_last_delete, int(m_closed.size()));
+	m_last_delete = 0;
+	int restored = 0;
+	for (int i = 0; i < n; ++i) {
+		// reopen_closed_at clears the count, which is why it was read first.
+		if (reopen_closed_at(0))
+			++restored;
+	}
+	return restored;
 }
 
 bool tab_tree_model::move_sibling(node *n, int delta) {

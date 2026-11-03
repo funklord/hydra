@@ -667,6 +667,64 @@ int main(int argc, char **argv) {
 		holds(m, "moving out is refused at the top level and f");
 	}
 
+	section("undo puts back the last delete, all of it, where it was");
+	{
+		tab_tree_model m;
+		node *f = m.add_folder(m.root(), "f");
+		node *a = m.add_tab(f, "a", "http://a/");
+		node *b = m.add_tab(f, "b", "http://b/");
+		node *c = m.add_tab(f, "c", "http://c/");
+		(void)b;
+		check(!m.can_undo_delete(), "nothing to undo before a delete");
+		check(m.remove_nodes({ a, c }, /*remember=*/true) == 2, "two rows deleted at once");
+		check(m.can_undo_delete(), "and undo is offered");
+		check(m.undo_delete() == 2, "one undo brings back both");
+		QStringList order;
+		for (node *k : f->children)
+			order << k->title;
+		check(order == QStringList({ "a", "b", "c" }),
+		      QString("each where it was (%1)").arg(order.join(",")));
+		check(!m.can_undo_delete(), "and there is nothing left to undo");
+		holds(m, "undo puts back the last delete");
+	}
+
+	section("undo is already offered when the delete is announced");
+	{
+		// The shell reads Undo's enabled state from `structure_changed`; a
+		// count set after the signal left it greyed after the delete it was
+		// for, which a fresh delete after an undo showed.
+		tab_tree_model m;
+		node *a = m.add_tab(m.root(), "a", "http://a/");
+		node *b = m.add_tab(m.root(), "b", "http://b/");
+		m.remove_node(a, true);
+		m.undo_delete();
+		bool seen = false;
+		QObject::connect(&m, &tab_tree_model::structure_changed, &m,
+		                 [&] { seen = m.can_undo_delete(); });
+		m.remove_node(b, true);
+		check(seen, "can_undo_delete is true inside the delete's own signal");
+	}
+
+	section("undo is only for the last delete, and a reopen spends it");
+	{
+		tab_tree_model m;
+		node *x = m.add_tab(m.root(), "x", "http://x/");
+		node *y = m.add_tab(m.root(), "y", "http://y/");
+		m.remove_node(x, true);
+		m.remove_node(y, true);
+		check(m.undo_delete() == 1 && m.root()->children.size() == 1 &&
+		          m.root()->children.first()->title == "y",
+		      "undo brings back only the last one");
+		check(m.has_closed(), "the older one is still in Recently Closed");
+		node *z = m.add_tab(m.root(), "z", "http://z/");
+		m.remove_node(z, true);
+		check(m.reopen_closed() != nullptr, "a reopen of the newest");
+		check(!m.can_undo_delete(), "spends the undo rather than undoing something else");
+		node *w = m.add_tab(m.root(), "w", "http://w/");
+		m.remove_node(w, false);
+		check(!m.can_undo_delete(), "and an internal removal is never undoable");
+	}
+
 	section("moving into a folder puts a row at the end of that folder");
 	{
 		tab_tree_model m;

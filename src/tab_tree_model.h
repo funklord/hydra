@@ -170,6 +170,13 @@ public:
 	// removals (a mirror refresh, a reorganize) pass remember=false and are not
 	// reopenable, so Reopen never resurrects churn the user did not do.
 	bool  has_closed() const { return !m_closed.isEmpty(); }
+	// **Undo the last delete, as one step however many rows it took.** A
+	// multi-row delete remembers each subtree separately; this puts back the
+	// group the last user delete made, newest first so every row lands where
+	// it was. A reopen in between spends entries the group counted, so it
+	// clears the group rather than undoing something else.
+	bool  can_undo_delete() const { return m_last_delete > 0 && !m_closed.isEmpty(); }
+	int   undo_delete();
 	// How many closed tabs are remembered, and the title of one, counted
 	// newest-first (0 is the most recently closed). For a Recently Closed list.
 	int   closed_count() const { return int(m_closed.size()); }
@@ -310,6 +317,9 @@ private:
 	// `reopen_closed` or evicted past the cap; the destructor frees the rest.
 	struct closed_entry { node *tree = nullptr; QString parent_id; int index = 0; };
 	QList<closed_entry> m_closed;
+	// How many entries at the end of m_closed the last user delete made.
+	int m_last_delete = 0;
+	bool remove_one(node *n, bool remember);
 	bool    is_ancestor_of(const node *maybe_ancestor, const node *n) const;
 
 	QString               m_path;

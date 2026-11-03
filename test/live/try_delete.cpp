@@ -20,6 +20,7 @@
 #include "settings_dialog.h"
 #include "state_store.h"
 #include "tab_tree_model.h"
+#include "tab_tree_view.h"
 
 #include <QMessageBox>
 #include <QAbstractButton>
@@ -32,6 +33,8 @@
 #include <QSortFilterProxyModel>
 #include <QTimer>
 #include <QTreeView>
+#include <QTest>
+#include <QToolButton>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -189,8 +192,13 @@ int main(int argc, char *argv[]) {
 		const int before = model->root()->children.size();
 		const QString name = victim->title;
 
+		auto *ttv = qobject_cast<tab_tree_view *>(tree);
+		check(ttv && !ttv->ask_before_delete(),
+		      "a delete does not ask by default -- Undo is the guard now");
+		if (ttv)
+			ttv->set_ask_before_delete(true);
 		if (del) {
-			// Refused: the folder must survive. If nothing asks, it does not,
+			// With Settings' "Ask before deleting" on. Refused: the folder must survive. If nothing asks, it does not,
 			// which is the whole assertion -- a silent delete cannot pass this
 			// by luck.
 			tree->setCurrentIndex(index_for(tree, model, victim));
@@ -212,6 +220,82 @@ int main(int argc, char *argv[]) {
 			       QString("and answering yes takes it (%1 -> %2)")
 			           .arg(before).arg(model->root()->children.size()));
 		}
+		if (ttv)
+			ttv->set_ask_before_delete(false);
+
+		// **The default: no question, and Undo puts it back.** A modal here
+		// would hang the driver, which is the assertion that none appears.
+		QAction *undo = nullptr;
+		for (QAction *a : w.findChildren<QAction *>())
+			if (QString(a->text()).remove('&') == "Undo Delete")
+				undo = a;
+		check(undo != nullptr, "the Edit menu offers Undo Delete");
+		node *again = model->add_folder(nullptr, "Scratch 2");
+		model->add_tab(again, "Inside 2", "about:blank");
+		spin(100);
+		const int count = model->root()->children.size();
+		node *back = nullptr;   // Undo restores a copy, so `again` is gone after it
+		if (del && undo) {
+			tree->setCurrentIndex(index_for(tree, model, again));
+			del->trigger();
+			spin(300);
+			check(model->root()->children.size() == count - 1 &&
+			          !QApplication::activeModalWidget(),
+			      "with asking off, Delete takes it at once and asks nothing");
+			auto *offer = w.findChild<QToolButton *>("undo_delete");
+			check(offer && offer->isVisible(),
+			      "and the status bar offers Undo beside what went");
+			check(undo->isEnabled(), "and Edit > Undo Delete is live");
+			undo->trigger();
+			spin(300);
+			for (node *c : model->root()->children)
+				if (c->title == "Scratch 2") back = c;
+			check(model->root()->children.size() == count && back &&
+			          back->children.size() == 1,
+			      "and Undo puts the folder back with what was inside it");
+			check(offer && !offer->isVisible(), "and takes its offer down");
+		}
+
+		// **The X on the row under the pointer**, pressed where a person
+		// presses it.
+		node *row = model->add_tab(nullptr, "Hover me", "about:blank");
+		spin(100);
+		if (ttv && row) {
+			const QModelIndex at = index_for(tree, model, row);
+			ttv->scrollTo(at);
+			spin(100);
+			const QPoint centre = ttv->visualRect(at).center();
+			QTest::mouseMove(ttv->viewport(), centre);
+			spin(100);
+			const QRect x = ttv->delete_button_rect(at);
+			check(!x.isEmpty(), "hovering a row shows its delete button");
+			// A picture of it, for a person to look at.
+			ttv->viewport()->grab().save(out + "/hover-delete.png");
+			const QModelIndex other = back ? index_for(tree, model, back) : QModelIndex();
+			check(other.isValid() && ttv->delete_button_rect(other).isEmpty(),
+			      "and only on that row");
+			const int n = model->root()->children.size();
+			QTest::mouseClick(ttv->viewport(), Qt::LeftButton, {}, x.center());
+			spin(300);
+			check(model->root()->children.size() == n - 1,
+			      "a click on it deletes that row");
+			check(undo && undo->isEnabled(),
+			      "and Undo Delete is live straight after it, not a step late");
+			if (undo) {
+				undo->trigger();
+				spin(300);
+			}
+			bool found = false;
+			for (node *c : model->root()->children)
+				if (c->title == "Hover me") found = true;
+			check(found, "and Undo brings it back");
+		}
+		// Out of the way, unremembered, for the sections after this one,
+		// which count the root.
+		for (const QString &t : { QStringLiteral("Hover me"), QStringLiteral("Scratch 2") })
+			for (node *c : QList<node *>(model->root()->children))
+				if (c->title == t)
+					model->remove_node(c, false);
 	}
 
 	section("deleting a suspended tab takes its blob");

@@ -264,6 +264,20 @@ void set_preload_background_tabs(bool on) {
 	s.sync();
 }
 
+bool ask_before_delete() {
+	QSettings s = open_settings();
+	// **Off by default** (holder, 2026-11-03): Undo brings a deleted row back
+	// where it was, so a question before every delete guards nothing Undo
+	// does not, and taxes the common case.
+	return s.value("tabs/askBeforeDelete", false).toBool();
+}
+
+void set_ask_before_delete(bool on) {
+	QSettings s = open_settings();
+	s.setValue("tabs/askBeforeDelete", on);
+	s.sync();
+}
+
 bool autofill_https_only() {
 	QSettings s = open_settings();
 	return s.value("autofill/httpsOnly",
@@ -1688,6 +1702,8 @@ void settings_dialog::restore_page_defaults(int page) {
 			m_live_views->setValue(main_window::k_default_live_views);
 		if (m_preload_bg)
 			m_preload_bg->setChecked(true);
+		if (m_ask_delete)
+			m_ask_delete->setChecked(false);
 	} else if (name.startsWith("Kiosk")) {
 		const kiosk_config d;   // the struct's own initialisers are the defaults
 		put_value(m_kiosk_home, d.home.toString());
@@ -2430,6 +2446,15 @@ void settings_dialog::build_tabs_page(QWidget *page) {
 	  "and one loaded this way is the first to be put back to sleep — so it "
 	  "never costs you a page you were reading.",
 	  m_preload_bg, page));
+
+	m_ask_delete = new QCheckBox(page);
+	m_ask_delete->setObjectName("ask_before_delete");
+	v->addWidget(settings_row(
+	  "Ask before deleting",
+	  "Put a question before a tab or folder is deleted. Off, a delete happens "
+	  "at once, and Edit → Undo Delete — or the Undo the status bar offers "
+	  "right after — puts it back where it was, folder contents and all.",
+	  m_ask_delete, page));
 	v->addStretch(1);
 }
 
@@ -3161,6 +3186,8 @@ void settings_dialog::load() {
 		m_live_views->setValue(settings_store::live_view_cap());
 	if (m_preload_bg)
 		m_preload_bg->setChecked(settings_store::preload_background_tabs());
+	if (m_ask_delete)
+		m_ask_delete->setChecked(settings_store::ask_before_delete());
 
 	if (m_routine_ai) {
 		m_routine_ai->setCurrentIndex(
@@ -3305,6 +3332,8 @@ void settings_dialog::apply() {
 		settings_store::set_live_view_cap(m_live_views->value());
 	if (m_preload_bg)
 		settings_store::set_preload_background_tabs(m_preload_bg->isChecked());
+	if (m_ask_delete)
+		settings_store::set_ask_before_delete(m_ask_delete->isChecked());
 	if (m_policy) {
 		// Exceptions the user removed. Every feature is set back to unset, which
 		// is what "falls through to the defaults" means in the policy model --

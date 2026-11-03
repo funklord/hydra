@@ -1303,6 +1303,18 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_tree->setAccessibleDescription(
 	  "Open tabs and folders; a row opens the page it names");
 	m_tree->setModel(m_proxy);
+	m_tree->set_ask_before_delete(settings_store::ask_before_delete());
+	// The shortcut is scoped to the tree, so the action has to be on it.
+	if (m_undo_delete_action)
+		m_tree->addAction(m_undo_delete_action);
+	// Say what went, and offer it back, for as long as the offer stands.
+	connect(m_tree, &tab_tree_view::deleted, this, [this](const QString &what) {
+		m_status->showMessage(QString("Deleted %1").arg(what), 10000);
+		if (m_undo_delete_button && m_model->can_undo_delete()) {
+			m_undo_delete_button->show();
+			m_undo_delete_timer->start();
+		}
+	});
 	// **The grip's position depends on whether the scrollbar is there**, and
 	// the bar arrives when a tab is opened rather than when the window is
 	// resized -- so laying the drawer out only on resize would leave the grip
@@ -1342,6 +1354,10 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	connect(m_model, &tab_tree_model::structure_changed, this, [this] {
 		if (m_reopen_action)
 			m_reopen_action->setEnabled(m_model->has_closed());
+		if (m_undo_delete_action)
+			m_undo_delete_action->setEnabled(m_model->can_undo_delete());
+		if (m_undo_delete_button && !m_model->can_undo_delete())
+			m_undo_delete_button->hide();
 	});
 	// A node about to be deleted may have a live view, and the model knows
 	// nothing about views. Without this the view survived its node: it stayed in
@@ -1630,6 +1646,22 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		refresh_save_hint();
 	});
 	m_status->addPermanentWidget(m_save_hint);
+	// **Undo, beside the sentence that says what went.** Offered for a few
+	// seconds after a delete, the way a phone's own apps do it -- and on a
+	// phone it is the way to undo at all, with no keyboard for Ctrl+Z.
+	m_undo_delete_button = new QToolButton(this);
+	m_undo_delete_button->setObjectName("undo_delete");
+	m_undo_delete_button->setText("Undo");
+	m_undo_delete_button->setAutoRaise(true);
+	m_undo_delete_button->hide();
+	connect(m_undo_delete_button, &QToolButton::clicked, this,
+	        &main_window::undo_delete);
+	m_undo_delete_timer = new QTimer(this);
+	m_undo_delete_timer->setSingleShot(true);
+	m_undo_delete_timer->setInterval(10000);
+	connect(m_undo_delete_timer, &QTimer::timeout,
+	        m_undo_delete_button, &QWidget::hide);
+	m_status->addPermanentWidget(m_undo_delete_button);
 	m_status->addPermanentWidget(m_progress);
 	m_status->addPermanentWidget(m_tab_counts);
 	m_find = new find_bar(this);
@@ -1759,10 +1791,10 @@ QMenuBar *main_window::build_menu_bar() {
 	new_folder_act->setStatusTip("Add a folder under the selection");
 
 	// Close the current tab, the browser-standard Ctrl+W. Distinct from the
-	// tree's Delete: that removes the selected row and asks first because it
-	// can take a folder and everything in it, while this closes the single
-	// tab being viewed and asks nothing, because Reopen Closed Tab brings it
-	// back. Greyed when no page is showing.
+	// tree's Delete: that removes the selected rows, folders and all, and
+	// Undo Delete puts them back; this closes the single tab being viewed,
+	// and Reopen Closed Tab brings it back. Neither asks unless Settings says
+	// to. Greyed when no page is showing.
 	m_close_tab_action = file_menu->addAction("&Close Tab",
 	                                          QKeySequence("Ctrl+W"), this,
 	                                          &main_window::close_current_tab);
@@ -1852,10 +1884,25 @@ QMenuBar *main_window::build_menu_bar() {
 	m_undo_action->setEnabled(false);
 	m_undo_action->setStatusTip("Put the tree back the way it was before the "
 	                             "last accepted reorganization");
-	// Reopen the last deleted tab or folder. Deletion is otherwise permanent --
-	// the confirmation dialog is the only guard -- so this is the safety net
-	// every browser binds to Ctrl+Shift+T, grouped with Undo as the other way
-	// back from a change you did not mean.
+	// **Undo the last delete, whole.** Deleting no longer asks by default
+	// (holder, 2026-11-03), so this is what makes a slip cheap: one step puts
+	// back everything that delete took, where it was. Ctrl+Z, but only while
+	// the tree has the focus -- the action lives on the tree with a
+	// widget-scoped shortcut, so a page's text field and the address bar
+	// keep their own undo, which is the reason Undo Reorganize is on
+	// Ctrl+Shift+Z.
+	m_undo_delete_action = edit_menu->addAction("Undo &Delete", this,
+	                                             &main_window::undo_delete);
+	m_undo_delete_action->setShortcut(QKeySequence::Undo);
+	m_undo_delete_action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+	// Added to the tree where the tree is made, which is after this menu.
+	m_undo_delete_action->setEnabled(false);
+	m_undo_delete_action->setStatusTip("Put back what the last delete in the "
+	                                    "tree took, where it was");
+	// Reopen the last deleted tab or folder, one at a time and from further
+	// back than the last delete: the safety net every browser binds to
+	// Ctrl+Shift+T, grouped with Undo as the other way back from a change you
+	// did not mean.
 	m_reopen_action = edit_menu->addAction("Reopen Closed &Tab",
 	                                        QKeySequence("Ctrl+Shift+T"), this,
 	                                        [this] {
@@ -1935,10 +1982,10 @@ QMenuBar *main_window::build_menu_bar() {
 	// without a word, from a menu entry that also owns the Delete key. The
 	// only undo in this window is for Reorganize.
 	//
-	// The tree view's `keyPressEvent` declines to bind Delete itself, on the
-	// stated grounds that "a stray key should not remove a folder and
-	// everything in it, and the menu entry asks first" -- so this is the entry
-	// that sentence was relying on.
+	// The tree view's `keyPressEvent` declines to bind Delete itself, so this
+	// is the one place the key deletes. It asked first until 2026-11-03; it
+	// asks now only when Settings says to, because Undo Delete puts back
+	// whatever a stray key took (holder's word).
 	QAction *del_act = edit_menu->addAction("&Delete", QKeySequence::Delete, this,
 	                                         [this] {
 		// The whole selection, not just the current row: the tree is
@@ -3175,6 +3222,17 @@ void main_window::forget_keepass_pairing() {
 	                           : QStringLiteral(
 	                                 "Could not remove the stored pairing."),
 	                      6000);
+}
+
+void main_window::undo_delete() {
+	if (m_undo_delete_button)
+		m_undo_delete_button->hide();
+	if (!m_model)
+		return;
+	const int back = m_model->undo_delete();
+	if (back > 0)
+		m_status->showMessage(back == 1 ? QStringLiteral("Put back")
+		                                : QString("Put back %1 items").arg(back), 4000);
 }
 
 void main_window::undo_reorganize() {
@@ -8898,6 +8956,8 @@ void main_window::open_settings() {
 		showing = m_views_by_id.key(v);
 	enforce_live_cap(showing);
 	update_status();
+	// And whether a delete asks first, which the tree holds.
+	m_tree->set_ask_before_delete(settings_store::ask_before_delete());
 }
 
 void main_window::open_downloads() {

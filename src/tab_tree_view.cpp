@@ -1,6 +1,9 @@
 #include "tab_tree_view.h"
 #include "touch_scroll.h"
 #include <QMouseEvent>
+#include <QHelpEvent>
+#include <QToolTip>
+#include <QPainter>
 #include <QTimer>
 #include <QEvent>
 #include "tree_sort_proxy.h"
@@ -35,6 +38,8 @@ tab_tree_view::tab_tree_view(QWidget *parent) : QTreeView(parent) {
 	// refuse to hand anything over.
 	setDragDropMode(QAbstractItemView::DragDrop);
 	setDefaultDropAction(Qt::MoveAction);
+	// For the delete button, which follows the pointer.
+	setMouseTracking(true);
 #ifdef Q_OS_ANDROID
 	// **A swipe scrolls the tree.** Without this a finger swipe was the
 	// tree's drag-and-drop: on the emulator, swiping up a 40-row tree to
@@ -672,9 +677,14 @@ bool tab_tree_view::confirm_and_remove(node *n) {
 	  ? QString("Delete \"%1\" and the %2 item%3 inside it?")
 	        .arg(n->title).arg(kids).arg(kids == 1 ? "" : "s")
 	  : QString("Delete \"%1\"?").arg(n->title);
-	if (QMessageBox::question(this, "Delete", what) != QMessageBox::Yes)
+	if (m_ask_before_delete &&
+	    QMessageBox::question(this, "Delete", what) != QMessageBox::Yes)
 		return false;
-	m->remove_node(n, /*remember=*/true);
+	const QString title = n->title.isEmpty() ? n->url : n->title;
+	if (!m->remove_node(n, /*remember=*/true))
+		return false;
+	emit deleted(kids > 0 ? QString("\"%1\" and %2 inside").arg(title).arg(kids)
+	                      : QString("\"%1\"").arg(title));
 	return true;
 }
 
@@ -717,9 +727,114 @@ bool tab_tree_view::confirm_and_remove_selection() {
 	  ? QString("Delete %1 selected items and the %2 item%3 inside them?")
 	        .arg(roots.size()).arg(extra).arg(extra == 1 ? "" : "s")
 	  : QString("Delete %1 selected items?").arg(roots.size());
-	if (QMessageBox::question(this, "Delete", what) != QMessageBox::Yes)
+	if (m_ask_before_delete &&
+	    QMessageBox::question(this, "Delete", what) != QMessageBox::Yes)
 		return false;
-	return m->remove_nodes(roots, /*remember=*/true) > 0;
+	const int gone = m->remove_nodes(roots, /*remember=*/true);
+	if (gone > 0)
+		emit deleted(QString("%1 items").arg(gone));
+	return gone > 0;
+}
+
+// ---- The delete button ------------------------------------------------------
+//
+// **An X on the row under the pointer, the way a tab strip closes a tab.**
+// Deleting took a right-click and a menu, or a selection and the Edit menu;
+// a tab list is closed from the tab. Shown on one row at a time so the tree
+// does not become a column of crosses, and on a phone -- which has no hover
+// -- on the current row instead. It deletes without asking unless Settings
+// says to ask, and Undo is what makes that safe (holder, 2026-11-03).
+
+bool tab_tree_view::shows_delete_button(const QModelIndex &index) const {
+	if (!index.isValid())
+		return false;
+	const QModelIndex row = index.siblingAtColumn(0);
+#ifdef Q_OS_ANDROID
+	return row == currentIndex().siblingAtColumn(0);
+#else
+	return m_hover.isValid() && row == QModelIndex(m_hover).siblingAtColumn(0);
+#endif
+}
+
+QRect tab_tree_view::delete_button_rect(const QModelIndex &index) const {
+	if (!shows_delete_button(index))
+		return QRect();
+	const QRect r = visualRect(index.siblingAtColumn(0));
+	if (!r.isValid())
+		return QRect();
+	// A square the row's height at the viewport's right edge, inset a little,
+	// so it sits over whatever column is last and never under a scrollbar.
+	const int side = qMax(16, r.height() - 4);
+	return QRect(viewport()->width() - side - 4,
+	             r.top() + (r.height() - side) / 2, side, side);
+}
+
+void tab_tree_view::drawRow(QPainter *painter, const QStyleOptionViewItem &option,
+                             const QModelIndex &index) const {
+	QTreeView::drawRow(painter, option, index);
+	const QRect b = delete_button_rect(index);
+	if (b.isEmpty())
+		return;
+	painter->save();
+	painter->setRenderHint(QPainter::Antialiasing);
+	const bool selected = option.state & QStyle::State_Selected;
+	const QColor ink = option.palette.color(
+	  selected ? QPalette::HighlightedText : QPalette::Text);
+	QPen pen(ink, qMax(1.5, b.width() / 10.0));
+	pen.setCapStyle(Qt::RoundCap);
+	painter->setPen(pen);
+	const QRectF x = QRectF(b).adjusted(b.width() * 0.3, b.height() * 0.3,
+	                                    -b.width() * 0.3, -b.height() * 0.3);
+	painter->drawLine(x.topLeft(), x.bottomRight());
+	painter->drawLine(x.topRight(), x.bottomLeft());
+	painter->restore();
+}
+
+void tab_tree_view::mouseMoveEvent(QMouseEvent *event) {
+	const QModelIndex at = indexAt(event->position().toPoint());
+	if (QPersistentModelIndex(at) != m_hover) {
+		m_hover = at;
+		viewport()->update();
+	}
+	QTreeView::mouseMoveEvent(event);
+}
+
+void tab_tree_view::leaveEvent(QEvent *event) {
+	if (m_hover.isValid()) {
+		m_hover = QPersistentModelIndex();
+		viewport()->update();
+	}
+	QTreeView::leaveEvent(event);
+}
+
+void tab_tree_view::mousePressEvent(QMouseEvent *event) {
+	if (event->button() == Qt::LeftButton) {
+		const QPoint p = event->position().toPoint();
+		const QModelIndex at = indexAt(p);
+		if (delete_button_rect(at).contains(p)) {
+			if (node *n = node_at_index(at)) {
+				m_hover = QPersistentModelIndex();
+				confirm_and_remove(n);
+			}
+			event->accept();
+			return;
+		}
+	}
+	QTreeView::mousePressEvent(event);
+}
+
+bool tab_tree_view::viewportEvent(QEvent *event) {
+	if (event->type() == QEvent::ToolTip) {
+		const auto *he = static_cast<QHelpEvent *>(event);
+		if (delete_button_rect(indexAt(he->pos())).contains(he->pos())) {
+			QToolTip::showText(he->globalPos(),
+			                   m_ask_before_delete ? QStringLiteral("Delete…")
+			                                       : QStringLiteral("Delete (Undo brings it back)"),
+			                   viewport());
+			return true;
+		}
+	}
+	return QTreeView::viewportEvent(event);
 }
 
 int tab_tree_view::duplicate_selection() {
@@ -729,9 +844,9 @@ int tab_tree_view::duplicate_selection() {
 
 void tab_tree_view::keyPressEvent(QKeyEvent *event) {
 	// F2 is what a hand reaches for to rename something in a tree, and it cost
-	// nothing to answer. Delete is deliberately *not* bound here: a stray key
-	// should not remove a folder and everything in it, and the menu entry asks
-	// first.
+	// nothing to answer. Delete is deliberately *not* bound here: the Edit
+	// menu's entry owns the key, so there is one path for it, and Undo Delete
+	// is what answers a stray press.
 	if (event->key() == Qt::Key_F2) {
 		// `node_at_index` rather than the mapping written out here: it is the
 		// one that refuses the root, and this is where that mattered. With no

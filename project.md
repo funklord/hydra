@@ -41960,3 +41960,45 @@ horizontal scrollbar under it, the same fault Readings had. It is now
 an `empty_state` in the list's viewport and wraps. `test_annoyance`
 reads it from there (82). A search for other sentences added as rows,
 or placeholder items disabled to look like text, found none.
+
+## Deleting from the tree: an X on the row, Undo, and no question by default
+
+Asked for by the holder 2026-11-03: an easier delete, an Undo, and no
+confirmation by default, with the confirmation still available.
+
+- **An X on the row under the pointer**, drawn at the viewport's right
+  edge in the row's text colour, the way a tab strip closes a tab. Only one
+  row shows it at a time. A phone has no hover, so there it is on the
+  current row. A click on it deletes that row alone, whatever is selected.
+- **Undo Delete** (Edit menu; Ctrl+Z while the tree has the focus) puts
+  back everything the last delete took, where it was. A multi-row delete
+  undoes as one step. It is built on the store Reopen Closed Tab already
+  kept: `remove_one` stashes a copy, and the model now counts how many
+  stashes the last user delete made. `undo_delete` reopens that many,
+  newest first, so each row lands in its own place. A reopen in between
+  clears the group rather than undoing something else. The shortcut is
+  scoped to the tree, so a page's text field and the address bar keep
+  their own Ctrl+Z. That is why Undo Reorganize sits on Ctrl+Shift+Z.
+- **An Undo on the status bar** for ten seconds after a delete, beside
+  "Deleted ..." naming what went. On a phone this is the way to undo, with
+  no keyboard.
+- **Settings > Tabs > Ask before deleting**, off by default. The tree
+  holds it through `set_ask_before_delete`, set at start and after
+  Settings closes. The Edit menu's Delete owns the Delete key, so a stray
+  press now deletes without asking, and Undo is what answers that.
+
+**A bug the test caught.** The undo count was first set after
+`remove_one` returned. `structure_changed`, which the shell reads Undo's
+enabled state from, had already fired, so Undo stayed greyed after the
+very delete it was for. The menu-delete check passed anyway, on a stale
+count left by an earlier delete. The X check, a fresh delete straight
+after an undo, failed with Undo disabled. The count is now taken where
+the copy is stashed, before anything is announced. `test_model` pins
+that Undo is offered inside the delete's own signal.
+
+`test_model` (423) covers grouping, order, the reopen interaction and
+internal removals. `try_delete` (26) covers the asking path, the silent
+default with no modal, Undo through the menu and the status bar, and the
+X: shown on the hovered row only, a click deletes, Undo restores. It
+also saves a picture of the hovered row. Not yet checked on the emulator:
+the X on a phone's current row.

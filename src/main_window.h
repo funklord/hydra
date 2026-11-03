@@ -333,6 +333,7 @@ private slots:
 	void confirm_rules();
 	void offer_confirmation(const QStringList &added, const QString &host);
 	void undo_reorganize();
+	void undo_delete();
 	void on_media_found(const QString &site_host, int count);
 
 private:
@@ -963,6 +964,9 @@ public:
 	QAction            *m_kiosk_action  = nullptr;
 	QAction            *m_undo_action   = nullptr;
 	QAction            *m_reopen_action = nullptr;
+	QAction            *m_undo_delete_action = nullptr;
+	QToolButton        *m_undo_delete_button = nullptr;
+	QTimer             *m_undo_delete_timer = nullptr;
 	tree_snapshot       m_undo;
 	QTimer             *m_save_timer    = nullptr;
 	// Whether the tree is showing now, and how wide it was when it last was.

@@ -104,8 +104,25 @@ public:
 	// existing nodes or replaced them all.
 	void setModel(QAbstractItemModel *m) override;
 
+	// **Whether a delete asks first.** Off by default: a delete is undoable
+	// now (Edit > Undo Delete, and the Undo the status bar offers), and a
+	// question before every one is a toll on the common case paid to guard
+	// the rare one. The shell sets it from Settings.
+	void set_ask_before_delete(bool on) { m_ask_before_delete = on; }
+	bool ask_before_delete() const { return m_ask_before_delete; }
+	// Where a row's delete button is drawn, in viewport coordinates; empty
+	// for a row that does not show one. Public so a test presses what a
+	// person presses.
+	QRect delete_button_rect(const QModelIndex &index) const;
+
 protected:
 	bool eventFilter(QObject *o, QEvent *e) override;
+	void drawRow(QPainter *painter, const QStyleOptionViewItem &option,
+	             const QModelIndex &index) const override;
+	void mouseMoveEvent(QMouseEvent *event) override;
+	void mousePressEvent(QMouseEvent *event) override;
+	void leaveEvent(QEvent *event) override;
+	bool viewportEvent(QEvent *event) override;
 
 #ifdef Q_OS_ANDROID
 	// **The tab menu, on a device with no right button.** Everything done to a
@@ -127,6 +144,12 @@ protected:
 	QTimer *m_hold = nullptr;
 	QPoint  m_hold_at;
 #endif
+	bool m_ask_before_delete = false;
+	// The row under the pointer, whose delete button is drawn.
+	QPersistentModelIndex m_hover;
+	// The row a delete button belongs on: the hovered one, or on a device
+	// with no hover the current one.
+	bool shows_delete_button(const QModelIndex &index) const;
 
 public:
 
@@ -159,6 +182,9 @@ signals:
 	// and nothing when the tab is not open, its stored url having just been
 	// updated and its next activation loading from it.
 	void navigate_requested(node *n);
+	// Something was deleted, so the shell can offer to undo it. `what` names
+	// it: the title of a lone row, or a count.
+	void deleted(const QString &what);
 
 public:
 	// **Hold the folds across a search, and give them back afterwards.**
