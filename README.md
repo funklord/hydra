@@ -17,7 +17,7 @@ A page in the tree that has never been loaded costs nothing, so the tree is also
 where bookmarks live; there is no second store to keep in step. A tab put to
 sleep keeps its back and forward history, and a popup lands as a child of the
 page that opened it. The jobs other browsers leave to extensions are built in
-and answer to **one per-site policy engine** with twenty capabilities: blocking
+and answer to **one per-site policy engine**, a switch per capability: blocking
 with uBlock Origin's own filter lists, answering cookie banners, finding the
 stream a page is really playing, downloading torrents beside ordinary files,
 reading view, and passwords from KeePassXC. It runs on Linux on Qt 6 Widgets
@@ -134,11 +134,12 @@ not do them, or does something adjacent that is not the same thing.
 - **A filter-evolution loop**: passive signals from pages you visited become
   proposed rules, dry-run validated against real requests, then shown as a diff
   you accept or reject.
-- **Twenty per-site capabilities**, not the usual handful — javascript, cookies,
-  third-party cookies, ads, popups, images, autoplay, location, camera,
-  microphone, notifications, referer, autofill, extractor-fetch, cookie notices,
-  clipboard reading, pointer lock, screen sharing, request-desktop-site and
-  media auto-detection.
+- **A per-site switch for every capability**, not the usual handful —
+  javascript, cookies, third-party cookies, ads, popups, images, autoplay,
+  location, camera, microphone, notifications, referer, autofill,
+  extractor-fetch, cookie notices, clipboard reading, pointer lock, screen
+  sharing, request-desktop-site, media auto-detection and skipping sponsor
+  segments.
 - **"Request desktop site" is a site rule as well as a tab toggle.** Some sites
   refuse a phone whatever it is running — Teams redirects a mobile user agent to
   a "not supported" page before serving anything, server-side, and Chrome on
@@ -290,10 +291,9 @@ work, and most of them were got wrong here first and are written up in
   qmake; `fmake` derives the entire build from the sources — every `Q_OBJECT`,
   the moc runs, the platform-specific files, and a link set closed over symbols.
   Six annotations in the source are the only things it cannot infer.
-- **The tests drive the real thing.** Forty-three test suites — most needing
-  nothing but a build, a handful wanting a network or a device — and forty
-  live drivers that stand up the actual shell against a local server and check
-  what a page sees. Every dialog is measured at phone geometry — width, cut
+- **The tests drive the real thing.** Offline suites that need nothing but a
+  build, a handful wanting a network or a device, and live drivers that stand
+  up the actual shell against a local server and check what a page sees. Every dialog is measured at phone geometry — width, cut
   labels, focus, Tab coverage, and paragraphs absorbing spare height — and
   renders a picture, because the last two dialog defects were found by looking
   at one.
