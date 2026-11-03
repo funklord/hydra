@@ -545,8 +545,16 @@ int main(int argc, char **argv) {
 		const QByteArray sums = read(fixture + "/SHA2-256SUMS");
 		const QByteArray sig  = read(fixture + "/SHA2-256SUMS.sig");
 		const QByteArray key  = ytdlp_updater::shipped_key();
-		check(!sums.isEmpty() && !sig.isEmpty() && !key.isEmpty(),
-		      "the fixture and the shipped release key are there");
+		check(!sums.isEmpty() && !sig.isEmpty(), "the release fixture is there");
+		// **The key is the submodule's** (`third_party/yt-dlp/public.key`),
+		// and CI checks out without submodules on purpose -- so there it is
+		// absent by construction, and this check was red on every run for it.
+		// Absent beside a checkout is still a failure.
+		if (vendored_checkout_present())
+			check(!key.isEmpty(), "and the shipped release key is there");
+		else
+			note("skipped: no vendored checkout, so no shipped release key to "
+			     "verify against");
 		check(ytdlp_updater::tag_from(QUrl("https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.21"))
 		          == "2026.10.21",
 		      "the release is read from where latest points");
@@ -556,6 +564,8 @@ int main(int argc, char **argv) {
 		      "a file's checksum is its own line's, and none for a name not there");
 		if (QStandardPaths::findExecutable("gpgv").isEmpty()) {
 			std::printf("  --    no gpgv here, so signatures are not checked\n");
+		} else if (key.isEmpty()) {
+			std::printf("  --    no release key here, so signatures are not checked\n");
 		} else {
 			QString why;
 			check(ytdlp_updater::verify(sums, sig, key, &why),

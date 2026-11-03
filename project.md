@@ -41334,6 +41334,12 @@ like a browser's. yt-dlp said so: "no impersonate target is available".
 With `curl_cffi` in a scratch environment, the same yt-dlp found the
 video's three sizes.
 
+The key is read from the submodule (`third_party/yt-dlp/public.key`), and CI
+checks out without submodules on purpose. So the three signature checks
+skip there, saying so, where for three weeks "the fixture and the shipped
+release key are there" failed every CI run instead (fixed 2026-11-03).
+Beside a checkout, a missing key is still a failure.
+
 Debian does not package `curl_cffi`, and it is compiled code (a modified
 curl). The holder chose for hydra to manage it. The daily check keeps a
 private environment at `<app data>/yt-dlp/venv`:
