@@ -103,6 +103,13 @@ int main(int argc, char **argv) {
 		QApplication::setFont(bigger);
 		downloads_dialog wide(&m, &players, &proxy);
 		wide.show();
+		// **Room for every column**, or the question is not asked. At twice
+		// the font a narrow dialog is cramped and hides Source and Size on
+		// purpose (a phone's layout), and a hidden section's size is 0 -- so
+		// in Debian's default font, wider than this machine's, CI read the
+		// two hidden columns as "pinned" on every run. Reproduced in a trixie
+		// hull machine and gone there with this line.
+		wide.resize(4000, wide.height());
 		spin(300);
 		auto *t2 = wide.findChild<QTreeWidget *>();
 		QHeaderView *const h2 = t2 ? t2->header() : nullptr;
@@ -120,9 +127,12 @@ int main(int argc, char **argv) {
 		// a count, and every other column has to move.
 		QStringList stuck;
 		const int last = h2 ? h2->count() - 1 : 0;
-		for (int c = 0; h2 && c < last && c < before.size(); ++c)
-			if (h2->sectionSize(c) <= before.at(c))
+		for (int c = 0; h2 && c < last && c < before.size(); ++c) {
+			if (t2->isColumnHidden(c))
+				stuck << t2->headerItem()->text(c) + " (hidden)";
+			else if (h2->sectionSize(c) <= before.at(c))
 				stuck << t2->headerItem()->text(c);
+		}
 		check(h2 && stuck.isEmpty(),
 		       QString("and every column but the last grows when the text "
 		                "does (%1)")

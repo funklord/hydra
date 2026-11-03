@@ -33134,6 +33134,17 @@ fails on `test_pick` and `test_rotation` and no longer mentions
 since the defect was invisible on this machine by construction. What is left
 red is the two font-metric pins, and neither is a code fault.
 
+**`test_pick`'s was not a pin; it was the test measuring a hidden column**
+(found 2026-11-03, after a month red). At twice the font in Debian's default
+font, which is wider than this machine's, the dialog is cramped and hides
+Source and Size on purpose. A hidden section's size is 0, so the check read
+them as "did not grow". It was reproduced in a trixie hull machine (the
+KeePassXC image, the same fonts) and is fixed there by giving the enlarged
+dialog room. A hidden column is now named as hidden rather than as pinned.
+The old sabotage, Progress fixed at 170, still fails it. `test_rotation`'s
+menu-bar floor is the one font pin left, and its own section says why it
+stays.
+
 **Reading a CI result means not pushing while you wait.** The run before
 that one was cancelled at 5m10s by the next push, as were two earlier in the
 day: the workflow has a concurrency group, so a newer push on the same branch
@@ -41323,6 +41334,12 @@ and signature (`test/fixture/ytdlp`):
 - the checksum lookup reads only its own line;
 - a newer fetched copy is chosen over the pin, and an older one is not.
 
+The key is read from the submodule (`third_party/yt-dlp/public.key`), and CI
+checks out without submodules on purpose. So the three signature checks
+skip there, saying so, where for three weeks "the fixture and the shipped
+release key are there" failed every CI run instead (fixed 2026-11-03).
+Beside a checkout, a missing key is still a failure.
+
 `test/live/try_ytdlp_update` runs the whole thing against GitHub in
 test mode.
 
@@ -41333,12 +41350,6 @@ it checks that the connection itself, down to the TLS handshake, looks
 like a browser's. yt-dlp said so: "no impersonate target is available".
 With `curl_cffi` in a scratch environment, the same yt-dlp found the
 video's three sizes.
-
-The key is read from the submodule (`third_party/yt-dlp/public.key`), and CI
-checks out without submodules on purpose. So the three signature checks
-skip there, saying so, where for three weeks "the fixture and the shipped
-release key are there" failed every CI run instead (fixed 2026-11-03).
-Beside a checkout, a missing key is still a failure.
 
 Debian does not package `curl_cffi`, and it is compiled code (a modified
 curl). The holder chose for hydra to manage it. The daily check keeps a
