@@ -44,6 +44,10 @@ public:
 
 	// Everything seen on this page -- the corpus a rule is simulated against.
 	QStringList observed_for(const QString &site_host) const;
+	// Every site anything was observed on this session: the pages somebody
+	// used, which is the known-clean set a proposed rule is dry-run against
+	// before it is offered (sec 12's regression feedback).
+	QStringList sites() const;
 
 	// **A capability a page asked for, and what it was told.**
 	//

@@ -89,6 +89,13 @@ QStringList filter_signals::refused_for(const QString &site_host) const {
 	return m_refused.value(site_host);
 }
 
+QStringList filter_signals::sites() const {
+	QMutexLocker guard(&m_lock);
+	QStringList out = m_observed.keys();
+	out.sort();
+	return out;
+}
+
 QStringList filter_signals::observed_for(const QString &site_host) const {
 	QMutexLocker guard(&m_lock);
 	return m_observed.value(site_host);

@@ -283,6 +283,25 @@ void filter_dialog::show_proposals(const QList<filter_rule> &rules) {
 			continue;
 		}
 
+		// **The other pages this session, as a known-clean set** (sec 12's
+		// regression feedback). A network rule is dry-run against what every
+		// other site requested; anything it would block there is a page the
+		// person used without complaint that this rule would now change.
+		// Named, and the rule left unticked, so accepting it is deliberate.
+		QStringList elsewhere;
+		QList<QPair<QString, QStringList>> collateral;
+		if (!r.cosmetic) {
+			for (const QString &other : m_signals->sites()) {
+				if (other == m_site)
+					continue;
+				const dry_run o = filter_list::evaluate(r, m_signals->observed_for(other), other);
+				if (o.rejected || o.would_block.isEmpty())
+					continue;
+				elsewhere << QString("%1 (%2)").arg(other).arg(o.would_block.size());
+				collateral.append({ other, o.would_block });
+			}
+		}
+
 		if (r.cosmetic) {
 			row->setText(1, sim.cosmetic_checked
 			                    ? (sim.cosmetic_hits
@@ -298,11 +317,17 @@ void filter_dialog::show_proposals(const QList<filter_rule> &rules) {
 		// Pre-tick only what is demonstrably doing something: a rule that
 		// matched nothing, or a cosmetic rule that misses the picked element,
 		// is unproven and stays for the user to decide.
+		if (!elsewhere.isEmpty())
+			row->setText(1, row->text(1) + "; and on other sites you used: " +
+			                    elsewhere.join(", "));
 		const bool proven = r.cosmetic ? (sim.cosmetic_checked && sim.cosmetic_hits)
 		                               : !sim.would_block.isEmpty();
-		row->setCheckState(0, proven ? Qt::Checked : Qt::Unchecked);
+		row->setCheckState(0, proven && elsewhere.isEmpty() ? Qt::Checked : Qt::Unchecked);
 		for (const QString &u : sim.would_block)
 			new QTreeWidgetItem(row, QStringList{u});
+		for (const auto &c : collateral)
+			for (const QString &u : c.second)
+				new QTreeWidgetItem(row, QStringList{QString("on %1: %2").arg(c.first, u)});
 		m_accepted << r;
 	}
 

@@ -42308,9 +42308,18 @@ undone rules are still in it as comments, and it checks the records are
 written (16).
 
 **The other part, a known-clean page set re-run when filters change, is
-not built.** It needs a list of pages the person vouches for, and a run
-that loads them and compares something against an earlier load. What
-"broke" means on a page nobody is looking at -- a missing element, a
-failed request, a layout change -- is the design question, and the
-dry-run against evidence already captured is the cheaper half to build
-first.
+built as a dry run, and not as a re-load** (2026-11-03). The known-clean set
+is every other site `filter_signals` saw this session, the pages somebody
+used without complaint; `filter_signals::sites` lists them. A proposed
+network rule is evaluated against each one's observed requests. If it would
+block anything there, the row says so, for example "and on other sites you
+used: other.example (2)", lists the requests under the rule, and **leaves it
+unticked even when it blocks the ad it was asked for**. `test_rotation` holds
+the naming, the untick and the listing, and all three fail with the
+cross-site dry run removed.
+
+What it does not do: re-load those pages, or say anything about a cosmetic
+rule's hide. Both need a page in front of a view. A generic cosmetic rule is
+left to the static rejection in `filter_list::evaluate`. And the set is the
+session's, not a list somebody keeps; a vouched list of pages that persists
+is the step after this, if the dry run proves too narrow.

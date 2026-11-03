@@ -3627,6 +3627,46 @@ int main(int argc, char **argv) {
 		              "site it broke (%1)").arg(row ? row->text(1) : QString("(no row)")));
 	}
 
+	// **The other pages this session are the known-clean set** (sec 12): a
+	// rule proposed for one site is dry-run against what the others asked
+	// for, and a rule that would change a page nobody complained about says
+	// which, and is not pre-ticked.
+	section("a proposed rule says what it would block on the other sites you used");
+	{
+		filter_signals sig;
+		auto seen = [&](const char *site, const char *url) {
+			request_context ctx;
+			ctx.site_host = site;
+			ctx.url = QUrl(url);
+			ctx.request_host = ctx.url.host();
+			sig.on_request(ctx, request_decision{});
+		};
+		seen("site.example", "https://ads.example.com/banner.js");
+		seen("other.example", "https://ads.example.com/widget.js");
+		seen("other.example", "https://ads.example.com/login-helper.js");
+		seen("third.example", "https://cdn.third.example/app.js");
+		filter_list list;
+		stub_ai prov;   // proposes ||ads.example.com^
+		filter_dialog dlg(&sig, &list, &prov, "site.example");
+		for (QPushButton *b : dlg.findChildren<QPushButton *>())
+			if (b->text().contains("Send"))
+				b->setEnabled(true), b->click();
+		spin(150);
+		auto *rules = dlg.findChild<QTreeWidget *>();
+		QTreeWidgetItem *row = rules && rules->topLevelItemCount()
+		                         ? rules->topLevelItem(0) : nullptr;
+		const QString said = row ? row->text(1) : QString("(no row)");
+		check(row && said.contains("other.example (2)") && !said.contains("third.example"),
+		      QString("it names the other site it would change, and how much (%1)").arg(said));
+		check(row && row->checkState(0) == Qt::Unchecked,
+		      "and is left unticked, though it does block the ad it was asked for");
+		int listed = 0;
+		for (int i = 0; row && i < row->childCount(); ++i)
+			if (row->child(i)->text(0).startsWith("on other.example:"))
+				++listed;
+		check(listed == 2, QString("with the requests it would block there listed (%1)").arg(listed));
+	}
+
 	// **A rule accepted for a site whose ads are allowed does nothing.** The
 	// interceptor skips the whole imported list for such a site, and the
 	// cosmetic half was taught the same switch earlier today -- so everything
