@@ -202,6 +202,17 @@ not do them, or does something adjacent that is not the same thing.
 - **Autofill behind two gates**: a strict origin match *and* the per-site policy,
   and it declines on plain HTTP unless you say otherwise, because filling a
   password over HTTP puts it on the wire.
+- **Sign-ins that ask who you are first** (Google, Microsoft, most banks):
+  the username page gets the login and no password, the password page after
+  it gets that account's password, and a password saved there is filed under
+  the login from the first page.
+- **It asks once, and only about something new.** Submitting a login offers to
+  save it once; submitting the one the vault just filled does not ask at all.
+  A locked vault is said to be locked, on the key, rather than left looking
+  ready to fill.
+- **Tested against a real KeePassXC** in a throwaway machine with its own vault
+  (`make hull-keepass`), so the integration is exercised without ever pairing
+  with yours.
 
 ### Permissions that say what is happening
 
@@ -302,10 +313,6 @@ Kept here rather than left for you to discover.
   asks gets it. Set `camera=ask` in `policy.ini` for a prompt.
 - **The site-extractor loop is not finished**: it does not yet produce a usable
   extractor reliably on every media host. `project.md` has the measurements.
-- **The KeePassXC bridge has never met a real KeePassXC.** The protocol is
-  implemented and its socket path settled, but framing, key exchange and
-  association have only been tested against the protocol, not a running
-  KeePassXC.
 - **A saved `policy.ini` pins the defaults that were current when it was
   written**, so a default changed later does not reach an existing profile.
 
