@@ -37,6 +37,8 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QLineEdit>
+#include <QAbstractButton>
+#include <QMessageBox>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTimer>
@@ -89,6 +91,36 @@ public:
 			  "Content-Length: " + QByteArray::number(body.size()) +
 			  "\r\nConnection: close\r\n\r\n" + body;
 			s->write(resp);
+			s->flush();
+			s->disconnectFromHost();
+		});
+	}
+};
+
+// **Pages for the vault sections**, by path: a login form, and a sign-up
+// form whose password field asks for a new password. Listens on a fixed port,
+// because the vault's entry is for that origin.
+class vault_site : public QTcpServer {
+public:
+	void incomingConnection(qintptr fd) override {
+		auto *s = new QTcpSocket(this);
+		s->setSocketDescriptor(fd);
+		connect(s, &QTcpSocket::readyRead, this, [s] {
+			const QByteArray req = s->readAll();
+			const bool signup = req.startsWith("GET /signup");
+			const QByteArray body = signup
+			  ? QByteArray("<!doctype html><html><body><h1>Sign up</h1>"
+			               "<form><input type=text name=user autocomplete=username>"
+			               "<input type=password name=pass autocomplete=new-password>"
+			               "<button type=submit>Go</button></form></body></html>")
+			  : QByteArray("<!doctype html><html><body><h1>Sign in</h1>"
+			               "<form onsubmit='return false'>"
+			               "<input type=text name=user autocomplete=username>"
+			               "<input type=password name=pass autocomplete=current-password>"
+			               "<button type=submit>Go</button></form></body></html>");
+			s->write("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n"
+			         "Content-Length: " + QByteArray::number(body.size()) +
+			         "\r\nConnection: close\r\n\r\n" + body);
 			s->flush();
 			s->disconnectFromHost();
 		});
@@ -363,6 +395,134 @@ int main(int argc, char *argv[]) {
 			       "and the other tab is NOT -- delivery is per view, not a "
 			       "broadcast");
 		}
+	}
+
+	// ---- Against a real vault -------------------------------------------------
+	//
+	// **Only in a machine that has one**, under HYDRA_VAULT=1: the hull rig
+	// (`make hull-keepass`) runs this after try_keepass has paired with a
+	// throwaway KeePassXC and stored the pairing. Never against the holder's
+	// own vault, which this would read from and write to.
+	if (qEnvironmentVariableIntValue("HYDRA_VAULT") != 1) {
+		note("vault sections skipped: they need the hull rig's throwaway vault");
+	} else {
+		// Plain http on loopback is what the fixture is, so the HTTPS rule
+		// that the sections above prove is lifted for the tabs opened below.
+		settings_store::set_autofill_https_only(false);
+
+		auto field = [](web_view_backend *v, const char *css) -> QString {
+			auto *view = v ? qobject_cast<QWebEngineView *>(v->widget()) : nullptr;
+			if (!view || !view->page()) return QString("(no page)");
+			QString out; QEventLoop loop;
+			view->page()->runJavaScript(
+			  QString("(document.querySelector('%1')||{}).value||''").arg(css),
+			  [&](const QVariant &r) { out = r.toString(); loop.quit(); });
+			QTimer::singleShot(3000, &loop, &QEventLoop::quit);
+			loop.exec();
+			return out;
+		};
+		auto run = [](web_view_backend *v, const QString &js) {
+			auto *view = v ? qobject_cast<QWebEngineView *>(v->widget()) : nullptr;
+			if (view && view->page())
+				view->page()->runJavaScript(js);
+		};
+		auto open_url = [&](const QString &url) -> web_view_backend * {
+			node *n = w.m_model->add_tab(nullptr, "vault", url);
+			emit w.m_tree->activated(
+			  w.m_proxy->mapFromSource(w.m_model->index_for_node(n)));
+			wait_for([&] { return w.m_views_by_id.value(n->id, nullptr) != nullptr; });
+			return w.m_views_by_id.value(n->id, nullptr);
+		};
+		QAction *gen = nullptr;
+		for (QAction *a : w.findChildren<QAction *>())
+			if (QString(a->text()).remove('&') == "Generate Password")
+				gen = a;
+
+		vault_site site;
+		const bool listening = site.listen(QHostAddress::LocalHost, 9931);
+		vault_site other;
+		const bool other_up = other.listen(QHostAddress::LocalHost, 9934);
+		check(listening && other_up, "the vault's site is served on its own origin");
+
+		section("the shell pairs with the stored pairing, asking nobody");
+		auto *bridge = w.findChild<keepass_bridge *>();
+		check(bridge != nullptr, "the shell has a bridge");
+		QMetaObject::invokeMethod(&w, "toggle_password_manager");
+		const bool paired = bridge && wait_for([&] { return bridge->associated(); }, 20000);
+		check(paired, "Passwords > Connect takes the stored pairing");
+
+		section("a login form is filled from the vault");
+		web_view_backend *login = open_url("http://127.0.0.1:9931/login");
+		const bool asked = wait_for([&] {
+			return key->isEnabled() && key->toolTip().contains("login form");
+		}, 15000);
+		check(asked, QString("the key comes alive for a vault site (%1)").arg(key->toolTip()));
+		if (paired && asked) {
+			key->trigger();
+			const bool filled = wait_for([&] {
+				return field(login, "input[type=password]").size() > 0;
+			}, 20000);
+			check(filled, "pressing it fills the password field");
+			check(field(login, "input[name=user]") == "alice",
+			      QString("with the vault's username (%1)").arg(field(login, "input[name=user]")));
+			check(field(login, "input[type=password]").size() == 16,
+			      QString("and its password, %1 characters, not shown here")
+			          .arg(field(login, "input[type=password]").size()));
+			check(key->text().contains("✓"), QString("and the key says so (%1)").arg(key->text()));
+		}
+
+		section("a new-password field gets a generated password");
+		web_view_backend *signup = open_url("http://127.0.0.1:9931/signup");
+		wait_for([&] { return field(signup, "input[type=password]") == ""; }, 8000);
+		spin(1500);
+		check(gen && gen->isEnabled(), "Passwords > Generate Password is offered");
+		if (gen && paired) {
+			gen->trigger();
+			const bool made = wait_for([&] {
+				return field(signup, "input[type=password]").size() >= 8;
+			}, 20000);
+			check(made, QString("and puts a password into the new-password field "
+			                    "(%1 characters, not shown here)")
+			                .arg(field(signup, "input[type=password]").size()));
+		}
+
+		section("a login typed into a page is offered to the vault, and saved");
+		web_view_backend *fresh = open_url("http://127.0.0.1:9934/login");
+		spin(2500);
+		// The prompt is modal, so it is answered from inside its own loop.
+		bool prompted = false;
+		QTimer answer;
+		answer.setInterval(200);
+		QObject::connect(&answer, &QTimer::timeout, [&] {
+			auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+			if (!box || !box->text().contains("Save the password")) return;
+			prompted = true;
+			if (QAbstractButton *yes = box->button(QMessageBox::Yes)) yes->click();
+		});
+		answer.start();
+		run(fresh, "document.querySelector('input[name=user]').value='bob';"
+		           "document.querySelector('input[type=password]').value='typed-by-try-autofill';"
+		           "document.querySelector('button').click();");
+		const bool offered = wait_for([&] { return prompted; }, 15000);
+		answer.stop();
+		check(offered, "submitting the form asks whether to save it");
+		bool listed = false;
+		QList<credential> found;
+		if (bridge && offered) {
+			QObject::connect(bridge, &keepass_bridge::logins, &app,
+			                 [&](int tag, const QList<credential> &e) {
+				if (tag != 99) return;
+				found = e;
+				listed = true;
+			});
+			spin(2000);
+			bridge->request_logins("http://127.0.0.1:9934", 99);
+			wait_for([&] { return listed; }, 15000);
+		}
+		check(listed && found.size() == 1 && found.first().login == "bob",
+		      QString("and the vault then has it (%1 entr%2%3)")
+		          .arg(found.size()).arg(found.size() == 1 ? "y" : "ies")
+		          .arg(found.isEmpty() ? QString() : ", " + found.first().login));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

@@ -104,3 +104,17 @@ grep -q 'the stored pairing was accepted' /tmp/second.log || {
 grep -q '^0 failed\|, 0 failed' /tmp/second.log || {
 	echo "FAIL  the second run failed checks"; exit 1; }
 echo "ok    the second run took the stored pairing, and nobody was asked"
+
+# **And the browser itself against the vault**: the shell, a real page, the
+# key, a generated password and a save from a submitted form. Same keyring
+# item as try_keepass, so it inherits that pairing and asks nobody.
+echo
+echo "=== the shell against the vault ==="
+HYDRA_VAULT=1 HYDRA_SECRET_KIND=keepassxc-association-try-keepass \
+	QT_QPA_PLATFORM=offscreen QTWEBENGINE_DISABLE_SANDBOX=1 \
+	HYDRA_TEST_OUT=/tmp/autofill \
+	timeout 300 /mnt/repo/test/build-make/try_autofill
+# Read back by the vault's own tool, not by the bridge that wrote it.
+printf '%s\n' "$pw" | keepassxc-cli search -q "$db" 127.0.0.1:9934 | grep -q . || {
+	echo "FAIL  keepassxc-cli does not find the saved login"; exit 1; }
+echo "ok    keepassxc-cli finds the login the shell saved"

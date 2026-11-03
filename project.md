@@ -42070,3 +42070,33 @@ seconds, and every run since has shown it at once. That cause is not
 established. The loop now waits 150 seconds, inside `try_keepass`'s own
 three minutes, and lists the open windows every ten seconds while it
 waits, so a repeat says what was on the screen.
+
+### Next: the shell against the vault, written and not yet run whole
+
+**Handover, 2026-11-03, the session stopped here on the holder's word.**
+Committed, and not yet seen to pass:
+
+- `try_autofill` has vault sections under `HYDRA_VAULT=1`. They pair the
+  shell through Passwords > Connect on the stored pairing, then:
+  - fill `http://127.0.0.1:9931/login` from the Key, expecting `alice`
+    and a 16-character password;
+  - put a generated password into a new-password field at `/signup`;
+  - submit a new login at `:9934`, answer the save prompt yes, and look
+    the entry up through the bridge.
+
+  Without the variable they are skipped and say so; the default run
+  passes 22.
+- The image now carries QtWebEngine, its helper process, the Qt platform
+  plugins, libtorrent and a font. `make hull-keepass-image` built it.
+- `payload.sh` runs `try_autofill` after `try_keepass`'s two runs,
+  sharing their keyring item, with `QTWEBENGINE_DISABLE_SANDBOX=1`. It
+  then confirms the saved login with `keepassxc-cli search`.
+
+**What the next session does:** `make hull-keepass`, then read the
+"=== the shell against the vault ===" part. Expect the first run to need
+fixing: the engine in a chroot machine has never been run, and neither
+has the shell's fill path against a vault. Each failure there is a kink
+the holder's installed hydra would otherwise meet in their real vault,
+which is why this is tested in hull first (the holder's rule; see the
+section above). Until it passes, the holder should not pair their
+installed hydra for filling or saving.
