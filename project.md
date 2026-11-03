@@ -27766,11 +27766,18 @@ carried along as amendments to a list item.
    the browser, and any answer would be the same for every Qt application on
    the machine.
 
-   That is why this arm has stayed a device question. It need not: installing
-   the bridge would make the desktop half testable without a handset, and the
-   controls this project has since named are what such a test would read. The
-   package is the holder's to add -- it is their machine -- and the check
-   afterwards is one command against a running window.
+   **~~Qt has no accessibility bridge~~ -- wrong, and the instrument is why**
+   (re-measured 2026-11-03). In Qt 6 the AT-SPI bridge is compiled into
+   QtGui, not shipped as a plugin, so a missing plugin directory says
+   nothing. `nm -D` on `libQt6Gui.so.6` lists 80 exported `QSpi`/`AtSpi`
+   symbols, and its strings name `org.a11y.atspi.Registry`. The reader side
+   is here too: `gi.repository.Atspi` imports in `python3`. So the desktop
+   arm is measurable on this machine with nothing installed: hydra on the
+   xcb platform (the offscreen platform publishes no tree) under its own
+   Xvfb and session bus, with `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`, read
+   back through Atspi. Not run, because screen-reader work is deferred on
+   the holder's word. This paragraph used to call it the holder's package
+   to add; no package is needed.
 
 4. **The loop works on a disguised manifest; make it work on a noisy capture.**
    Three runs in five on dramafren now return `url.includes('cf-master')` — a
