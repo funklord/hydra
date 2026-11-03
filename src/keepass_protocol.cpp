@@ -177,6 +177,20 @@ QString describe_login_failure(const QJsonObject &reply) {
 	                     : QStringLiteral("KeePassXC could not look this site up: ") + err;
 }
 
+QString describe_pairing_failure(const QJsonObject &reply, bool stored_pairing) {
+	// A stored pairing is kept through a refusal (see keepass_bridge), so
+	// unlocking is all it takes; a new one has to be asked for again.
+	if (error_code(reply) == database_not_opened)
+		return stored_pairing
+		  ? QStringLiteral("KeePassXC's database is locked. Unlock it there, and "
+		                   "the pairing works again.")
+		  : QStringLiteral("KeePassXC's database is locked. Unlock it, then "
+		                   "choose Passwords > Connect again.");
+	QString err;
+	is_error(reply, &err);
+	return err;
+}
+
 int error_code(const QJsonObject &reply) {
 	// The wire carries it as a string, which is why this is not a plain
 	// toInt() on the value: a numeric read of a JSON string is 0, and 0 is the

@@ -680,6 +680,19 @@ int main(int argc, char **argv) {
 		check(other_said.contains("Something else") && !other_said.contains("locked"),
 		      QString("and any other refusal keeps KeePassXC's own words (%1)")
 		          .arg(other_said));
+
+		// A pairing refused the same way. A stored one survives the refusal,
+		// so unlocking is enough; a new one has to be asked for again.
+		const QString kept = keepass_protocol::describe_pairing_failure(locked, true);
+		const QString fresh = keepass_protocol::describe_pairing_failure(locked, false);
+		check(kept.contains("locked") && !kept.contains("Connect"),
+		      QString("a stored pairing refused by a locked vault needs only an "
+		              "unlock (%1)").arg(kept));
+		check(fresh.contains("locked") && fresh.contains("Connect"),
+		      QString("a new pairing refused by one is asked for again (%1)").arg(fresh));
+		check(keepass_protocol::describe_pairing_failure(other, true) == "Something else (code 9)",
+		      QString("and anything else is KeePassXC's message (%1)")
+		          .arg(keepass_protocol::describe_pairing_failure(other, true)));
 	}
 
 	section("a save updates the entry it came from, rather than adding beside it");

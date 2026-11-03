@@ -348,7 +348,14 @@ void keepass_bridge::handle(const QJsonObject &reply) {
 			// Throwing the pairing away on that would make a locked vault cost
 			// the user their pairing, and re-pairing is the one step that needs
 			// a human. Forgetting stays an explicit act.
-			emit associated_changed(false, err);
+			emit associated_changed(
+			  false, keepass_protocol::describe_pairing_failure(inner, true));
+		} else if (action == "associate") {
+			// Refused before anybody was asked -- a locked vault, most
+			// often. It went to error() alone, so whoever was waiting on the
+			// pairing heard nothing either way.
+			emit associated_changed(
+			  false, keepass_protocol::describe_pairing_failure(inner, false));
 		} else if (action == "set-login") {
 			emit login_saved(tag, false, err);
 		} else if (action == "generate-password") {

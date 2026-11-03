@@ -169,6 +169,12 @@ constexpr int database_not_opened = 1;
 // words that say what to do. `reply` is the decrypted error reply.
 QString describe_login_failure(const QJsonObject &reply);
 
+// The same for a pairing that failed: `associate` (asking for a new one) or
+// `test-associate` (checking a stored one). A locked vault is the common
+// case, and KeePassXC's own words for it are a code; anything else keeps
+// KeePassXC's message.
+QString describe_pairing_failure(const QJsonObject &reply, bool stored_pairing);
+
 // Which stored entry a save should UPDATE rather than add beside, by matching
 // the login being saved against what the vault already returned for this site.
 // Empty means add a new entry, which is also what an unrecognised login means.

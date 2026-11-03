@@ -3201,15 +3201,25 @@ void main_window::toggle_password_manager() {
 			if (m_keepass->restore_pairing() || m_keepass->associated())
 				m_keepass->test_association();
 			else
-				m_keepass->associate();
+				ask_to_pair();
 		}, Qt::SingleShotConnection);
 		m_status->showMessage("Connecting to KeePassXC…", 4000);
 		m_keepass->start();
 	} else if (!m_keepass->associated()) {
-		m_keepass->associate();
+		ask_to_pair();
 	} else {
 		m_status->showMessage("Already paired with KeePassXC.", 4000);
 	}
+}
+
+// **KeePassXC answers a pairing with a window of its own**, like its
+// generator: it asks the person to name this connection and allow it. Said
+// on the status bar first, so the request does not read as having done
+// nothing while the answer waits in another program.
+void main_window::ask_to_pair() {
+	m_status->showMessage("KeePassXC is asking whether to allow this browser: "
+	                      "name the connection there and press Save.", 20000);
+	m_keepass->associate();
 }
 
 void main_window::forget_keepass_pairing() {

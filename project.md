@@ -42206,6 +42206,19 @@ showing. **Measured: 39 passed, with the last section locking the vault and
 reading the key. With the signal removed, that check fails on the old
 tooltip.** `test_autofill` holds the wording (95).
 
+**Pairing had the same two gaps.** Passwords > Connect with no stored
+pairing makes KeePassXC open its association window, and the shell said
+nothing about it. It now says, before asking, that KeePassXC is asking
+whether to allow this browser and to name the connection there and press
+Save (`main_window::ask_to_pair`). A pairing refused by a locked vault used
+to reach the person as "Database not opened (code 1)". A refused
+`associate` went to `error()` alone, so `associated_changed` never answered
+it either way. Both now answer in words
+(`keepass_protocol::describe_pairing_failure`). A stored pairing survives the
+refusal, so for one the message says only to unlock. A new one has to be
+asked for again. The wording is held by `test_autofill` (98). No machine run
+pairs against a locked vault yet; the rig's runs still pass (22, 15, 39).
+
 `make hull-keepass` also rebuilt only `try_keepass` and never
 `try_autofill`, which the payload runs. So a source change was tested on a
 stale binary, which passes or fails for the wrong reason. It builds both now.
