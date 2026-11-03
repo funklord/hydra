@@ -42018,6 +42018,14 @@ bar. Two faults turned up on the way:
   no row current.
 
 The emulator's accessibility dump did not list the restored row, but
-the screenshot shows it back in the tree. Seen on the emulator and not
-yet fixed: the address bar read "htthttp://..." after the open tab was
-deleted, and once opened its full-screen editor.
+the screenshot shows it back in the tree. The address bar read "htthttp://..." after the open tab was deleted. It
+was a repaint fault, not wrong text: the "not secure" icon in front of
+the address was hidden, the text moved left into its space, and on
+Android only part of the field was redrawn. So the new text's first
+letters sat beside the old text's stale pixels. The field is now
+repainted whenever the icon's visibility changes, and a crop of the bar
+after the delete reads cleanly. The full-screen editor that opened once
+came from the drawer closing with focus inside it and no open tab left,
+which hands focus to the address bar. That is the existing behaviour
+for an empty window. A focus dump showed the X itself leaves the focus
+on the tree.

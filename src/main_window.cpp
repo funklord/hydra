@@ -5533,8 +5533,20 @@ void main_window::update_navigation() {
 		m_hard_reload_action->setEnabled(v != nullptr);
 	// Shown only where the current page is plain http; hidden otherwise and
 	// when there is no page.
-	if (m_insecure_action)
-		m_insecure_action->setVisible(v && scheme_is_insecure(v->url()));
+	//
+	// **And the whole field repainted when it changes.** Hiding a leading
+	// action moves the text left, and on Android only part of the field was
+	// redrawn: after the open tab was deleted the bar read "htt|http://...",
+	// the new text's start beside the old text's stale pixels (emulator,
+	// 2026-11-03).
+	if (m_insecure_action) {
+		const bool show = v && scheme_is_insecure(v->url());
+		if (m_insecure_action->isVisible() != show) {
+			m_insecure_action->setVisible(show);
+			if (m_address)
+				m_address->update();
+		}
+	}
 }
 
 // **A window called "Hydra" tells the task switcher nothing.** Every window
