@@ -8350,6 +8350,17 @@ hydra, or run against a real session file. The next step, if this is taken up,
 is to run both readers over the same captured file and diff them -- which is a
 harness shape this project already has.
 
+**situ has since built both things this evaluation asked of it** (reported by
+situ's session, 2026-11-03). `pad_to(n)` is decision 0043, and it pads to the
+next multiple of n **from the base of the struct that declares it** -- neither
+reading the suggestion named, chosen so a struct's size stays a property of
+the struct. A UTF-16 run is decision 0044:
+`u16 data[length] [encoding = utf16le];` under `encoding utf16le;`, which
+`situc map` reports as `size=8..139` for a `u32 length [max = 64]` struct
+with a pad and a trailing `u32`. Bare `utf16` is refused: the byte order has
+to be named. So `pickle_string16` can now be described as text with a bounded
+length. The adoption question above is unchanged and still the holder's.
+
 ### fmake, run on `src/` rather than reasoned about
 
 The earlier assessment of fmake from this project was written from its
