@@ -18977,7 +18977,15 @@ the line that re-applies the setting to the live controller is read rather
 than run. `try_forget` has the harness for driving that dialog modally and
 this section does not.
 
-## Open: the proxy can send cookies and nothing supplies them
+## ~~Open:~~ the proxy can send cookies and nothing supplies them -- closed
+
+**Closed, and this heading went on saying open after it was.** The desktop
+supplier was built as the feared mirror, but the matching is not ours:
+`qtwebengine_factory` feeds `cookieAdded`/`cookieRemoved` into a
+`QNetworkCookieJar`, whose `cookiesForUrl` does domain, path, secure and
+expiry. See *The page's cookies were being sent to whatever host held the
+stream*, which also split the field into `cookies` and `cookies_for`. What
+follows is the question as it stood before that.
 
 `architecture.md` sec 11.3 is explicit -- *"a naked stream URL frequently
 returns 403, because the CDN expects the same `Referer`, cookies, and
@@ -28056,8 +28064,11 @@ carried along as amendments to a list item.
      2026-10-29, and verified on the emulator rather than a phone**, see
      *A held finger on a link has a menu on Android*.
 
-   The proxy cookie supplier and DASH muxing were on the same list. Both
-   have their own sections here and are waiting on the holder's decision.
+   The proxy cookie supplier and DASH muxing were on the same list. The
+   supplier is built (*The page's cookies were being sent to whatever host
+   held the stream*), and so is the DASH mux for Save (*Save muxes what the
+   manifest kept apart*); only Watch on a split-audio MPD waits on the
+   holder, in *The DASH audio gap is two different problems*.
 
 ## From fmake: the hydra it builds had no icons, and its suite offscreen
 
@@ -30287,6 +30298,13 @@ copy that does not get re-read.
 
 Nothing about the refusal is provisional in the meantime. It names the audio,
 it happens at the moment the manifest is read, and it is what the assembler's
+**Who is in that population is small, measured 2026-11-03.** The assembler
+is reached only for a player without `native_streams`, and in
+`player_launcher`'s table that is mplayer and mplayer2 (and a custom
+command); mpv, VLC, SMPlayer and ffplay are handed the manifest and read the
+split audio themselves. So the decision is about mplayer users meeting a
+split-audio MPD, not about Watch on DASH in general.
+
 own comment says it is -- the alternative being a file that plays perfectly
 and is silent.
 
