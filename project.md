@@ -41877,3 +41877,25 @@ Widgets page drawn bouncing reads as a glitch.
 It deliberately leaves item views and editors alone. There a drag
 already means something: moving a tab in the tree, or selecting text.
 A tap that does not move still reaches the control under it.
+
+### On a phone, scrolling the tab tree moved tabs
+
+On the emulator, a swipe up a 40-row tree did not scroll it. The drag
+was the tree's own drag-and-drop, which lifted "Row 27" from under the
+finger and dropped it inside "Row 05". So scrolling the tab tree on a
+phone silently rearranged it. The tree now gets the same flick gesture
+as the Settings pages. Measured after the change:
+
+- the swipe scrolls (Row 00 to Row 07 at the top) and the saved file is
+  unchanged;
+- a still hold opens the row's menu;
+- the menu showed on screen even though the accessibility dump missed
+  it, the Qt bridge's known gap.
+
+The cost, also measured: Android's hold-then-drag no longer moves a row,
+and the file kept all 40 rows in order. This reverses "the tree's
+drag-and-drop keeps the gesture it already had" from the long-press
+entry. That was right for a short tree, but it made a long tree
+unscrollable and every scroll attempt a move. The menu has Move Up,
+Move Down, Move Out and Group, but nothing puts a tab into an existing
+folder. That is the gap the change opens on a phone.

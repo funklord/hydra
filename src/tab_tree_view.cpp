@@ -1,4 +1,5 @@
 #include "tab_tree_view.h"
+#include "touch_scroll.h"
 #include <QMouseEvent>
 #include <QTimer>
 #include <QEvent>
@@ -33,6 +34,18 @@ tab_tree_view::tab_tree_view(QWidget *parent) : QTreeView(parent) {
 	// refuse to hand anything over.
 	setDragDropMode(QAbstractItemView::DragDrop);
 	setDefaultDropAction(Qt::MoveAction);
+#ifdef Q_OS_ANDROID
+	// **A swipe scrolls the tree.** Without this a finger swipe was the
+	// tree's drag-and-drop: on the emulator, swiping up a 40-row tree to
+	// scroll it lifted the row under the finger and dropped it inside
+	// another, nesting a tab nobody meant to move (2026-11-03). With it the
+	// same swipe scrolls and the file is unchanged, a tap still opens and a
+	// still hold still opens the menu. What it costs, measured: Android's
+	// own hold-then-drag no longer moves a row either, so on a phone a tab
+	// is moved from the menu.
+	setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+	enable_touch_scroll(this);
+#endif
 	setSelectionMode(QAbstractItemView::ExtendedSelection);
 	// **Rows, not cells.** The default is `SelectItems`, which is invisible
 	// while a model has one column and breaks everything the moment it has

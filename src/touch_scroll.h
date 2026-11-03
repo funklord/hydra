@@ -12,11 +12,12 @@
 // Settings page left it exactly where it was, so the only way down was the
 // scrollbar, a few pixels wide at the edge (2026-11-03).
 //
-// For a scroll area holding controls and text to read, not for item views
-// or editors: there a drag already means something -- moving a tab in the
-// tree, selecting text -- and a scroller would take it. A tap that does not
-// move still reaches the control under it, since the scroller only claims a
-// press once it has moved.
+// Mostly for a scroll area holding controls and text to read. An editor is
+// left alone, since a drag there selects text. The tab tree uses it too, and
+// says at its call why: a drag there moved a tab, which a swipe meant to
+// scroll was doing by accident. A tap that does not move still reaches the
+// control under it, and a press held still is handed back to the widget
+// after the scroller's press delay.
 //
 // Nothing on a desktop, where a wheel and a scrollbar are the way.
 inline void enable_touch_scroll(QAbstractScrollArea *area) {
