@@ -71,13 +71,21 @@ public slots:
 	// the page except the password it generated, and stores nothing.
 	void request_generated_password(const QString &origin);
 
+public:
+	// **Not slots, and that is the protection, not a style.** Everything
+	// above is what the page's channel may call; these three answer a
+	// person or a test. They sat under `slots` while their comments said no
+	// page could reach them, which held only because the desktop channel
+	// lives in an isolated world -- a backend whose channel is the page's own
+	// would have let a page confirm its own save into the vault.
+
 	// The shell's answer to `save_offered`: store it, or do not. Called from the
 	// prompt, never from a page.
 	void confirm_save(bool yes);
 
 	// The shell's answer to `choice_needed`: which of the offered entries to
 	// fill, by index, or a negative number to fill nothing. Called from the
-	// picker, never from a page -- it is not a slot for that reason.
+	// picker, never from a page.
 	void choose(int index);
 
 	// Hand the controller a reply as if KeePassXC had sent one.
