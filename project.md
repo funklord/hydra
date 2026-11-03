@@ -24523,6 +24523,11 @@ wrong.
 
 ## A pin that measures the desktop's font
 
+**Dropped, on the holder's word (2026-11-03).** The 223 check is gone from
+`test_rotation`. The 320 bound for a small phone and the overflow checks
+stay, and they hold what it stood for. It was CI's last red check. What
+follows is the record of why it was kept until then.
+
 `make check` is red here at `4340ce6`, reproducibly, on one `test_rotation`
 check: *the floor the address bar sets does not become the window's* wants the
 window's layout minimum at 223 or less and measures **228**.
@@ -33158,8 +33163,8 @@ them as "did not grow". It was reproduced in a trixie hull machine (the
 KeePassXC image, the same fonts) and is fixed there by giving the enlarged
 dialog room. A hidden column is now named as hidden rather than as pinned.
 The old sabotage, Progress fixed at 170, still fails it. `test_rotation`'s
-menu-bar floor is the one font pin left, and its own section says why it
-stays.
+menu-bar floor was the one font pin left, and was dropped the same day on
+the holder's word (see *A pin that measures the desktop's font*).
 
 **Reading a CI result means not pushing while you wait.** The run before
 that one was cancelled at 5m10s by the next push, as were two earlier in the
