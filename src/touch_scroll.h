@@ -7,6 +7,7 @@
 #include <QComboBox>
 #include <QEvent>
 #include <QMouseEvent>
+#include <QPlainTextEdit>
 #include <QScroller>
 #include <QScrollerProperties>
 #endif
@@ -51,8 +52,9 @@ inline void enable_touch_scroll(QAbstractScrollArea *area) {
 // fault the Settings pages had, and a tap on a dropdown opened nothing.
 // Installed once on the application, it gives each item view the scroller
 // when the view is first polished, unless it has one already (the tab tree
-// sets its own and says why), and opens each dropdown on release. Editors
-// are not item views, so text selection is untouched. Nothing on a desktop.
+// sets its own and says why), and opens each dropdown on release. A read-only
+// text pane gets it as well; an editor does not, so typing and selecting are
+// untouched. Nothing on a desktop.
 inline void install_touch_scroll_for_lists() {
 #ifdef Q_OS_ANDROID
 	struct lists : QObject {
@@ -92,6 +94,12 @@ inline void install_touch_scroll_for_lists() {
 						v->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 						enable_touch_scroll(v);
 					}
+				// A read-only pane too: nothing to edit, so a drag there only
+				// selected text, and the AI dialogs' review of what will be
+				// sent could be read only by a scrollbar a few pixels wide.
+				if (auto *t = qobject_cast<QPlainTextEdit *>(o))
+					if (t->isReadOnly() && !QScroller::hasScroller(t->viewport()))
+						enable_touch_scroll(t);
 			}
 			return false;
 		}

@@ -41958,6 +41958,13 @@ It deliberately leaves item views and editors alone. There a drag
 already means something: moving a tab in the tree, or selecting text.
 A tap that does not move still reaches the control under it.
 
+**Read-only text panes too (2026-11-05).** The five `QPlainTextEdit`s in the
+AI dialogs hold the review of what will be sent, and a drag there only
+selected text. On the emulator, with a stand-in for Ollama and a 60-row
+tree, a swipe now moves the reorganizer's payload to row 24; the picture was
+read, because a selection changes the same pixels. Editable text keeps its
+drag.
+
 ### On a phone, scrolling the tab tree moved tabs
 
 On the emulator, a swipe up a 40-row tree did not scroll it. The drag
