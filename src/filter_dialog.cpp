@@ -111,7 +111,7 @@ filter_dialog::filter_dialog(filter_signals *signals_source, filter_list *list,
 
 	if (suspects.isEmpty() && !m_picked.is_valid() && patches.isEmpty() &&
 	    seen.isEmpty())
-		say("Nothing ad-shaped slipped through on this page, and "
+		say("Nothing ad-shaped slipped through on this site, and "
 		                  "no element was picked — there is nothing to propose "
 		                  "against.");
 }

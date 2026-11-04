@@ -73,7 +73,10 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 	// Counts first, because they say whether there is anything to act on. A
 	// page with forty requests and no ad-shaped ones is a different problem
 	// from one with six suspects, and the tools below differ accordingly.
-	what->setText(QString("<b>%1</b><br>%2 request%3 seen on this page, "
+	// "On this site": the signals are kept per site and answer what a site
+	// does, so after a second page this counted both, and "this page" was
+	// not true.
+	what->setText(QString("<b>%1</b><br>%2 request%3 seen on this site, "
 	                       "%4 of them ad-shaped.")
 	                  .arg(report.host.toHtmlEscaped())
 	                  .arg(report.observed)
