@@ -42436,9 +42436,24 @@ over a new one without comment. **Proposed, and the holder's to decide:**
 put the build date and commit into the package version, for example
 `0.1+git20261103.0f858ee`. Not done.
 
+**Open: a folder's Properties dialog shows a stray "about:blank" box**
+(reported 2026-11-04). Found, not fixed. `tab_tree_view.cpp` builds the
+`url` line edit for every row, with the dialog as its parent, and adds the
+Address row to the form only `if (!n->is_folder())`. For a folder the edit
+is a child outside any layout, drawn at the dialog's top-left with its
+placeholder "about:blank". OK does not write it to a folder: `update_node`
+is given `n->url` for folders. So it is visible and harmless. The fix is
+to create the edit only for a tab, or hide it for a folder, with a check in
+whichever driver opens Properties on a folder that no visible `QLineEdit`
+lies outside the form.
+
 **Open: pages with many hover-preview videos load slower, reported
-2026-11-03 on a video site, and not explained.** Measured against the figures
-recorded before the 29 October build, and none moved:
+2026-11-03 on a video site, and not explained -- and possibly older than it
+looks.** The holder says the slowness may predate recent builds. The
+measurements below compare against figures taken around 29 October, so
+they would not see a cost that arrived before that. "Nothing moved since
+29 October" does not mean "nothing moved". Measured against those figures,
+and none moved:
 
 | Cost | Now | Before |
 |---|---|---|
