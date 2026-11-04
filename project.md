@@ -42411,3 +42411,47 @@ The exit status stays 139 and the first frame resolves to the handler's own
 line. It is opt-in because the sanitizers install a SEGV handler of their
 own, which this would replace. **The next session that sees `test crash:` in
 a rig log has the backtrace this one did not.**
+
+## Fold, 2026-11-04: where the 2026-11-03 session left things
+
+**CI is green** since `0f858ee`, for the first time in about a month, after
+the `test_pick` and `test_ytdlp` fixes and the 223 pin was dropped. Keep it
+that way: a red badge that nobody reads hides the next real failure.
+
+**KeePassXC works end to end in the rig** (`make hull-keepass`: 22, 15 and
+48 checks). It covers pairing, filling, multi-step sign-ins, the generator,
+saving once, a locked vault, and one request per read. One open item:
+`try_autofill` segfaulted at exit once in seven runs, unexplained. It is
+recorded above, and the rig now prints a backtrace if it recurs.
+
+**An installed hydra can be days older than the tree, and nothing says
+so.** The holder could not see the tree's delete X. `/usr/bin/hydra` had been
+installed that evening from `build/deb/hydra_0.1_amd64.deb`, built 29
+October, before the X existed. It was found by searching the binary for a
+plain string the X's commit added ("Ask before deleting", absent), with a
+string from older code ("Reopen Closed Tab", present) as the positive
+control. `QStringLiteral` text is stored as UTF-16, so the control has to be
+a plain literal. Every package is version `0.1`, so dpkg installs an old build
+over a new one without comment. **Proposed, and the holder's to decide:**
+put the build date and commit into the package version, for example
+`0.1+git20261103.0f858ee`. Not done.
+
+**Open: pages with many hover-preview videos load slower, reported
+2026-11-03 on a video site, and not explained.** Measured against the figures
+recorded before the 29 October build, and none moved:
+
+| Cost | Now | Before |
+|---|---|---|
+| Scriptlet script, per load (`try_scriptlet_cost`), with the lists / without | 40 / 22 ms | 38 / 19 ms |
+| One request decision (`try_filter_cost`) | 33.1 us | 32 us |
+| `ed560d5`'s autofill `MutationObserver`, on a synthetic 600-tile grid changing class and style about 60 times a second, 3 s | 60 forced layouts against 2, about 10 to 20 ms in total; frames unchanged | -- |
+
+The lists were uBlock's and EasyList, fetched that night into a scratch
+profile, since the holder's profile is not readable from the second
+account. They carry no scriptlets for that site. Its two `:-abp-properties`
+rules run under the procedural budget. Media interpretation runs only when
+Find Media opens. The machine was at load 9 to 10 of 24 from other sessions'
+builds and tests, the rig's runs among them. **The next step is the
+holder's two toggles on that site.** If the shield's "allow ads" restores the
+speed, the cause is in blocking; if not, try the media-detection switch. The
+site itself was not loaded from here.
