@@ -112,6 +112,9 @@ private:
 	// The same object as m_page, typed so the decider can be handed over
 	// without a downcast. Owned by the view, like m_page.
 	navigating_page *m_nav_page = nullptr;
+	// True once the page is being destroyed, shared with every pending script
+	// callback: "a destroyed view never calls back" is run_probe's contract.
+	std::shared_ptr<bool> m_page_gone = std::make_shared<bool>(false);
 	permission_decider m_decider;
 	capture_chooser    m_capture_chooser;
 	QWebChannel *m_channel = nullptr;

@@ -178,6 +178,20 @@ public:
 	navigating_page(QWebEngineProfile *profile, QObject *parent)
 	  : QWebEnginePage(profile, parent) {}
 
+	// **Raised before the base destructor runs, which is the whole point.**
+	// ~QWebEnginePage answers every script still pending, and it runs inside
+	// ~QWebEngineView, while the backend -- a child of that widget -- is still
+	// alive. So a QPointer to the backend says all is well, the callback asks
+	// the view for its url, and QWebEngineView::page(), finding no page, builds
+	// a new one on a half-destroyed widget and crashes. `try_crawler_copy`
+	// probes every load, so closing a tab just after it loaded could reach
+	// this; the hull rig caught it at exit, 1 run in 7 (2026-11-05).
+	~navigating_page() override {
+		if (gone)
+			*gone = true;
+	}
+	std::shared_ptr<bool> gone;
+
 	web_view_backend::navigation_decider decider;
 	// Called before a navigation is accepted, so a per-site script can be in
 	// place before the document it belongs to exists. `loadStarted` is too late
@@ -231,6 +245,7 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	navigating_page *page = new navigating_page(profile, m_view);
 	m_nav_page = page;
 	m_page = page;
+	page->gone = m_page_gone;
 	m_view->setPage(m_page);
 
 	// The backend is owned by the widget, not the other way round: the shell
@@ -1073,13 +1088,19 @@ void qtwebengine_view::remove_script(const QString &name) {
 void qtwebengine_view::run_probe(const QString &source,
                                   std::function<void(const QString &)> done) {
 	m_page->runJavaScript(source, QWebEngineScript::ApplicationWorld,
-	                      [done](const QVariant &v) { done(v.toString()); });
+	                      [done, gone = m_page_gone](const QVariant &v) {
+		if (!*gone)
+			done(v.toString());
+	});
 }
 
 void qtwebengine_view::run_page_probe(const QString &source,
                                        std::function<void(const QString &)> done) {
 	m_page->runJavaScript(source, QWebEngineScript::MainWorld,
-	                      [done](const QVariant &v) { done(v.toString()); });
+	                      [done, gone = m_page_gone](const QVariant &v) {
+		if (!*gone)
+			done(v.toString());
+	});
 }
 
 void qtwebengine_view::run_probe_in_frames(
@@ -1124,7 +1145,9 @@ void qtwebengine_view::run_probe_in_frames(
 		const QUrl at   = f.url();
 		const bool main = f.isMainFrame();
 		f.runJavaScript(source, QWebEngineScript::ApplicationWorld,
-		                [g, at, main, finish](const QVariant &v) {
+		                [g, at, main, finish, gone = m_page_gone](const QVariant &v) {
+			if (*gone)
+				return;
 			g->got << frame_answer{ at, main, v.toString() };
 			if (--g->waiting == 0)
 				finish();

@@ -18497,8 +18497,9 @@ reload should not lose them, which is what this section argued for. It only
 reorders, so where a site's page address does not change nothing moves, and
 a row tied to no page counts as this page's. `test_streamtype` holds 3
 segments on this page against 500 on the last; with the ordering removed,
-3 of its checks fail. The rest of this section -- filter signals and the
-anti-adblock watch -- stands as written.
+3 of its checks fail. Filter signals stay per site, as this section argues,
+and two sentences that called them "this page" now say "this site". The
+anti-adblock watch stands as written.
 
 `extractor_signals`' header states the requirement outright:
 
@@ -42401,29 +42402,33 @@ of vouched pages between runs. The set is what this session saw and what is
 loaded now; a persistent vouched list is the step after this, if that
 proves too narrow.
 
-### Open: `try_autofill` segfaulted once at exit in the rig, unexplained
+### Closed: closing a page with a probe in flight could crash the browser
 
-On 2026-11-03, one run of `make hull-keepass` printed `48 passed, 0 failed`
-and then `Segmentation fault`, so `try_autofill` exited 139 after every check
-had passed. It was the first such exit in about a dozen vault runs that
-day, and the first after `4d03131` (lock notices no longer release the write
-queue). That commit is the prime suspect only because it was the last
-change: nothing in it runs at teardown that is known to. Six runs since have
-exited 0, four of them with the instrument below on, and it did not
-reproduce outside the machine either (three runs of the driver here, without
-a vault).
+On 2026-11-03 one run of `make hull-keepass` printed `48 passed, 0 failed`
+and then `Segmentation fault`. It was left open rather than called flaky,
+and the drivers gained an opt-in crash backtrace in `test/watchdog.cpp`
+(`HYDRA_TEST_BACKTRACE=1`, resolved with `addr2line`). On 2026-11-05 a loop
+of the rig caught it on its second run:
 
-**It is not called flaky.** Not reproducing is what an intermittent fault
-looks like. The machine had no debugger, and an image with gdb is a
-gigabyte the disk did not have (96% that evening). So the drivers now carry
-an opt-in crash handler in `test/watchdog.cpp`: with `HYDRA_TEST_BACKTRACE=1`,
-which the rig sets for `try_autofill`, a crash prints each frame as
-file+offset, and `addr2line -f -C -e <file> <offset>` resolves it on the host
-against the same binary. It was checked by sending a running driver SIGSEGV.
-The exit status stays 139 and the first frame resolves to the handler's own
-line. It is opt-in because the sanitizers install a SEGV handler of their
-own, which this would replace. **The next session that sees `test crash:` in
-a rig log has the backtrace this one did not.**
+    QWebEngineView::setPage  <-  page()  <-  url()
+    qtwebengine_view::url  <-  try_crawler_copy's callback  <-  run_probe's
+    WebContentsAdapter::clearJavaScriptCallbacks
+
+The widget owns the page and the backend. `~QWebEngineView` deletes the page
+first, the engine answers every pending script as it goes, and the backend
+is still alive, so the shell's `QPointer` guard passes. The callback asks the
+view for its url, and `page()`, finding none, builds a new page on a
+half-destroyed widget. **So it was not an exit crash.** Any view deleted with
+a probe in flight could reach it, and `try_crawler_copy` probes on every
+load: closing or deleting a tab just after it loaded, or the live-tab cap
+evicting one. Whether a tab-close has actually crashed for the holder is not
+known; the mechanism is what was measured.
+
+`run_probe`'s stated contract was that a destroyed view never calls back. It
+holds now: `~navigating_page` raises a shared flag before the base destructor
+runs, and all three script paths check it. `try_autofill` starts a probe and
+deletes the widget at once. With the flag disabled the driver dies with 139
+at that section; with it, it passes.
 
 ## Fold, 2026-11-04: where the 2026-11-03 session left things
 
@@ -42433,9 +42438,9 @@ that way: a red badge that nobody reads hides the next real failure.
 
 **KeePassXC works end to end in the rig** (`make hull-keepass`: 22, 15 and
 48 checks). It covers pairing, filling, multi-step sign-ins, the generator,
-saving once, a locked vault, and one request per read. One open item:
-`try_autofill` segfaulted at exit once in seven runs, unexplained. It is
-recorded above, and the rig now prints a backtrace if it recurs.
+saving once, a locked vault, and one request per read. The one open item,
+`try_autofill`'s crash at exit, is closed above: it was a real crash on any
+view deleted with a probe in flight.
 
 **An installed hydra can be days older than the tree, and nothing says
 so.** The holder could not see the tree's delete X. `/usr/bin/hydra` had been

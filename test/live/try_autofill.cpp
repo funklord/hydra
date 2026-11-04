@@ -435,6 +435,25 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	section("a view deleted with a probe in flight says nothing");
+	{
+		// **The exit crash, deterministically.** Deleting the widget destroys
+		// the page while the backend is alive, and the engine answers pending
+		// scripts as it goes. The callback does what the shell's do, asking
+		// the view for its url, which is what crashed.
+		web_view_backend *v = factory.create_view(nullptr);
+		v->load(QUrl(QString("http://127.0.0.1:%1/login").arg(port)));
+		spin(1500);
+		bool called = false;
+		v->run_probe(QStringLiteral("1 + 1"), [&](const QString &) {
+			called = true;
+			(void)v->url();
+		});
+		delete v->widget();
+		spin(500);
+		check(!called, "the callback does not run, so nothing touches the dead view");
+	}
+
 	// ---- Against a real vault -------------------------------------------------
 	//
 	// **Only in a machine that has one**, under HYDRA_VAULT=1: the hull rig
