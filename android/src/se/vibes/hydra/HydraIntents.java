@@ -3,6 +3,7 @@ package se.vibes.hydra;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.Context;
 import android.net.Uri;
 import android.os.Build;
 import android.view.WindowInsets;
@@ -73,6 +74,36 @@ public class HydraIntents {
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
             a.startActivity(i);
+            return true;
+        } catch (ActivityNotFoundException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Hand an https address to the app that owns it, and to nothing else.
+     *
+     * For BankID: its current guidance starts the app with
+     * https://app.bankid.com/?autostarttoken=..., and Android routes that to
+     * the app only when a browser asks it to. A WebView never does, it renders
+     * the address as a page, so a bank's "open BankID" landed on BankID's site
+     * (reported 2026-11-04).
+     *
+     * FLAG_ACTIVITY_REQUIRE_NON_BROWSER is what makes the answer safe to act
+     * on: it refuses to resolve to a browser or to a chooser, so with no such
+     * app installed this returns false and the caller loads the page as
+     * before, rather than bouncing the address to another browser. API 30;
+     * below that the flag does not exist, and the page loads.
+     */
+    public static boolean openInOwnApp(final Context c, final String url) {
+        if (c == null || url == null || Build.VERSION.SDK_INT < 30)
+            return false;
+        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        i.addCategory(Intent.CATEGORY_BROWSABLE);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                   | Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER);
+        try {
+            c.startActivity(i);
             return true;
         } catch (ActivityNotFoundException e) {
             return false;

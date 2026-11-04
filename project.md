@@ -42480,20 +42480,23 @@ holder's two toggles on that site.** If the shield's "allow ads" restores the
 speed, the cause is in blocking; if not, try the media-detection switch. The
 site itself was not loaded from here.
 
-**Open: BankID does not open from a page on Android** (reported 2026-11-04;
-diagnosed from the code, not yet seen on the phone). `bankid:///...` links
-already leave the browser, because `android_view::claims_external_url` hands
-any address that is not a page to an untyped `ACTION_VIEW`. But BankID's
-current guidance is to start the app with
-`https://app.bankid.com/?autostarttoken=...`. Android routes that address to
-the BankID app only when a browser asks it to, and a WebView never does: it
-renders as a page, so hydra loads BankID's site instead of opening the app.
-**Proposed fix, not built:** in `HydraWebView.shouldOverrideUrlLoading`,
-for `app.bankid.com` only, try `ACTION_VIEW` with
-`FLAG_ACTIVITY_REQUIRE_NON_BROWSER` (API 30+) and load the page if nothing
-answers. Narrow on purpose: a general "open in the app" would hand Teams and
-YouTube pages away, against this tree's keeping them in the browser.
-Verifying it needs the holder's phone, since the emulator has no BankID app.
-A built-in BankID is not possible: the identity is a key the bank issues
-into BankID's own app, and relying parties accept only that app's
-signatures.
+**BankID opens from a page on Android, measured with a stand-in** (reported
+2026-11-04). `bankid:///...` links already left the browser, but BankID's
+current guidance starts the app with
+`https://app.bankid.com/?autostarttoken=...`, which Android routes to the
+app only when a browser asks. A WebView never does, so hydra loaded BankID's
+site. `HydraWebView.shouldOverrideUrlLoading` now tries
+`HydraIntents.openInOwnApp` for that host alone, on main-frame navigations:
+`ACTION_VIEW` with `FLAG_ACTIVITY_REQUIRE_NON_BROWSER` (API 30+), and the page
+loads if nothing answers. Narrow on purpose: a general "open in the app" would
+hand Teams and YouTube pages away, against this tree's keeping them in the
+browser. It does not ask for a user gesture, because a bank's page commonly
+redirects after an asynchronous step.
+
+The emulator has no BankID app, so a stand-in APK claimed the host, approved
+with `pm set-app-links-user-selection`, and a page sent itself there. Without
+the stand-in nothing else starts and hydra stays in front; with it, it received
+`https://app.bankid.com/?autostarttoken=abc-123`. **The real app on the
+holder's phone is still the last check.** A built-in BankID is not possible:
+the identity is a key the bank issues into BankID's own app, and relying
+parties accept only that app's signatures.

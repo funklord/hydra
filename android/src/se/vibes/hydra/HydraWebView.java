@@ -1514,6 +1514,12 @@ public class HydraWebView {
                         // about one would spawn a sub-tab for an ad slot.
                         if (!req.isForMainFrame())
                             return false;
+                        // BankID's own host alone, on purpose: a general "open
+                        // in the app" would hand Teams and YouTube pages away,
+                        // and this tree keeps those in the browser.
+                        if ("app.bankid.com".equals(req.getUrl().getHost())
+                            && HydraIntents.openInOwnApp(v.getContext(), url))
+                            return true;
                         // True here means "handled, do not load", so a refusal
                         // is the negation of permission.
                         if (!allowNavigation(id, url, req.hasGesture()))
