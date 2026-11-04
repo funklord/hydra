@@ -5034,6 +5034,13 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 		connect(view, &web_view_backend::url_changed, this,
 		         [this, view, cosmetic, consent, autofill,
 		          sponsor](const QUrl &u) {
+			// **What the tap heard was the page before this one.** It keeps
+			// a running count per site and nothing reset it, so an article
+			// after a video still said "This page is playing video", with
+			// the video's bytes. A page that is playing reports again on
+			// its next append.
+			if (m_mse)
+				m_mse->clear_site(u.host());
 			apply_policy(view, u.host());
 			// And an open Find Media goes with this tab when it is the one
 			// in front of you -- a new video on the same site included.

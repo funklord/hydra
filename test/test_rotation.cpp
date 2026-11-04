@@ -4567,6 +4567,22 @@ int main(int argc, char **argv) {
 		         .arg(w12.m_media_action->isVisible()
 		                ? w12.m_media_action->text() : QString("hidden")));
 
+		// The next page on the site is not playing what the last one was.
+		auto *tapped_view = dynamic_cast<fake_view *>(
+		  w12.m_views_by_id.value(n->id, nullptr));
+		check(tapped_view != nullptr, "the tab has its view");
+		if (tapped_view) {
+			tapped_view->navigated_to(QUrl("https://tapped.example/article"));
+			spin(150);
+			check(w12.m_mse->streams_for("tapped.example").isEmpty() &&
+			          !w12.m_media_action->isVisible(),
+			      "a new page on the site drops what the last one reported");
+			w12.m_mse->report("tapped.example", "video/mp4", 8192, 5, 2.0, 120.0);
+			spin(150);
+			check(w12.m_media_action->isVisible(),
+			      "and a report from the page in front brings the badge back");
+		}
+
 		// No explicit refresh: the window listens to the engine's `changed()`,
 		// which is what makes this work from the settings dialog as well as
 		// from the shield. `on_policy_changed` is the shield's slot only, and

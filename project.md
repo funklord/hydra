@@ -18499,7 +18499,11 @@ a row tied to no page counts as this page's. `test_streamtype` holds 3
 segments on this page against 500 on the last; with the ordering removed,
 3 of its checks fail. Filter signals stay per site, as this section argues,
 and two sentences that called them "this page" now say "this site". The
-anti-adblock watch stands as written.
+Media Source tap was the same shape: a running count per site that nothing
+reset, so an article after a video still said "This page is playing video".
+It is dropped for a host when a tab arrives at a page there, and a page that
+is playing reports again on its next append. The anti-adblock watch stands
+as written.
 
 `extractor_signals`' header states the requirement outright:
 
