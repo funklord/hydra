@@ -990,8 +990,13 @@ void tab_tree_view::edit_properties(node *n) {
 	                         "sub-tab below it -- and cannot be moved.");
 
 	form->addRow("Title", title);
+	// A folder has no address. Left out of the form the edit was still a child
+	// of the dialog, drawn at its top-left over the title with its placeholder
+	// showing (reported 2026-11-04), so it is hidden as well as unlisted.
 	if (!n->is_folder())
 		form->addRow("Address", url);
+	else
+		url->hide();
 	form->addRow("Tags", tags);
 	form->addRow("Locked", locked);
 	form->addRow("Id", id);

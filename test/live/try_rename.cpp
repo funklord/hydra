@@ -23,6 +23,7 @@
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
+#include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -143,6 +144,34 @@ int main(int argc, char *argv[]) {
 		      QString("the id is shown as a label rather than an editable "
 		               "field (%1)").arg(saw.id_label.isEmpty() ? "not found"
 		                                                         : saw.id_label));
+	}
+
+	section("a folder has no address box");
+	{
+		// Every visible line edit has to be one the form placed. The address
+		// edit used to be left a loose child of the dialog for a folder, drawn
+		// over the top-left corner.
+		int loose = -1, boxes = 0;
+		QTimer::singleShot(400, [&] {
+			auto *dlg = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+			if (!dlg)
+				return;
+			auto *form = dlg->findChild<QFormLayout *>();
+			loose = 0;
+			for (QLineEdit *e : dlg->findChildren<QLineEdit *>()) {
+				if (!e->isVisible())
+					continue;
+				++boxes;
+				if (!form || form->indexOf(e) < 0)
+					++loose;
+			}
+			dlg->reject();
+		});
+		view->edit_properties(model->root()->children.first());
+		spin(300);
+		check(loose == 0 && boxes >= 2,
+		      QString("its Properties shows only the form's boxes "
+		              "(%1 visible, %2 outside the form)").arg(boxes).arg(loose));
 	}
 
 	section("and the page cannot take it back");
