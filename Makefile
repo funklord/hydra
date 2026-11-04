@@ -577,7 +577,11 @@ hull-keepass-image:
 
 hull-keepass:
 	@$(MAKE) --no-print-directory -C test build-make/try_keepass build-make/try_autofill
-	@$(HULL) images | grep -q '^hydra/keepass ' || $(MAKE) --no-print-directory hull-keepass-image
+	@# Every time, not only when absent: hull caches a step until it changes,
+	@# so this is free when nothing did, and an image kept because it existed
+	@# ran a spec older than the tree, failing a check for a missing package
+	@# the spec already named.
+	@$(MAKE) --no-print-directory hull-keepass-image
 	$(HULL) run -f test/hull/keepass/hull.conf
 
 drivers:
