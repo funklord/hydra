@@ -562,14 +562,12 @@ test-sanitize:
 	@$(MAKE) --no-print-directory SANITIZE=1 TEST_BUILD=build-san \
 	   $(if $(T),test-one T=$(T),test)
 
-# Separate from `test` because it is a different order of cost: each driver
-# compiles the whole app and links WebEngine, and they want a real display.
 # **KeePassXC, end to end, in a machine hull runs** (test/hull/keepass). The
 # bridge pairs with a throwaway vault inside the machine -- never the user's,
 # whose KeePassXC answers on this account's runtime directory, which the
 # machine does not share. `hull` is a sibling checkout rather than vendored,
-# so HULL is a variable, as netcfgd's is. The image is built once and needs
-# the network; the run needs none.
+# so HULL is a variable, as netcfgd's is. Building the image needs the network
+# when its step changed; the run needs none.
 HULL ?= $(HOME)/src/hull/build/hull
 
 hull-keepass-image:
@@ -584,6 +582,8 @@ hull-keepass:
 	@$(MAKE) --no-print-directory hull-keepass-image
 	$(HULL) run -f test/hull/keepass/hull.conf
 
+# Separate from `test` because it is a different order of cost: each driver
+# compiles the whole app and links WebEngine, and they want a real display.
 drivers:
 	@$(MAKE) --no-print-directory -C test -j$(JOBS) all
 	@echo "live drivers built. Run one: $(HEADLESS) ./$(TESTS_DIR)/try_cookies"
