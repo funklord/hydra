@@ -262,7 +262,7 @@ media_dialog::media_dialog(media_detector *detector, player_launcher *players,
 	picture->setObjectName("media_save_picture");
 	both->setObjectName("media_save_both");
 	connect(menu, &QMenu::aboutToShow, this, [this, sound, picture, both] {
-		const QList<media_item> items = m_detector->items_for(m_site);
+		const QList<media_item> items = m_detector->items_for(m_site, QUrl(m_ctx.referer));
 		const bool s = media_detector::best_sound(items) >= 0;
 		const bool p = media_detector::best_picture(items, k_save_max_height) >= 0;
 		sound->setEnabled(s);
@@ -280,7 +280,7 @@ media_dialog::media_dialog(media_detector *detector, player_launcher *players,
 }
 
 void media_dialog::save_as(save_choice choice) {
-	const QList<media_item> items = m_detector->items_for(m_site);
+	const QList<media_item> items = m_detector->items_for(m_site, QUrl(m_ctx.referer));
 	const int s = media_detector::best_sound(items);
 	const int p = media_detector::best_picture(items, k_save_max_height);
 	QStringList said;
@@ -337,7 +337,7 @@ void media_dialog::set_site(const QString &site_host, const QString &node_id,
 
 void media_dialog::repopulate() {
 	m_list->clear();
-	const QList<media_item> items = m_detector->items_for(m_site);
+	const QList<media_item> items = m_detector->items_for(m_site, QUrl(m_ctx.referer));
 	if (m_save)
 		m_save->setVisible(media_saving_allowed(m_site, QUrl(), nullptr) &&
 		                   std::any_of(items.cbegin(), items.cend(),

@@ -31,6 +31,9 @@ struct media_item {
 	media_kind kind = media_kind::direct;
 	QUrl       url;
 	QString    site_host;   // the page it was found on
+	// The page it was last requested from, fragment removed. Empty for a row
+	// that came from anywhere else, and such a row counts as this page's.
+	QUrl       page;
 	QString    label;       // filename or manifest name, for the list
 	int        hits = 0;    // segment counts tell us which stream is playing
 
@@ -163,12 +166,21 @@ public:
 	void on_request(const request_context &ctx, const request_decision &d) override;
 
 	// Snapshot for a page, best candidate first.
-	QList<media_item> items_for(const QString &site_host) const;
+	//
+	// **`page` puts that page's own rows ahead of the site's others.** Rows are
+	// kept per site, because a reload should not lose them, and ranked by the
+	// segments fetched -- so after ten minutes of one video, its manifest
+	// outranked the one the next video on that site had just requested, and
+	// the row called "the stream this page looks to be playing" was the last
+	// page's. Only an order: the older rows are still listed. Where a site's
+	// page address does not change, every row is this page's and nothing moves.
+	QList<media_item> items_for(const QString &site_host,
+	                            const QUrl &page = QUrl()) const;
 	int count_for(const QString &site_host) const;
 
 	// The primary stream: the manifest whose segments are actively being
 	// fetched, else the first manifest, else the first direct file (sec 11.3).
-	media_item primary_for(const QString &site_host) const;
+	media_item primary_for(const QString &site_host, const QUrl &page = QUrl()) const;
 
 	void clear_site(const QString &site_host);
 

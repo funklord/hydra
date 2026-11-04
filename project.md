@@ -18484,8 +18484,21 @@ kept for every page of its site rather than lost. Decided without asking
 because the header had already stated the requirement this section quotes.
 `test_extloop` feeds two pages on one site and checks the evidence, the
 allowlist and the dialog; `try_forget` shows the real interceptor naming the
-tab's page (2 of the site's 4 requests). The rest of this section -- media,
-filter signals, the anti-adblock watch -- stands as written.
+tab's page (2 of the site's 4 requests).
+
+**Media is settled too (2026-11-04), as an order rather than a key.** The
+fault was worse than the stale rows this section names: rows rank by
+segments fetched, so after ten minutes of one video its manifest outranked
+the next video's, and the row the dialog calls the stream this page looks to
+be playing, which Watch uses, was the last page's. Each row now keeps the
+page that last requested it, or fetched its segments, and `items_for(host,
+page)` puts that page's rows first. The others stay listed below, because a
+reload should not lose them, which is what this section argued for. It only
+reorders, so where a site's page address does not change nothing moves, and
+a row tied to no page counts as this page's. `test_streamtype` holds 3
+segments on this page against 500 on the last; with the ordering removed,
+3 of its checks fail. The rest of this section -- filter signals and the
+anti-adblock watch -- stands as written.
 
 `extractor_signals`' header states the requirement outright:
 

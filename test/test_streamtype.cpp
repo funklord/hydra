@@ -386,6 +386,63 @@ int main(int argc, char **argv) {
 		      "ranked rows come first, highest rank first, over kind and label");
 	}
 
+	section("the page in front of you comes first, whatever the last one fetched");
+	{
+		// Two videos on one site, the first watched for a while. Ranked by
+		// segments alone the first video's manifest led the list on the
+		// second video's page, and Watch handed over the wrong film.
+		media_detector det;
+		auto request = [&](const char *page, const char *url) {
+			request_context ctx;
+			ctx.site_host    = "site.test";
+			ctx.request_host = "cdn.test";
+			ctx.page         = QUrl(QString::fromUtf8(page));
+			ctx.url          = QUrl(QString::fromUtf8(url));
+			det.on_request(ctx, request_decision{});
+		};
+		const char *one = "https://site.test/watch/1";
+		const char *two = "https://site.test/watch/2";
+		request(one, "https://cdn.test/a/master.m3u8");
+		for (int i = 0; i < 500; ++i)
+			request(one, "https://cdn.test/a/seg-1.ts");
+		request(two, "https://cdn.test/b/master.m3u8");
+		for (int i = 0; i < 3; ++i)
+			request(two, "https://cdn.test/b/seg-1.ts");
+
+		const QString first = "https://cdn.test/a/master.m3u8";
+		const QString second = "https://cdn.test/b/master.m3u8";
+		check(det.primary_for("site.test", QUrl(two)).url.toString() == second,
+		      "on the second page its 3 segments beat the first page's 500");
+		check(det.primary_for("site.test", QUrl(one)).url.toString() == first,
+		      "and going back puts the first one first again");
+		check(det.primary_for("site.test", QUrl("https://site.test/watch/2#t=9"))
+		          .url.toString() == second,
+		      "a fragment is not another page");
+		check(det.items_for("site.test", QUrl(two)).size() == 2,
+		      "the other page's row is still listed, below");
+		check(det.primary_for("site.test").url.toString() == first,
+		      "and with no page named the order is the old one, by segments");
+		check(det.primary_for("site.test", QUrl("https://site.test/other")).url.toString()
+		          == first,
+		      "as it is on a page that has requested neither");
+
+		// Fetched by a third page, it belongs to that page now.
+		request("https://site.test/watch/3", "https://cdn.test/b/master.m3u8");
+		check(det.primary_for("site.test", QUrl("https://site.test/watch/3"))
+		          .url.toString() == second,
+		      "a known manifest asked for again moves to the page that asked");
+
+		// A row nobody tied to a page stays in with this page's.
+		media_item vouched;
+		vouched.kind  = media_kind::direct;
+		vouched.url   = QUrl("https://cdn.test/yt/video.mp4");
+		vouched.label = "from a lookup";
+		vouched.rank  = 5;
+		det.add_item("site.test", vouched);
+		check(det.primary_for("site.test", QUrl(two)).url == vouched.url,
+		      "and a lookup's ranked row, which has no page, still leads");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;
 }

@@ -105,6 +105,7 @@ void media_detector::on_request(const request_context &ctx, const request_decisi
 		return;
 
 	int count = 0;
+	const QUrl page = ctx.page.adjusted(QUrl::RemoveFragment);
 	{
 		QMutexLocker guard(&m_lock);
 		QList<media_item> &list = m_by_site[ctx.site_host];
@@ -128,17 +129,26 @@ void media_detector::on_request(const request_context &ctx, const request_decisi
 			if (!best)
 				return;         // a segment with no known manifest tells us nothing yet
 			best->hits++;
+			// A manifest whose segments this page is fetching is this page's,
+			// wherever it was first seen.
+			if (!page.isEmpty())
+				best->page = page;
 			count = list.size();
 		} else {
-			for (const media_item &m : list)
-				if (m.url == ctx.url)
-					return;     // already known
+			for (media_item &m : list)
+				if (m.url == ctx.url) {
+					// Known, and now asked for by this page.
+					if (!page.isEmpty())
+						m.page = page;
+					return;
+				}
 			if (list.size() >= k_max_per_site)
 				return;
 			media_item item;
 			item.kind      = kind;
 			item.url       = ctx.url;
 			item.site_host = ctx.site_host;
+			item.page      = page;
 			// Not just the filename: variant manifests are routinely all named
 			// master.m3u8 or index.mpd, and a list of identical labels is
 			// useless for choosing between them. Keep the parent directory,
@@ -159,16 +169,23 @@ void media_detector::on_request(const request_context &ctx, const request_decisi
 	emit site_updated(ctx.site_host, count);
 }
 
-QList<media_item> media_detector::items_for(const QString &site_host) const {
+QList<media_item> media_detector::items_for(const QString &site_host,
+                                            const QUrl &page) const {
 	QMutexLocker guard(&m_lock);
 	QList<media_item> list = m_by_site.value(site_host);
+	const QUrl here = page.adjusted(QUrl::RemoveFragment);
+	auto on_this_page = [&here](const media_item &m) {
+		return here.isEmpty() || m.page.isEmpty() || m.page == here;
+	};
 	// Manifests before direct files, and within manifests the most-fetched
 	// first -- that is the heuristic for "the stream the page is playing".
 	//
 	// **A ranked answer comes before all of that.** yt-dlp's rows have no hits,
 	// so they fell to the label tie-break, and "1080p" sorts first -- which put
 	// a picture-only stream at the top and made Watch play silence.
-	std::sort(list.begin(), list.end(), [](const media_item &a, const media_item &b) {
+	std::sort(list.begin(), list.end(), [&](const media_item &a, const media_item &b) {
+		const bool ah = on_this_page(a), bh = on_this_page(b);
+		if (ah != bh) return ah;
 		if (a.rank != b.rank) return a.rank > b.rank;
 		const bool am = (a.kind == media_kind::hls || a.kind == media_kind::dash);
 		const bool bm = (b.kind == media_kind::hls || b.kind == media_kind::dash);
@@ -226,8 +243,9 @@ int media_detector::count_for(const QString &site_host) const {
 	return m_by_site.value(site_host).size();
 }
 
-media_item media_detector::primary_for(const QString &site_host) const {
-	const QList<media_item> list = items_for(site_host);
+media_item media_detector::primary_for(const QString &site_host,
+                                        const QUrl &page) const {
+	const QList<media_item> list = items_for(site_host, page);
 	return list.isEmpty() ? media_item{} : list.first();
 }
 
