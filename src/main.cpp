@@ -27,6 +27,15 @@
 #define HYDRA_VERSION "unknown (built without a version)"
 #endif
 
+// The commit and its date, from `hydra.pro`, which says why. A build that reads
+// the sources alone has no stamp and says nothing.
+#if __has_include("build_stamp.h")
+#include "build_stamp.h"
+#endif
+#ifndef HYDRA_BUILD
+#define HYDRA_BUILD ""
+#endif
+
 #include "main_window.h"
 #include "touch_scroll.h"
 #include "settings_dialog.h"   // settings_store
@@ -115,6 +124,8 @@ int main(int argc, char *argv[]) {
 	// answers 2026-07-29.
 	if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QLatin1String("--version")) {
 		std::printf("hydra %s\n", HYDRA_VERSION);
+		if (HYDRA_BUILD[0])
+			std::printf("built from %s\n", HYDRA_BUILD);
 		std::printf("Qt %s (built against %s)\n", qVersion(), QT_VERSION_STR);
 		std::printf("Copyright (C) 2026 Nabeel Sowan <nabeel@vibes.se>\n");
 		return 0;
@@ -241,6 +252,9 @@ int main(int argc, char *argv[]) {
 	}
 #endif
 	app.setApplicationName("Hydra");
+	// What the About window says, so it can tell one build from another.
+	app.setApplicationVersion(HYDRA_BUILD[0] ? HYDRA_VERSION " (" HYDRA_BUILD ")"
+	                                         : HYDRA_VERSION);
 	// **The name of the desktop entry, which nothing was saying.**
 	// `packaging/hydra.desktop` exists and is installed, and this is the only
 	// call that tells a desktop which entry this process belongs to: Qt sends

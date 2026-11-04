@@ -41999,7 +41999,9 @@ drift from a dragged one. `move_targets` offers only what the move
 would accept: never the row itself, anything inside it, or the folder
 it is already in. Two folders with the same path are numbered so the
 second can be picked. `test_model` covers the move, its refusals and
-the targets (410).
+the targets (410). Driven on the emulator 2026-11-05 by coordinates, since
+the accessibility dump does not show menus: a hold on Hacker News, Move into
+Folder, the dropdown, Media, OK. The saved tree then has it under Media.
 
 ### On a phone, a dropdown outside a scroll area never opened
 
@@ -42087,8 +42089,7 @@ that Undo is offered inside the delete's own signal.
 internal removals. `try_delete` (26) covers the asking path, the silent
 default with no modal, Undo through the menu and the status bar, and the
 X: shown on the hovered row only, a click deletes, Undo restores. It
-also saves a picture of the hovered row. Not yet checked on the emulator:
-the X on a phone's current row.
+also saves a picture of the hovered row. The phone is covered below.
 
 **On the phone, measured on the emulator the same day.** The X on the
 current row deletes it, and "Deleted ..." with Undo appears on the status
@@ -42459,7 +42460,13 @@ control. `QStringLiteral` text is stored as UTF-16, so the control has to be
 a plain literal. Every package is version `0.1`, so dpkg installs an old build
 over a new one without comment. **Proposed, and the holder's to decide:**
 put the build date and commit into the package version, for example
-`0.1+git20261103.0f858ee`. Not done.
+`0.1+git20261103.0f858ee`. Not done. What did not need deciding is done
+(2026-11-05): `hydra --version` has a line `built from <commit> <date>`, and
+the About window says the same, so the question has a one-step answer. The
+first line is unchanged, because `version-check` reads it. `hydra.pro` writes
+`build_stamp.h` when the commit moves, and only `main.cpp` includes it, since
+qmake's objects do not depend on flags and a define would not have rebuilt
+anything.
 
 **Closed: a folder's Properties dialog showed a stray "about:blank" box**
 (reported 2026-11-04). The address edit was built for every row and added to

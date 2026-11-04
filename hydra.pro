@@ -22,6 +22,20 @@ VERSION  = $$cat(VERSION, singleline)
 # it is. One source still -- the file -- read once here.
 DEFINES += HYDRA_VERSION=\\\"$$VERSION\\\"
 
+# **Which commit this binary is, because every package says 0.1.** An installed
+# hydra days older than the tree looked the same as a current one: the holder
+# could not see a feature their build did not have, and it took a search of the
+# binary to find out (2026-11-03). A header rather than a define, since qmake's
+# objects do not depend on flags: only main.cpp includes it, and it is rewritten
+# only when the commit moves. Empty where there is no git, and the program then
+# says nothing about it.
+HYDRA_BUILD = $$system(git -C $$PWD log -1 --format=%h_%cs 2>/dev/null)
+HYDRA_BUILD ~= s/_/ /
+HYDRA_STAMP = "$${LITERAL_HASH}define HYDRA_BUILD \"$$HYDRA_BUILD\""
+HYDRA_STAMP_OLD = $$cat($$OUT_PWD/build_stamp.h, lines)
+!equals(HYDRA_STAMP_OLD, $$HYDRA_STAMP): write_file($$OUT_PWD/build_stamp.h, HYDRA_STAMP)
+INCLUDEPATH += $$OUT_PWD
+
 # **Qt 6.8, refused here rather than discovered in the compiler.** The floor
 # used to be stated as 6.4, derived once from the menu bar's addAction
 # overload and never derived again as the code moved. Two things have raised

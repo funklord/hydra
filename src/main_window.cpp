@@ -3535,7 +3535,7 @@ void main_window::on_about() {
 	// (C) 2026 Nabeel Sowan" with the address simply gone, which is the half
 	// of it a reader would need to act on.
 	QMessageBox::about(this, "About Hydra",
-	  "<b>Hydra</b><br>"
+	  "<b>Hydra</b> " + QApplication::applicationVersion().toHtmlEscaped() + "<br>"
 	  "A tab-tree browser over an embedded Chromium, with a per-site "
 	  "security policy engine.<br><br>"
 	  "Copyright (C) 2026 Nabeel Sowan &lt;nabeel@vibes.se&gt;<br>"
