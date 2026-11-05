@@ -24,7 +24,7 @@
 // platform this builds for.
 //
 // **A claim about a version we do not have, and that is the trade.** The
-// engine really is Chromium 122. A site relying on something only 156 has will
+// engine really is Chromium 134. A site relying on something only 156 has will
 // now fail later rather than turning us away at the door, which is the worse
 // failure in general and the better one here, because being refused up front
 // is unconditional and cannot be worked around from inside the page.
@@ -34,15 +34,11 @@
 // 122 -- two versions at once, which is what a bot check compares (a
 // Cloudflare check failing on coupert, 2026-10-17) and a fingerprint of its
 // own. The holder: the whole outward surface is this browser's to set, as
-// "current Chrome on Linux". Qt 6.8's `QWebEngineClientHints` sets the full
-// version and the full version list; the brand list itself -- the header on
-// every request, and `brands` in pages, frames and workers -- it cannot.
-// **Qt 6.10 can**: setting the full version list fills the brand list from
-// it (`PopulateBrandVersionLists`, read in the 6.10.0 source), so there
-// nothing more is needed. For 6.8, hydra's `engine-patch/0001` adds
-// `brandVersionList`. Set by name, so hydra builds and runs on any engine,
-// and says once if one older than 6.10 lacks the patch. The routes tried and
-// refused are in project.md.
+// "current Chrome on Linux". `QWebEngineClientHints` sets the full version and
+// the full version list, and from Qt 6.10 that list fills the brand list too
+// (`PopulateBrandVersionLists`, read in the 6.10.0 source): the header on every
+// request, and `brands` in pages, frames and workers. So 6.10 is what this
+// project builds against. The routes tried and refused are in project.md.
 namespace user_agent {
 
 // The Chrome major to claim. **It has to be maintained**: nothing here can

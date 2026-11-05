@@ -41078,6 +41078,10 @@ Reddit's challenge appeared once, on the first load only, so it does not separat
 them. Two samples each, cookies not cleared between loads, so this is a lead and not
 a cause.
 
+Moving to 6.10 was the holder's answer. It narrowed the gap from 122 to 134 and the
+same page still stops at 156, in an offscreen run where nobody can answer a
+challenge. Whether a person meets it in a real window is not measured.
+
 It was not pursued. A run stepping through claims to find which one such a check
 accepts was refused as bot-check circumvention, and that is a fair description of
 it: do not repeat it. The honest remedy is the one *the engine says what it is*
@@ -41848,6 +41852,19 @@ property is absent there, and hydra now warns about that only on an engine
 older than 6.10. Debian's backports carry `qt6-webengine` 6.10.2.
 
 ### Moving to QtWebEngine 6.10.2
+
+**Done 2026-11-05, on the holder's word and by their apt.** The fifteen packages
+went to `6.10.2+dfsg-3~bpo13+1`, nothing removed, `qtbase` still 6.8.2, so
+`--version` saying Qt 6.8.2 is correct. The engine is Chromium 134.0.6998.208 with
+security patches through 144.0.7559.96, read from the library. A clean rebuild
+passed `make test`, 54 suites, and `try_cdp hints` read one identity on every
+surface with no patch, at the 718 MB for three tabs measured below. Thirty-six
+public sites gave no refusal and no crash, the same pages as on 6.8.
+
+`engine-patch/` and the `brandVersionList` call are gone, a warning stays for an
+older engine, and `debian/control` requires 6.10. What follows is the plan as
+written, kept for the rollback and the reasoning. **Nothing holds these packages**,
+which now suits: updates arrive from backports.
 
 The holder asked for the plan 2026-10-22. Measured on this machine
 2026-10-23; the move itself is the holder's, by apt.
