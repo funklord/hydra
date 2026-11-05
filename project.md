@@ -41130,8 +41130,10 @@ a page that hit the deadline lost its permissions shim. `scriptlets::source_cach
 builds the script once for every view with the same set; `android_view` skips a script
 that has not changed and sends the bundle once a turn, flushing before anything that
 navigates. Reading the lists compiled a regular expression for every rule, twice, and
-now only what a list wrote as one is compiled up front. Closing the shield went from
-1.8 s to under 190 ms, and a new tab to under 150 ms. **Why the desktop never showed it**:
+now only what a list wrote as one is compiled up front. After the fix a shield opened and
+closed with one 188 ms stall and a new tab with none over 150 ms. Neither was timed
+before it: the 1.5 s and the 1.8 s for a policy pass are from a cold start, where
+`ensure_view` and `reapply_policy_to_views` were sampled. **Why the desktop never showed it**:
 the same script takes 30 ms there. The first 1.3 s are still blocking, before the window
 shows; moving the read to a worker would let pages load before their rules, so it stays.
 
