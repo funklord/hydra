@@ -41068,7 +41068,7 @@ Measured on the phone: every request says `"Google Chrome";v="156"` and
 The desktop constant still has to be maintained by hand. `try_cdp`'s 140s are that
 driver's own fixture, not the claim, and are left alone.
 
-**Open, and the holder's: the desktop claim may have cost something.** Run
+**Closed: the desktop claim stays at 156.** Run
 2026-11-05 at `9e41320` with a throwaway profile, 36 public sites including the
 Swedish banks and the sign-in pages gave no refusal and no crash at 156 on engine
 122. But a same-binary comparison on nine thin pages, overriding the claim through
@@ -41080,7 +41080,9 @@ a cause.
 
 Moving to 6.10 was the holder's answer. It narrowed the gap from 122 to 134 and the
 same page still stops at 156, in an offscreen run where nobody can answer a
-challenge. Whether a person meets it in a real window is not measured.
+challenge. **The holder then opened it in the installed build, 2026-11-05: it loads
+after Cloudflare's human check.** So the stop was a check nobody was there to answer,
+and 156 costs a click on that page at most.
 
 It was not pursued. A run stepping through claims to find which one such a check
 accepts was refused as bot-check circumvention, and that is a fair description of
