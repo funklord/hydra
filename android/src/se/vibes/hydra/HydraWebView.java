@@ -250,7 +250,9 @@ public class HydraWebView {
     /** One entry of that menu was chosen. */
     public static native void onLinkMenu(long id, String action, String value);
     /** The page asked for a window at this address; user means a person did. */
-    public static native void onNewWindow(long id, String url, boolean user);
+    public static native void onNewWindow(long id, String url, boolean user, long held);
+    /** The page's own `window.close()`: the tab goes, as on the desktop. */
+    public static native void onCloseRequested(long id);
     /** A file to save, with what this WebView would have sent to fetch it. */
     public static native void onDownload(long id, String url, String cookie,
                                          String userAgent, String referer,
@@ -937,10 +939,30 @@ public class HydraWebView {
                                        new ByteArrayInputStream(resourceBody(name)));
     }
 
+    /**
+     * The windows pages have opened, waiting for the shell's answer: a token
+     * goes to the shell with the address, and the WebView comes back out of
+     * here through {@link #create} if the shell makes a tab for it, or
+     * {@link #dropWindow} if it refuses. UI thread only.
+     */
+    private static final Map<Long, Player> HELD_WINDOWS = new HashMap<>();
+    private static long lastHeldWindow = 0;
+
+    /** The shell refused a held window, or no tab came of it. */
+    public static void dropWindow(final long held) {
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
+            @Override public void run() {
+                Player w = HELD_WINDOWS.remove(held);
+                if (w != null)
+                    w.destroy();
+            }
+        });
+    }
+
     // The Activity is handed in rather than fetched: QtNative.activity() is not
     // public API in Qt 6.11, and reaching for it compiles until the day it does
     // not. C++ already has the context and can pass it.
-    public static void create(final Activity a, final long id) {
+    public static void create(final Activity a, final long id, final long held) {
         if (a == null)
             return;
         ACTIVITY = a;
@@ -948,7 +970,10 @@ public class HydraWebView {
             @Override public void run() {
                 if (VIEWS.containsKey(id))
                     return;
-                Player w = new Player(a);
+                // A window a page opened is already the page's: the engine
+                // tied it to its opener when onCreateWindow handed it over.
+                final Player opened = HELD_WINDOWS.remove(held);
+                final Player w = opened != null ? opened : new Player(a);
                 w.id = id;
                 w.getSettings().setJavaScriptEnabled(true);
                 w.getSettings().setDomStorageEnabled(true);
@@ -1065,10 +1090,20 @@ public class HydraWebView {
                      * learn that: the first address it is sent to goes to the
                      * shell, whose new_window_requested is the same path the
                      * desktop takes, popup policy and external schemes
-                     * included, and the throwaway is destroyed. A window that
-                     * never navigates is destroyed by the timeout. There is
-                     * no opener in the tab that results, as there was not when
-                     * these replaced the page they came from.
+                     * included. The WebView is held meanwhile, because it is
+                     * the one the engine tied to its opener: if the shell
+                     * makes a tab, the tab is built on it and loads the
+                     * address, and `window.opener` works, which a sign-in
+                     * popup posting its answer back needs. Refused, it is
+                     * destroyed. A window that never navigates is destroyed
+                     * by the timeout.
+                     *
+                     * Stopped rather than left to load, because the rules
+                     * that apply to a page are installed by the shell, which
+                     * has not answered yet. So a window that is already
+                     * loading when this hears of it is asked for twice. Posted
+                     * through a Handler: View.post on a view with no parent
+                     * queues until it is attached, which this never is.
                      */
                     @Override
                     public boolean onCreateWindow(WebView parent, boolean dialog,
@@ -1077,28 +1112,35 @@ public class HydraWebView {
                         if (result == null
                             || !(result.obj instanceof WebView.WebViewTransport))
                             return false;
-                        final WebView scout = new WebView(parent.getContext());
+                        final Player scout = new Player(parent.getContext());
+                        final android.os.Handler main =
+                          new android.os.Handler(android.os.Looper.getMainLooper());
                         final boolean[] done = { false };
-                        final Runnable finish = new Runnable() {
-                            @Override public void run() {
-                                if (done[0])
-                                    return;
-                                done[0] = true;
-                                scout.stopLoading();
-                                scout.destroy();
-                            }
-                        };
                         scout.setWebViewClient(new WebViewClient() {
                             private void take(String url) {
                                 if (done[0] || url == null || url.isEmpty()
                                     || url.equals("about:blank"))
                                     return;
+                                done[0] = true;
                                 final Uri u = Uri.parse(url);
-                                if (!("app.bankid.com".equals(u.getHost())
-                                      && HydraIntents.openInOwnApp(parent.getContext(), url)))
-                                    onNewWindow(id, url, gesture);
-                                // Not from inside the scout's own callback.
-                                scout.post(finish);
+                                if ("app.bankid.com".equals(u.getHost())
+                                    && HydraIntents.openInOwnApp(parent.getContext(), url)) {
+                                    // Not from inside the scout's own callback.
+                                    main.post(new Runnable() {
+                                        @Override public void run() {
+                                            scout.destroy();
+                                        }
+                                    });
+                                    return;
+                                }
+                                final long held = ++lastHeldWindow;
+                                HELD_WINDOWS.put(held, scout);
+                                main.post(new Runnable() {
+                                    @Override public void run() {
+                                        scout.stopLoading();
+                                        onNewWindow(id, url, gesture, held);
+                                    }
+                                });
                             }
                             @Override
                             public boolean shouldOverrideUrlLoading(WebView v,
@@ -1114,8 +1156,26 @@ public class HydraWebView {
                         });
                         ((WebView.WebViewTransport) result.obj).setWebView(scout);
                         result.sendToTarget();
-                        parent.postDelayed(finish, 10000);
+                        main.postDelayed(new Runnable() {
+                            @Override public void run() {
+                                if (done[0])
+                                    return;
+                                done[0] = true;
+                                scout.destroy();
+                            }
+                        }, 10000);
                         return true;
+                    }
+
+                    /**
+                     * Chromium sends this only for a window a script may
+                     * close, which is one a script opened: the popup that has
+                     * posted its answer and is finished. Without it the tab
+                     * stayed open on a blank page.
+                     */
+                    @Override
+                    public void onCloseWindow(WebView window) {
+                        onCloseRequested(id);
                     }
 
                     /**
@@ -1481,7 +1541,7 @@ public class HydraWebView {
                         Log.w("hydra", "render process gone for view " + id
                                         + " (crashed=" + crashed + ")");
                         destroy(id);
-                        create(ACTIVITY, id);
+                        create(ACTIVITY, id, 0);
                         onRenderGone(id, crashed);
                         return true;
                     }

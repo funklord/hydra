@@ -74,6 +74,8 @@ class request_filter;
 // scrollbar flags. `setSupportMultipleWindows` is on: a window a page asks for
 // arrives at `HydraWebView`'s `onCreateWindow` and comes here as
 // `new_window_requested`, a tab under the page that asked, as on the desktop.
+// The tab is built on the WebView the engine made for that window, so it has
+// its `window.opener`, and `window.close()` comes back as `close_requested`.
 //
 // **File inputs open the system picker**, through Qt's own `QFileDialog` -- on
 // Android that is the document picker, and what comes back is a `content:` url
@@ -390,7 +392,9 @@ public:
 	static void report_console(qint64 id, const QString &text);
 	// What was chosen from the long-press menu (`link_menu.h`): `action` is
 	// the word `link_menu::encode` wrote, `value` the address or the text.
-	static void report_new_window(qint64 id, const QString &url, bool user);
+	static void report_new_window(qint64 id, const QString &url, bool user,
+	                              qint64 held);
+	static void report_close_requested(qint64 id);
 	static void report_link_menu(qint64 id, const QString &action,
 	                             const QString &value);
 	// A file to save, from the WebView's download listener or the menu's
@@ -411,6 +415,9 @@ private:
 	void on_nav_state_from_java(bool back, bool forward);
 
 	static QHash<qint64, android_view *> s_views;
+	// The WebView Java holds for a window a page opened, for the next view
+	// made while the shell answers that request. 0 when there is none.
+	static qint64 s_held_window;
 	static request_filter *s_filter;   // one per process; see should_block()
 	static std::function<void(const QUrl &)> s_external;
 	qint64 m_id = 0;

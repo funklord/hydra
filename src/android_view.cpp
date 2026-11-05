@@ -300,8 +300,13 @@ Java_se_vibes_hydra_HydraWebView_linkMenu(JNIEnv *env, jclass, jstring link,
 
 extern "C" JNIEXPORT void JNICALL
 Java_se_vibes_hydra_HydraWebView_onNewWindow(JNIEnv *env, jclass, jlong id,
-                                             jstring url, jboolean user) {
-	android_view::report_new_window(id, java_string(env, url), user);
+                                             jstring url, jboolean user, jlong held) {
+	android_view::report_new_window(id, java_string(env, url), user, held);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onCloseRequested(JNIEnv *, jclass, jlong id) {
+	android_view::report_close_requested(id);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -1105,6 +1110,7 @@ QString android_view::injected_scripts(qint64 id) {
 }
 
 QHash<qint64, android_view *> android_view::s_views;
+qint64 android_view::s_held_window = 0;
 request_filter *android_view::s_filter = nullptr;
 
 bool android_view::should_block(const QString &url, const QString &accept,
@@ -1395,10 +1401,35 @@ void android_view::report_console(qint64 id, const QString &text) {
 	}, Qt::QueuedConnection);
 }
 
-void android_view::report_new_window(qint64 id, const QString &url, bool user) {
-	QMetaObject::invokeMethod(qApp, [id, url, user] {
+void android_view::report_new_window(qint64 id, const QString &url, bool user,
+                                     qint64 held) {
+	QMetaObject::invokeMethod(qApp, [id, url, user, held] {
+		// The view the shell makes for this window takes the WebView Java is
+		// holding, in its constructor: that one is tied to its opener. Only
+		// the shell knows whether a view comes of the request, so the token
+		// waits here and whatever is left of it afterwards was refused.
+		web_view_backend *adopt = nullptr;
+		s_held_window = held;
 		if (android_view *v = s_views.value(id))
-			emit v->new_window_requested(QUrl(url), user, false, nullptr);
+			emit v->new_window_requested(QUrl(url), user, false, &adopt);
+		if (s_held_window) {
+			s_held_window = 0;
+			QJniObject::callStaticMethod<void>(k_cls, "dropWindow", "(J)V",
+			                                   jlong(held));
+			QJniEnvironment().checkAndClearExceptions();
+		}
+		// An adopted view is opened without loading, because on the desktop
+		// the engine's request carries the navigation. Here it was stopped
+		// to wait for this answer, so it is asked for now.
+		if (adopt)
+			adopt->load(QUrl(url));
+	}, Qt::QueuedConnection);
+}
+
+void android_view::report_close_requested(qint64 id) {
+	QMetaObject::invokeMethod(qApp, [id] {
+		if (android_view *v = s_views.value(id))
+			emit v->close_requested();
 	}, Qt::QueuedConnection);
 }
 
@@ -1522,9 +1553,12 @@ android_view::android_view(request_filter *filter, QWidget *parent)
 
 	m_id = next_id();
 	s_views.insert(m_id, this);
+	const qint64 held = s_held_window;
+	s_held_window = 0;
 	QJniObject::callStaticMethod<void>(
-	  k_cls, "create", "(Landroid/app/Activity;J)V",
-	  QNativeInterface::QAndroidApplication::context().object(), jlong(m_id));
+	  k_cls, "create", "(Landroid/app/Activity;JJ)V",
+	  QNativeInterface::QAndroidApplication::context().object(), jlong(m_id),
+	  jlong(held));
 	// A missing class throws rather than returning anything, so the exception
 	// state is the answer to "is there a WebView".
 	m_native = !QJniEnvironment().checkAndClearExceptions();

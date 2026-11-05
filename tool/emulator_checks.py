@@ -224,6 +224,23 @@ class files(http.server.BaseHTTPRequestHandler):
 			        "display:block;background:#cfc;font-size:40px'>OPEN</a>").encode()
 			self.send_response(200)
 			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/signin"):
+			# A sign-in popup's whole round trip: the popup answers through
+			# window.opener and closes itself, late enough to be seen as a tab.
+			body = ("<!doctype html><meta name=viewport content='width=device-width'>"
+			        "<title>Signin</title><script>addEventListener('message',function(e){"
+			        "if(e.data==='token42')fetch('/heard-token')});</script>"
+			        "<a href=# onclick=\"window.open('/popup-answers');return false\" "
+			        "style='position:fixed;inset:0;display:block;background:#cfc;"
+			        "font-size:40px'>SIGN IN</a>").encode()
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/popup-answers"):
+			body = (b"<!doctype html><title>Answers</title><script>"
+			        b"setTimeout(function(){window.opener.postMessage('token42','*');"
+			        b"setTimeout(function(){window.close()},1000)},15000);</script>")
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
 		elif self.path.startswith("/popped"):
 			body = b"<!doctype html><title>Popped</title><p>popped</p>"
 			self.send_response(200)
@@ -781,6 +798,21 @@ def main():
 			check(wait_for("the tree file", lambda: "popped-tapped" in
 			               adb("shell", "run-as", APP, "cat", "files/tree.txt"), 20, step=2),
 			      "and the tree has it")
+
+			print("\n== a sign-in popup answers its opener and closes ==")
+			# The tab is built on the WebView the engine tied to its opener.
+			# With a throwaway in its place the popup's window.opener is null.
+			tree = lambda: adb("shell", "run-as", APP, "cat", "files/tree.txt")
+			files.seen.clear()
+			open_url(f"http://127.0.0.1:{port}/signin", wait=15)
+			adb("shell", "input", "tap", "540", "1300")
+			check(wait_for("the popup's tab", lambda: "popup-answers" in tree(), 12, step=1),
+			      "the popup is a tab")
+			check(wait_for("the opener's report", lambda: any(
+			      p == "/heard-token" for p, _ in files.seen), 25, step=1),
+			      "the page that opened it heard its answer")
+			check(wait_for("the tab to go", lambda: "popup-answers" not in tree(), 20, step=2),
+			      "window.close() took the tab away")
 
 			print("\n== an ad is hidden on a page that allows no inline style ==")
 			# Cosmetic hiding inserted a <style>, which such a page refuses --

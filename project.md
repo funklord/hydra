@@ -42449,9 +42449,15 @@ policy and external schemes apply, and the throwaway is destroyed. A window
 that never navigates is destroyed after ten seconds. `app.bankid.com` goes
 to its app first, as the page hook does.
 
-**What it does not do:** the new tab has no `window.opener`. It did not have
-one when these replaced the page either, so nothing is lost, but a sign-in
-popup that posts back to its opener still does not work on Android.
+**The tab keeps its `window.opener`.** The first version destroyed the
+throwaway, so a sign-in popup that posts its answer back did nothing: the
+failure the desktop's `adopt` path was built for, when signing in to claude.ai
+with Google gave a blank tab and no session. Now the WebView is held while the
+shell decides, and the tab is built on it (`HELD_WINDOWS`, `s_held_window`).
+Refused, it is destroyed. `onCloseWindow` reaches `close_requested`, so a popup
+that closes itself takes its tab away. The load is stopped while the shell
+decides, since no rule is installed on that WebView yet, so a window already
+loading when the scout hears of it is requested twice.
 
 On the emulator a `target=_blank` link makes a sub-tab under its opener,
 which stays, and a script's `window.open` with no gesture stays refused under
