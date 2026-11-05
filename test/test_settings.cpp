@@ -2148,6 +2148,38 @@ int main(int argc, char **argv) {
 		check(user_agent::corrected(wout, 140) == wout,
 		      "and running it twice changes nothing, as on the desktop");
 
+		// **On a phone the engine is current, so it is claimed as it is.**
+		// A constant here told sites WebView 156 was Chrome 140, a release
+		// over a year old, which is the shape of the refusal this file exists
+		// to prevent and needed nobody to forget anything to go wrong.
+		QString newer = wv;
+		newer.replace("131.0.6778.200", "999.0.1234.56");
+		const QString eout = user_agent::engine_corrected(newer);
+		check(eout.contains("Chrome/999.0.0.0") && !eout.contains("1234"),
+		      "the engine's own major is claimed, reduced as Chrome reduces it");
+		check(!eout.contains("; wv") && eout.contains("Linux; Android 10; K"),
+		      "with every other correction still made");
+		check(user_agent::engine_corrected(eout) == eout,
+		      "and running it over its own answer changes nothing, since "
+		      "Java may hand back a string it already set");
+		check(user_agent::engine_full_version(newer) == "999.0.1234.56",
+		      "the hints get the engine's full version");
+		check(user_agent::engine_full_version(eout) ==
+		        user_agent::claimed_full_version(999),
+		      "and a reduced string, which has no build to give, gets a "
+		      "full version of the same major rather than 999.0.0.0");
+		// A device left behind: the emulator's image is WebView 109.
+		check(user_agent::engine_corrected(wv) == user_agent::corrected(wv) &&
+		      user_agent::engine_full_version(wv) == user_agent::claimed_full_version(),
+		      "an engine older than the claim gets the claim, in the string "
+		      "and the hints alike, since refused at the door is worse");
+		const QString nameless = "Mozilla/5.0 (Linux; Android 10; K) Safari/537.36";
+		check(user_agent::engine_corrected(nameless) ==
+		        user_agent::corrected(nameless) &&
+		      user_agent::engine_full_version(nameless) ==
+		        user_agent::claimed_full_version(),
+		      "a string naming no engine falls back to the claim");
+
 		// **The hints claim what the string claims**: the same major in the
 		// brand list, a full version of that major in the full list, and
 		// Chrome's own names, so a check comparing them sees one browser.

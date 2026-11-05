@@ -631,14 +631,16 @@ Java_se_vibes_hydra_HydraWebView_correctedUserAgent(JNIEnv *env, jclass,
 	const QString in = from_java(env, offered);
 	if (in.isEmpty())
 		return env->NewStringUTF("");
-	return env->NewStringUTF(user_agent::corrected(in).toUtf8().constData());
+	return env->NewStringUTF(user_agent::engine_corrected(in).toUtf8().constData());
 }
 
 // The full version the corrected string claims, for the WebView's client-hint
 // metadata to agree with it. Pure, like the correction beside it.
 extern "C" JNIEXPORT jstring JNICALL
-Java_se_vibes_hydra_HydraWebView_claimedFullVersion(JNIEnv *env, jclass) {
-	return env->NewStringUTF(user_agent::claimed_full_version().toUtf8().constData());
+Java_se_vibes_hydra_HydraWebView_claimedFullVersion(JNIEnv *env, jclass,
+                                                                jstring offered) {
+	const QString full = user_agent::engine_full_version(from_java(env, offered));
+	return env->NewStringUTF(full.toUtf8().constData());
 }
 
 // The desktop form of the string, for "request desktop site". Pure, like the

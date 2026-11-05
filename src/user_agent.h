@@ -24,7 +24,7 @@
 // platform this builds for.
 //
 // **A claim about a version we do not have, and that is the trade.** The
-// engine really is Chromium 122. A site relying on something only 140 has will
+// engine really is Chromium 122. A site relying on something only 156 has will
 // now fail later rather than turning us away at the door, which is the worse
 // failure in general and the better one here, because being refused up front
 // is unconditional and cannot be worked around from inside the page.
@@ -47,13 +47,17 @@ namespace user_agent {
 
 // The Chrome major to claim. **It has to be maintained**: nothing here can
 // work out what today's Chrome is, and a number left alone for two years
-// recreates the bug this exists to fix.
-constexpr int k_claimed_chrome = 140;
+// recreates the bug this exists to fix. It was: 140 was still here at 2026-11,
+// when the phone's WebView said 156. Take it from a current WebView or Chrome,
+// and take the build below with it.
+//
+// **On Android it is only a floor**: see engine_claimed.
+constexpr int k_claimed_chrome = 156;
 
 // The full version claimed with it, as Chrome reports one: the major above
 // and a build of that release.
 inline QString claimed_full_version(int claimed = k_claimed_chrome) {
-	return QStringLiteral("%1.0.7339.80").arg(claimed);
+	return QStringLiteral("%1.0.8078.47").arg(claimed);
 }
 
 // The brands Chrome sends, brand to version: majors for the brand list, full
@@ -136,6 +140,39 @@ inline QString corrected(const QString &qt_default,
 	ua.replace(QRegularExpression(QStringLiteral("Chrome/[0-9.]+")),
 	            QStringLiteral("Chrome/%1.0.0.0").arg(claimed));
 	return ua;
+}
+
+// The version an engine's own string names, empty if it names none.
+inline QString engine_version(const QString &offered) {
+	return QRegularExpression(QStringLiteral("Chrome/([0-9.]+)"))
+	         .match(offered).captured(1);
+}
+
+// The major the System WebView should claim: its own, or the constant if that
+// is newer. **It updates through the Play Store and is what Chrome is**, so
+// on a current phone the claim is true and no constant can go stale. A device
+// left behind still gets the constant, for the trade written at the top of
+// this file: refused at the door is the worse failure. The emulator's image is
+// WebView 109, and claiming that would have been a step backwards from 140.
+inline int engine_claimed(const QString &offered) {
+	const int major = engine_version(offered).section(QLatin1Char('.'), 0, 0).toInt();
+	return qMax(major, k_claimed_chrome);
+}
+
+inline QString engine_corrected(const QString &offered) {
+	return corrected(offered, engine_claimed(offered));
+}
+
+// The full version for the hints beside that string. A string that has been
+// corrected has frozen its build to zeros, which no Chrome reports as a full
+// version, so Java hands in the WebView's default and this falls back to a
+// build of the same major.
+inline QString engine_full_version(const QString &offered) {
+	const QString version = engine_version(offered);
+	const int claimed = engine_claimed(offered);
+	const bool own = version.section(QLatin1Char('.'), 0, 0).toInt() == claimed;
+	return own && !version.endsWith(QLatin1String(".0.0.0")) ? version
+	                                                         : claimed_full_version(claimed);
 }
 
 

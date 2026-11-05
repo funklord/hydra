@@ -834,6 +834,8 @@ A **bound service with AIDL** is the classic answer here and would also work; th
 
 ### 19.7 Honest constraints
 
+The System WebView is the Android engine by decision, not only by default: GeckoView and an own Chromium build stay open if WebView reaches a dead end. `project.md`, *The engine on Android stays the System WebView*, has the triggers and the costs.
+
 Qt Widgets on Android is supported but is the less-trodden path in the Qt ecosystem (QML is the norm), so the adaptive-layout and touch work is non-trivial and should be scoped as its own phase. The Android System WebView cannot match Chromium/CDP fidelity, so a few desktop-grade controls will be coarser or unavailable on Android; that is a documented difference, not a bug. And the reparenting/foreign-window discussion (§2) is desktop/X11-only and simply does not apply on Android — which is fine, because the design already chose the own-engine path.
 
 **Net:** keep the core platform-neutral, put every platform-specific edge behind an interface (WebView, player, password, download, layout), build the desktop implementations now, and add Android implementations as a later phase. The one thing not to defer is the *seam* for the web view — that belongs in the desktop code (step 3.5) before it grows further. Every feature you asked for is a consumer of infrastructure that already exists for another feature — which is what keeps it compact.

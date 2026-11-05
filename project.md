@@ -40975,6 +40975,85 @@ a knob, not a patched Qt, and a private copy of the engine would miss
 Debian's Chromium security updates. Offering the patch to Qt is the
 holder's decision; until then it is a local stopgap.
 
+## One header names this app to every site, and nothing here can stop it
+
+Measured 2026-11-05 on the Fold3, WebView 156, from a page served over `adb
+reverse`: the page, its image, a `fetch`, a frame and the favicon each arrived
+with `X-Requested-With: se.vibes.hydra`. The string and the client hints above
+say Chrome; this header, on every request and to every third party, says an
+app embedding a WebView. Nothing here had looked at it. **It is still sent, and
+it is recorded here as open.**
+
+`WebSettingsCompat.setRequestedWithHeaderOriginAllowList` with an empty set was
+tried and removed. `WebViewFeature.isFeatureSupported` answers
+`REQUESTED_WITH_HEADER_ALLOW_LIST` false on WebView 156, so the call is skipped
+and the header is unchanged. Chromium's notes say the header would stop by
+default once its trial ended at M138, with a holdback on part of stable traffic.
+The phone at 156 sends it, so do not read the Android documentation's
+"discontinued" as a measurement. A release variant (`debuggable=false`, signed
+with the debug key so that it installs over the debug copy and keeps the data)
+sent the same headers, so neither adb nor a debug build is the cause.
+
+The API 33 emulator image is WebView 109 and sends it too. **What the emulators
+say about this header is not evidence about a phone**, which is on a current
+WebView.
+
+Rejected without building:
+
+- Passing the header empty to `loadUrl`: reaches the main document only.
+- Refetching everything in `shouldInterceptRequest`: loses POST bodies and the
+  engine's own cookies and CORS.
+- Overriding `Application.getPackageName` during WebView startup: fragile against
+  every WebView update, and it would replace the name, not remove the header.
+
+**No site has been shown to refuse this browser over the header.** That is what
+decides the next section.
+
+### The engine on Android stays the System WebView, with both ways out kept open
+
+Decided by the holder 2026-11-05. Android permits a browser its own engine;
+WebView was chosen because Qt WebEngine has no Android target (architecture
+section 2 and section 19). Two alternatives stay open for evaluation:
+
+- **GeckoView**, the first to try: Firefox's engine as a library, no such header.
+  It cannot honestly claim Chrome, its pages can differ from the desktop's, and
+  request blocking would need reworking. The cost is tens of MB and keeping the
+  library current. Not measured here.
+- **An own Chromium build**, as Brave and Vivaldi do: the same engine as the
+  desktop and full control, at a far larger build and every security update ours
+  for good. The desktop's patched `libqt6webenginecore6` is no head start, since
+  Qt WebEngine has no Android target.
+
+**What counts as a dead end**, and should reopen this: a site that matters
+refuses the browser and the header or another WebView tell is shown to be the
+cause (with a control, not by inference); or a control the aims require cannot be
+built on WebView. Then evaluate GeckoView first, one backend, against the holder's
+banks, Teams and YouTube.
+
+**What keeps the door open** is the seam: `tool/seam_check.py` already holds the
+shell off any backend, so a second engine on Android is one new
+`web_view_backend`. Keep Android-only behaviour in `android_view.cpp` and
+`HydraWebView.java`, not in the shell.
+
+### The claimed Chrome was a year old
+
+The same capture said Chrome 140 on an engine of 156. `k_claimed_chrome` warns
+that it has to be maintained, and it was not, which is the state a Swedish bank
+refused. Now:
+
+- The desktop claims 156, with the build the phone's WebView reports.
+- Android claims its engine's own version where that is newer than the constant
+  (`engine_claimed`), read from the WebView's default string, so a current phone
+  is true and needs no maintenance. Claiming the engine outright was tried first
+  and dropped: on WebView 109 it took the claim from 140 down to 109, a step
+  towards the refusal this exists to prevent. So the constant is a floor there.
+
+Measured on the phone: every request says `"Google Chrome";v="156"` and
+`Chrome/156.0.0.0`, on the debug and the release variant.
+
+The desktop constant still has to be maintained by hand. `try_cdp`'s 140s are that
+driver's own fixture, not the claim, and are left alone.
+
 ## mplayer is started in a terminal, because its controls are there
 
 Reported 2026-10-22: mplayer started from Watch played, and nothing could

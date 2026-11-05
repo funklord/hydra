@@ -428,8 +428,12 @@ public class HydraWebView {
     /** The same string, rewritten to claim a desktop. See setDesktopSite. */
     public static native String desktopUserAgent(String mobile);
 
-    /** The full Chrome version the corrected string claims, e.g. 140.0.7339.80. */
-    public static native String claimedFullVersion();
+    /**
+     * The full Chrome version the corrected string claims, e.g. 156.0.8078.47.
+     * Given the WebView's default string, since the corrected one has lost its
+     * build.
+     */
+    public static native String claimedFullVersion(String offered);
 
     /**
      * **The client hints, to agree with the string**, through the WebView's own
@@ -450,7 +454,7 @@ public class HydraWebView {
     static boolean applyIdentity(WebSettings s, boolean desktop) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA))
             return false;
-        final String full = claimedFullVersion();
+        final String full = claimedFullVersion(WebSettings.getDefaultUserAgent(ACTIVITY));
         if (full == null || full.isEmpty())
             return false;
         final String major = full.split("\\.")[0];
