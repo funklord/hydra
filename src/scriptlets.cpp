@@ -3839,6 +3839,33 @@ bool parse_call(const QString &inside, scriptlet_call *out, QString *why) {
 	return true;
 }
 
+const QString &source_cache::get(const QList<scriptlet_call> &calls,
+                                  const QList<int> &dropped) {
+	if (m_valid && dropped == m_dropped)
+		return m_source;
+	QList<scriptlet_call> kept;
+	kept.reserve(calls.size());
+	int next = 0;   // `dropped` is in ascending order, as the calls are walked
+	for (int i = 0; i < calls.size(); ++i) {
+		if (next < dropped.size() && dropped[next] == i) {
+			++next;
+			continue;
+		}
+		kept.push_back(calls[i]);
+	}
+	m_source  = source_for(kept);
+	m_dropped = dropped;
+	m_valid   = true;
+	++m_builds;
+	return m_source;
+}
+
+void source_cache::clear() {
+	m_valid = false;
+	m_source.clear();
+	m_dropped.clear();
+}
+
 QString source_for(const QList<scriptlet_call> &calls) {
 	QString data;                                  // each call's JSON, back to back
 	QMap<QString, QStringList> index;              // host -> "offset:length"

@@ -7301,6 +7301,7 @@ int main_window::load_subscriptions() {
 	QList<network_rule> option_rules;
 	QSet<QString> cancelled;
 	m_scriptlets.clear();
+	m_scriptlet_source.clear();
 	// Rebuilt in place: every view holds a pointer to it, and a stylesheet is
 	// written at load, so a list update reaches each page on its next load.
 	generic_cosmetics generic;
@@ -7455,8 +7456,9 @@ void main_window::inject_scriptlets(web_view_backend *view) {
 	if (!view)
 		return;
 	static const QString name = QStringLiteral("hydra-scriptlets");
-	QList<scriptlet_call> allowed;
-	for (const scriptlet_call &c : m_scriptlets) {
+	QList<int> dropped;
+	for (int i = 0; i < m_scriptlets.size(); ++i) {
+		const scriptlet_call &c = m_scriptlets[i];
 		// **The shield's escape hatch, applied per scope.** `request_filter`
 		// skips the whole imported list for a site whose `ads` setting is
 		// allow, on the stated grounds that a half-working escape leaves the
@@ -7464,10 +7466,9 @@ void main_window::inject_scriptlets(web_view_backend *view) {
 		// A scriptlet names the site it patches, so the same question has an
 		// exact answer here rather than needing the page to ask it.
 		if (m_policy && m_policy->is_allowed(policy::feature::ads, c.scope))
-			continue;
-		allowed.push_back(c);
+			dropped << i;
 	}
-	const QString src = scriptlets::source_for(allowed);
+	const QString src = m_scriptlet_source.get(m_scriptlets, dropped);
 	// Removed rather than replaced with a script that does nothing: an
 	// injector that leaves an empty patch behind is one more thing running in
 	// every page for no reason, and `remove_script` is what the collection

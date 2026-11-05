@@ -973,6 +973,7 @@ public:
 	void reload_subscriptions_soon();
 
 	QList<scriptlet_call> m_scriptlets;
+	scriptlets::source_cache m_scriptlet_source;
 	QTimer              *m_subs_timer   = nullptr;
 	QAction            *m_kiosk_action  = nullptr;
 	QAction            *m_undo_action   = nullptr;

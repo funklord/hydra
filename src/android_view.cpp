@@ -1290,6 +1290,7 @@ void android_view::print() {
 void android_view::show_html(const QString &html, const QUrl &base) {
 	if (!m_native)
 		return;
+	push_frame_scripts();
 	QJniObject::callStaticMethod<void>(
 	  k_cls, "showHtml", "(JLjava/lang/String;Ljava/lang/String;)V", jlong(m_id),
 	  QJniObject::fromString(html).object<jstring>(),
@@ -1738,6 +1739,7 @@ void android_view::set_desktop_site(bool on) {
 	// happened and the only evidence was a script that stayed 2957 characters
 	// long across a change that should have grown it. This side knows the url
 	// and can read the shield on its own thread; there is nothing to ask.
+	push_frame_scripts();
 	if (m_native)
 		QJniObject::callStaticMethod<void>(
 		  k_cls, "setDesktopSite", "(JZLjava/lang/String;Ljava/lang/String;)V",
@@ -1810,6 +1812,7 @@ void android_view::load(const QUrl &address) {
 	// still asks, because there the UI thread is answering a navigation the Qt
 	// thread is not involved in and `allow_navigation` proves that round trip
 	// works at that moment.
+	push_frame_scripts();
 	QJniObject::callStaticMethod<void>(
 	  k_cls, "load", "(JLjava/lang/String;Ljava/lang/String;)V", jlong(m_id),
 	  QJniObject::fromString(url.toString()).object<jstring>(),
@@ -1818,11 +1821,13 @@ void android_view::load(const QUrl &address) {
 }
 
 void android_view::back() {
+	push_frame_scripts();
 	if (m_native)
 		QJniObject::callStaticMethod<void>(k_cls, "back", "(J)V", jlong(m_id));
 }
 
 void android_view::forward() {
+	push_frame_scripts();
 	if (m_native)
 		QJniObject::callStaticMethod<void>(k_cls, "forward", "(J)V", jlong(m_id));
 }
@@ -1834,6 +1839,7 @@ void android_view::reload() {
 	// journey this fixes is the reported one -- a site says it cannot find the
 	// camera, the shield is set to allow, `on_policy_changed` reloads, and the
 	// page comes back with the old answer still in the script.
+	push_frame_scripts();
 	if (m_native)
 		QJniObject::callStaticMethod<void>(
 		  k_cls, "reload", "(JLjava/lang/String;Ljava/lang/String;)V",
@@ -1921,6 +1927,11 @@ void android_view::set_script(const QString &name, const QString &source,
                                bool subframes) {
 	const int at = m_script_names.indexOf(name);
 	if (at >= 0) {
+		// **Nothing to send.** A policy change hands every view its scripts
+		// again, and the bundle holds a 1.3 MB scriptlet script, so each
+		// unchanged one was a rebuild and a copy into Java for nothing.
+		if (m_script_sources[at] == source && m_script_frames[at] == subframes)
+			return;
 		m_script_sources[at] = source;
 		m_script_frames[at]  = subframes;
 	} else {
@@ -1928,7 +1939,7 @@ void android_view::set_script(const QString &name, const QString &source,
 		m_script_sources << source;
 		m_script_frames << subframes;
 	}
-	push_frame_scripts();   // every script is in the bundle, not only subframes
+	queue_frame_scripts();   // every script is in the bundle, not only subframes
 }
 
 void android_view::remove_script(const QString &name) {
@@ -1938,7 +1949,7 @@ void android_view::remove_script(const QString &name) {
 	m_script_names.removeAt(at);
 	m_script_sources.removeAt(at);
 	m_script_frames.removeAt(at);
-	push_frame_scripts();
+	queue_frame_scripts();
 }
 
 // **Asked once and cached.** `DOCUMENT_START_SCRIPT` depends on the WebView
@@ -1980,7 +1991,22 @@ QString android_view::frame_scripts(qint64 id) {
 	  .replace(QLatin1String("/*BUNDLE*/"), out);
 }
 
+// **Once per turn, not once per script.** A new view is given about ten scripts
+// and bridges one after another, and each sent the whole bundle to Java, the
+// scriptlet script with it: 1.3 MB rebuilt and copied each time, on a thread
+// the UI thread waits on. Anything that navigates sends what is waiting first,
+// or the page would start without it.
+void android_view::queue_frame_scripts() {
+	if (m_frame_scripts_queued)
+		return;
+	m_frame_scripts_queued = true;
+	QTimer::singleShot(0, this, [this] { push_frame_scripts(); });
+}
+
 void android_view::push_frame_scripts() {
+	if (!m_frame_scripts_queued)
+		return;
+	m_frame_scripts_queued = false;
 	if (!m_native || !document_start_supported())
 		return;
 	const QString js = frame_scripts(m_id);
@@ -2009,7 +2035,7 @@ void android_view::set_script_bridge(QObject *object, const QString &name) {
 		m_relayed.insert(object);
 		m_signal_relay->watch(name, object);
 	}
-	push_frame_scripts();   // the bundle registers it
+	queue_frame_scripts();   // the bundle registers it
 }
 
 QByteArray android_view::save_state() const {

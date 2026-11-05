@@ -89,6 +89,29 @@ bool parse_call(const QString &inside, scriptlet_call *out, QString *why);
 // installing a script that does nothing.
 QString source_for(const QList<scriptlet_call> &calls);
 
+// **The script, built once for every view that gets the same one.** With
+// uBlock's lists it is 1.3 MB from about 10,000 calls: 30 ms on a desktop and
+// about 1.5 s on a phone, and it was built again for each view made and each
+// view a policy change touched, on the Qt thread. Android's UI thread waits on
+// that thread at every page start, so the whole app froze and a menu tapped
+// then opened seconds later (measured on an SM-F926B, 2026-11-06).
+//
+// Which calls apply differs only by what the shield lets through, so that is
+// the key: `dropped` names, by index, the calls left out. `clear` goes with any
+// change to the calls themselves.
+class source_cache {
+public:
+	const QString &get(const QList<scriptlet_call> &calls, const QList<int> &dropped);
+	void clear();
+	int builds() const { return m_builds; }
+
+private:
+	QString    m_source;
+	QList<int> m_dropped;
+	bool       m_valid  = false;
+	int        m_builds = 0;
+};
+
 // **What the injected script did in one frame**, as it reports it on the
 // console: which scriptlets ran, which failed and why, and how many were not
 // for this host. The browser keeps it with the site's other signals, so the

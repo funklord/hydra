@@ -41110,13 +41110,36 @@ on a tap outside. Walked on the emulator with a temporary stall probe, a 25 ms
 timer on the Qt thread logging any gap and the events before it, and stacks from
 `debuggerd -b` (the emulator allows `adb root`).
 
-**Each menu blocked the Qt thread 0.7 to 1.3 s, and that figure is not the phone's.**
+**Solved on the phone, 2026-11-06, and the menus were never the cause.** On the
+SM-F926B, over a light page, a heavy one and one still loading, 36 menu opens and
+the drawer, editor and shield gave no stall over 150 ms on the Qt thread, and a
+screen recording showed each menu within tens of milliseconds of the same point
+after its tap. The hangs were what a menu was waiting behind:
+
+| After a cold start, Qt thread blocked | before | after |
+|---|---|---|
+| building the scriptlet script, per view and per policy change | 1.5 s each | once |
+| reading the filter lists, before the window | 2 s | about 0.7 s |
+| total | 6.4 s | 1.3 s |
+
+A 25 ms timer found the stalls, and a watchdog thread sampled both threads' stacks
+by signal, since `simpleperf` needs `security.perf_harden` changed on the phone.
+**The UI thread was frozen as well**: it sat in `on_qt_thread`, from `injectedScripts`
+at each page start, for up to its 2 s deadline, so taps and drawing stopped too, and
+a page that hit the deadline lost its permissions shim. `scriptlets::source_cache`
+builds the script once for every view with the same set; `android_view` skips a script
+that has not changed and sends the bundle once a turn, flushing before anything that
+navigates. Reading the lists compiled a regular expression for every rule, twice, and
+now only what a list wrote as one is compiled up front. Closing the shield went from
+1.8 s to under 190 ms, and a new tab to under 150 ms. **Why the desktop never showed it**:
+the same script takes 30 ms there. The first 1.3 s are still blocking, before the window
+shows; moving the read to a worker would let pages load before their rules, so it stays.
+
+**Each menu blocked the Qt thread 0.7 to 1.3 s on the emulator, and that figure is not the phone's.**
 Sampled mid-stall, the Qt thread was in `eglSwapBuffers`, waiting on the emulator's
 software GPU through its qemu pipe, and the Android UI thread was idle. So the
-emulator cannot answer this, and the deadlock between the two threads that
-`on_qt_thread` warns of is not what an ordinary menu meets. **What the phone does is
-still open**; the probe is the instrument, and it is not in the tree. Opening the
-shield took 2 s here, which may be its own cost: it builds fifteen rows of dropdowns.
+emulator cannot answer this. The probe is not in the tree. Opening the shield took 2 s
+here and 160 ms on the phone, so its fifteen rows of dropdowns are not a cost to chase.
 
 **The snapshot was suspected and is not the cause.** Every window over the page has
 the page copied for a stand-in picture. That was a JPEG, encoded on the UI thread and

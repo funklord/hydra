@@ -3029,6 +3029,40 @@ int main(int argc, char **argv) {
 		      "and a request carries no property named for this browser");
 	}
 
+	section("the script is built once for views that get the same one");
+	{
+		QList<scriptlet_call> calls;
+		for (const char *host : { "one.test", "two.test", "three.test" }) {
+			scriptlet_call c;
+			c.name  = QStringLiteral("abort-on-property-read");
+			c.args  = { QStringLiteral("adHost") };
+			c.scope = QString::fromLatin1(host);
+			calls << c;
+		}
+		scriptlets::source_cache cache;
+		const QString all = cache.get(calls, {});
+		check(all == scriptlets::source_for(calls), "it is the script source_for writes");
+		cache.get(calls, {});
+		cache.get(calls, {});
+		check(cache.builds() == 1, "asked three times with one answer, built once");
+
+		// The shield's allow for a site has to reach the script.
+		const QString without = cache.get(calls, { 1 });
+		check(cache.builds() == 2, "a call dropped by the shield builds again");
+		check(without.contains("one.test") && !without.contains("two.test") &&
+		      without.contains("three.test"), "and the dropped call is the one gone");
+		check(cache.get(calls, {}) == all, "and allowing nothing brings it back");
+
+		// A list update: same indices, different calls.
+		calls[0].scope = QStringLiteral("changed.test");
+		cache.clear();
+		check(cache.get(calls, {}).contains("changed.test"),
+		      "cleared, it reads the calls as they are now");
+		QList<scriptlet_call> none;
+		cache.clear();
+		check(cache.get(none, {}).isEmpty(), "and no calls is still an empty script");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

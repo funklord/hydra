@@ -372,7 +372,9 @@ public:
 
 	// Push the current subframe set at Java. Called whenever it changes,
 	// which in practice is once, when the view is built.
+	void queue_frame_scripts();
 	void push_frame_scripts();
+	bool m_frame_scripts_queued = false;
 
 	QByteArray save_state() const override;
 	bool       restore_state(const QByteArray &blob) override;
