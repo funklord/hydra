@@ -5858,7 +5858,9 @@ void main_window::report_certificate_rejected(const QUrl &url,
 	const QString host = url.host();
 	m_cert_url = url;
 	m_status->showMessage(
-	  QString("%1 was not loaded: its certificate could not be trusted (%2).")
+	  // The fault first: on a phone the bar shows about half of this.
+	  QString("The certificate of %1 could not be trusted, so it was not "
+	           "loaded (%2).")
 	      .arg(host.isEmpty() ? QStringLiteral("That site") : host,
 	            reason.isEmpty() ? QStringLiteral("no reason given") : reason));
 }

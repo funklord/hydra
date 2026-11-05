@@ -395,6 +395,8 @@ public:
 	static void report_new_window(qint64 id, const QString &url, bool user,
 	                              qint64 held);
 	static void report_close_requested(qint64 id);
+	static void report_certificate_rejected(qint64 id, const QString &url,
+	                                        const QString &reason);
 	static void report_link_menu(qint64 id, const QString &action,
 	                             const QString &value);
 	// A file to save, from the WebView's download listener or the menu's

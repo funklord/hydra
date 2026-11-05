@@ -305,6 +305,13 @@ Java_se_vibes_hydra_HydraWebView_onNewWindow(JNIEnv *env, jclass, jlong id,
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onCertificateRejected(JNIEnv *env, jclass, jlong id,
+                                                       jstring url, jstring reason) {
+	android_view::report_certificate_rejected(id, java_string(env, url),
+	                                          java_string(env, reason));
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_se_vibes_hydra_HydraWebView_onCloseRequested(JNIEnv *, jclass, jlong id) {
 	android_view::report_close_requested(id);
 }
@@ -1423,6 +1430,14 @@ void android_view::report_new_window(qint64 id, const QString &url, bool user,
 		// to wait for this answer, so it is asked for now.
 		if (adopt)
 			adopt->load(QUrl(url));
+	}, Qt::QueuedConnection);
+}
+
+void android_view::report_certificate_rejected(qint64 id, const QString &url,
+                                               const QString &reason) {
+	QMetaObject::invokeMethod(qApp, [id, url, reason] {
+		if (android_view *v = s_views.value(id))
+			emit v->certificate_rejected(QUrl(url), reason);
 	}, Qt::QueuedConnection);
 }
 

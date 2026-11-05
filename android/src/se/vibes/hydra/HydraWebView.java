@@ -251,6 +251,7 @@ public class HydraWebView {
     public static native void onLinkMenu(long id, String action, String value);
     /** The page asked for a window at this address; user means a person did. */
     public static native void onNewWindow(long id, String url, boolean user, long held);
+    public static native void onCertificateRejected(long id, String url, String reason);
     /** The page's own `window.close()`: the tab goes, as on the desktop. */
     public static native void onCloseRequested(long id);
     /** A file to save, with what this WebView would have sent to fetch it. */
@@ -948,6 +949,24 @@ public class HydraWebView {
     private static final Map<Long, Player> HELD_WINDOWS = new HashMap<>();
     private static long lastHeldWindow = 0;
 
+    /** What is wrong with a certificate, in the words the status bar shows. */
+    private static String sslReason(android.net.http.SslError e) {
+        switch (e.getPrimaryError()) {
+            case android.net.http.SslError.SSL_EXPIRED:
+                return "it has expired";
+            case android.net.http.SslError.SSL_NOTYETVALID:
+                return "it is not valid yet";
+            case android.net.http.SslError.SSL_IDMISMATCH:
+                return "it was issued to another name";
+            case android.net.http.SslError.SSL_UNTRUSTED:
+                return "its issuer is not trusted";
+            case android.net.http.SslError.SSL_DATE_INVALID:
+                return "its dates are invalid";
+            default:
+                return "it is invalid";
+        }
+    }
+
     /** The shell refused a held window, or no tab came of it. */
     public static void dropWindow(final long held) {
         new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
@@ -1581,6 +1600,33 @@ public class HydraWebView {
                         // end to the same navigation.
                         FAILED.put(Long.valueOf(id), Boolean.TRUE);
                         endLoad(id, false);
+                    }
+
+                    /**
+                     * **A certificate that cannot be trusted is refused, and
+                     * now said so.** Nothing overrode this, and the default
+                     * cancels with no other callback: a blank page, the
+                     * progress bar left running, and no reason given, where
+                     * the desktop names the site and the fault. No
+                     * click-through here either, for the desktop's reason:
+                     * letting somebody past is a decision this browser has
+                     * not made.
+                     *
+                     * A subresource refused is not the page failing, as in
+                     * onReceivedError, so the load ends only for the address
+                     * the tab is going to.
+                     */
+                    @Override
+                    public void onReceivedSslError(WebView v,
+                                                   android.webkit.SslErrorHandler h,
+                                                   android.net.http.SslError e) {
+                        h.cancel();
+                        final String url = e.getUrl();
+                        onCertificateRejected(id, url, sslReason(e));
+                        if (url != null && url.equals(v.getUrl())) {
+                            FAILED.put(Long.valueOf(id), Boolean.TRUE);
+                            endLoad(id, false);
+                        }
                     }
 
                     @Override

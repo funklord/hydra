@@ -42466,6 +42466,17 @@ suite failed in places at load 14 to 17, so it was run with this one line
 switched off as a control: the same torrent and menu failures appeared, more
 of them, so they are not from this change.
 
+### Closed: a bad certificate on Android was a blank page and a running bar
+
+`onReceivedSslError` had no override, so the default cancelled and nothing else
+happened: no message, no end to the load. The desktop has always named the site
+and the fault. Android now reports through the same `certificate_rejected`, and
+ends the load when the refused address is the tab's own. There is still no way
+past a refusal on either platform. The message now leads with the fault, since
+the bar on a phone shows about half of it. Found by listing which backend signals
+Android never emits, after `close_requested` turned out to be one; of the rest
+only `link_hovered` is missing, and a phone has no hover.
+
 ### Closed: Back went past a window that is not modal, on Android
 
 Downloads, the media list and the Annoyed report stay open beside the page by
