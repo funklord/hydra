@@ -41146,6 +41146,16 @@ carries on, as the status bar's already did. The toolbar stays as it was: its fi
 button is what toggles the drawer, and a press that shut the drawer and then reached
 the button would open it again.
 
+**A tap on the menu bar with the address editor open** shut the editor and left the
+menu's title lit over nothing: the editor closed on a queued call, after the menu had
+opened, and its focus and keyboard took the menu with them. On the menu bar it now
+closes at once. The menu then shows over black rather than the page's picture, since
+the page was already hidden and has nothing new to copy; a blemish, left.
+
+Walked and found right, each by picture: every menu and a submenu closing on one
+outside tap, a long-press on a link and on the tree, a tree menu then the drawer
+closing in that order, the Sort dropdown, and menus after a dialog closes.
+
 **Two things that looked like faults here and are not.** The File menu opens over the
 toolbar, so a tap meant for the Tab tree button with File open lands on New Tab. And
 Hydra died once going to the background, in `libEGL_emulation.so`, the emulator's own

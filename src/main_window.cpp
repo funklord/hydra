@@ -4308,7 +4308,12 @@ bool main_window::eventFilter(QObject *watched, QEvent *event) {
 		QWidget *w = static_cast<QWidget *>(watched);
 		const bool inside = w == m_editor_panel || m_editor_panel->isAncestorOf(w) ||
 		                    (m_suggest_list && (w == m_suggest_list || m_suggest_list->isAncestorOf(w)));
-		if (!inside)
+		// At once on the menu bar: queued, the editor's focus and the keyboard
+		// went after the menu had opened and took it with them, leaving its
+		// title lit over nothing (emulator, 2026-11-05).
+		if (!inside && qobject_cast<QMenuBar *>(w))
+			close_address_editor();
+		else if (!inside)
 			QTimer::singleShot(0, this, [this] { close_address_editor(); });
 	}
 	// **The drawer's right edge, which had no handle at all.** In drawer mode
