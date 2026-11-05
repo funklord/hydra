@@ -40994,9 +40994,23 @@ The phone at 156 sends it, so do not read the Android documentation's
 with the debug key so that it installs over the debug copy and keeps the data)
 sent the same headers, so neither adb nor a debug build is the cause.
 
-The API 33 emulator image is WebView 109 and sends it too. **What the emulators
-say about this header is not evidence about a phone**, which is on a current
-WebView.
+The API 33 emulator image is WebView 109 and sends it too, and so does the API 36
+image, WebView 133, on a build that made the call. **What the emulators say about
+this header is not evidence about a phone**, which is on a current WebView.
+
+A page can also tell WebView from Chrome without the header. Read on WebView 109
+and 133, not on the phone: `window.chrome`, `Notification`, `PublicKeyCredential`,
+`navigator.share` and `PaymentRequest` are all undefined. Nothing has been shown
+to refuse the browser over these either.
+
+**A sweep of public sites on the emulator could not be finished.** Four runs,
+two images, two renderers: qemu died with SIGSEGV after two to eight pages, and
+adb then answers empty, which reads as the app having died. Compare the emulator's
+own exit status before believing a dead process. In the last run Hydra's process
+was gone just before qemu went, which is probably the same event but is not
+established. On WebView 109, eight pages loaded with no refusal; Stack Overflow
+stopped at a "Just a moment..." challenge, not followed up. So real sites at scale
+remain unmeasured, and the phone is the better place for it.
 
 Rejected without building:
 
