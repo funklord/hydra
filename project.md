@@ -42460,6 +42460,16 @@ suite failed in places at load 14 to 17, so it was run with this one line
 switched off as a control: the same torrent and menu failures appeared, more
 of them, so they are not from this change.
 
+### Closed: Back went past a window that is not modal, on Android
+
+Downloads, the media list and the Annoyed report stay open beside the page by
+design. On a phone that means over it, filling the screen, and
+`activeModalWidget` does not see them, so Back reached the page underneath and
+the only way out was the window's own Close. `handle_back` closes the active
+such window, or failing that any visible one, before it looks at the address
+editor or the page (2026-11-05). `test_rotation` holds it. It was found because
+the emulator suite left Downloads up and six later sections failed behind it.
+
 ## Fold, 2026-11-04: where the 2026-11-03 session left things
 
 **CI is green** since `0f858ee`, for the first time in about a month, after

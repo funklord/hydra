@@ -36,6 +36,7 @@
 // 674x841 and 841x674 open. A desktop window dragged between those sizes is
 // the same event, which is why none of this needs a device.
 #include <functional>
+#include "downloads_dialog.h"
 #include "cosmetic_filters.h"
 #include "main_window.h"
 #include "torrent_download_source.h"
@@ -6394,6 +6395,14 @@ int main(int argc, char **argv) {
 			check(cv && showing(child), "the child is in front, opened from the tree");
 			if (cv) {
 				cv->history = true;
+				// A window that stays open beside the page is over it on a
+				// phone, and Back closes it before anything else moves.
+				QMetaObject::invokeMethod(&w, "open_downloads");
+				spin(50);
+				check(w.m_downloads_ui && w.m_downloads_ui->isVisible(),
+				      "the Downloads window is up, and not modal");
+				check(w.handle_back() && !w.m_downloads_ui->isVisible(),
+				      "Back closes it");
 				check(w.handle_back() && showing(child),
 				      "with history, Back stays in the tab (it goes back in it)");
 				cv->history = false;

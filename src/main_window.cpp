@@ -4438,6 +4438,22 @@ bool main_window::handle_back() {
 			modal->close();
 		return true;
 	}
+	// **And a window that is not modal.** Downloads, the media list and the
+	// Annoyed report stay open beside the page by design, which on a phone
+	// means over it, filling the screen, and `activeModalWidget` does not see
+	// them: Back went past to the page underneath, and the only way out was the
+	// window's own Close (emulator, 2026-11-05). The active one first.
+	{
+		QDialog *open = qobject_cast<QDialog *>(QApplication::activeWindow());
+		if (!open || open->parent() != this)
+			for (QDialog *d : findChildren<QDialog *>(Qt::FindDirectChildrenOnly))
+				if (d->isVisible())
+					open = d;
+		if (open && open->isVisible()) {
+			open->reject();
+			return true;
+		}
+	}
 	// The address editor, which covers the window while somebody types: a
 	// panel of this window rather than a dialog, so neither test above sees
 	// it, and Back went past it to the page or out of the app.
