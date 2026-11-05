@@ -42470,6 +42470,27 @@ such window, or failing that any visible one, before it looks at the address
 editor or the page (2026-11-05). `test_rotation` holds it. It was found because
 the emulator suite left Downloads up and six later sections failed behind it.
 
+### Section collection and a fresh APK, 2026-11-05
+
+The holder's rule of the same day: `-ffunction-sections -fdata-sections` and
+`-Wl,--gc-sections`. Measured with `size` on the `-Os` builds: the desktop
+binary's text went from 2,824,947 bytes to 2,743,275, 2.9%, and the file from
+3,717,488 to 3,609,800. `libhydra.so` on Android went from 9,400,560 bytes to
+8,610,728, 8.4%, text 9,216,672 to 8,439,237, with the same 37 JNI exports.
+That is more than the guidelines measured in bbq-predictor and beerssh, whose
+`.so` barely moved. The reason is not established; statically linked
+libtorrent is the candidate. The collected APK passed the emulator suite, 87
+checks, none failed. On the desktop the collected binary has only had a
+25-second smoke run, no crash.
+
+`android-build` now depends on the shared `android-fresh`, so Gradle writes the
+APK new instead of reopening the last one and padding the holes. Its line was
+seen in a real rebuild's log.
+
+The shared gate's brace fix found five lines here with a tab too many
+(`main_window.cpp`); they were retabbed in `45f624c` and the gate taken in
+`b38884b`.
+
 ## Fold, 2026-11-04: where the 2026-11-03 session left things
 
 **CI is green** since `0f858ee`, for the first time in about a month, after

@@ -139,6 +139,18 @@ def reports():
 			out.setdefault(int(m.group(1)), {})[m.group(2)] = m.group(3)
 	return out
 
+# Qt's Android bridge drops the menu bar from the accessibility tree once there
+# is more than one tab, so a title is tapped where it is drawn when it is not
+# listed. (File, View and Tools on this AVD's 1080-wide screen.)
+MENU_AT = {"File": (50, 93), "View": (245, 93), "Tools": (441, 93)}
+
+def open_menu(name):
+	if tap(name, limit=5, exact=True):
+		return True
+	adb("shell", "input", "tap", str(MENU_AT[name][0]), str(MENU_AT[name][1]))
+	time.sleep(2)
+	return True
+
 class files(http.server.BaseHTTPRequestHandler):
 	# A page that sets a cookie and is one big link, and the file it links to,
 	# sent as an attachment. Every request is kept, so the check can read what
@@ -1061,7 +1073,7 @@ def main():
 				adb("shell", "input", "keyevent", "4")
 				time.sleep(2)
 			open_url(f"http://127.0.0.1:{port}/zap", wait=12)
-			ok = tap("Tools") and tap("Zap an Element")
+			ok = open_menu("Tools") and tap("Zap an Element")
 			check(ok, "Tools, Zap an Element")
 			time.sleep(3)
 			# The status line is painted by Qt and is not in the tree a test
@@ -1086,7 +1098,7 @@ def main():
 				adb("shell", "input", "keyevent", "4")
 				time.sleep(2)
 			open_url(f"http://127.0.0.1:{port}/article", wait=12)
-			ok = tap("File") and tap("Save Page")
+			ok = open_menu("File") and tap("Save Page")
 			check(ok, "File, Save Page")
 			# The status line is Qt's own painting and not in the readable
 			# tree, so the file is the witness.
@@ -1101,7 +1113,7 @@ def main():
 
 			print("\n== View Page Source shows the page's HTML ==")
 			open_url(f"http://127.0.0.1:{port}/article", wait=12)
-			ok = tap("View", exact=True) and tap("View Page Source")
+			ok = open_menu("View") and tap("View Page Source")
 			check(ok, "View, View Page Source")
 			time.sleep(8)
 			# Chromium's own source viewer -- Android's WebView has it too,

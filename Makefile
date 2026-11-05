@@ -910,7 +910,7 @@ android-gradle-check:
 		exit 1; \
 	 fi
 
-android-build: android-check android-gradle-check
+android-build: android-fresh android-check android-gradle-check
 	@test -d "$(ANDROID_NDK_ROOT)" || { echo "no NDK at $(ANDROID_NDK_ROOT)"; exit 2; }
 	@test -d "$(ANDROID_SDK_ROOT)" || { echo "no SDK at $(ANDROID_SDK_ROOT)"; exit 2; }
 	@# **Asks for javac, because that is what the message is about.** This was

@@ -71,6 +71,11 @@ QMAKE_CXXFLAGS += -Wall -Wextra
 # setting depend on where in the line qmake happened to put it.
 QMAKE_CXXFLAGS_RELEASE -= -O2
 QMAKE_CXXFLAGS_RELEASE += -Os
+# **And the linker drops what nothing reaches**, which -Os cannot see working
+# one function at a time. JNI entry points are exported, so they stay roots.
+QMAKE_CFLAGS   += -ffunction-sections -fdata-sections
+QMAKE_CXXFLAGS += -ffunction-sections -fdata-sections
+QMAKE_LFLAGS   += -Wl,--gc-sections
 
 # And -Og rather than qmake's -O0 for a debug build, for the same reason: it
 # stays followable in a debugger without giving up everything.
