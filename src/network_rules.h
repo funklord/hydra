@@ -160,7 +160,7 @@ struct network_rule {
 	// (2026-11-02).
 	QStringList methods;
 	QStringList not_methods;
-	// Compiled once, by `filter_list::pattern_regex`.
+	// Built by `filter_list::pattern_regex`, compiled by its first match.
 	QRegularExpression match;
 	QString            literal;   // `filter_list::literal_of`, tested first
 };

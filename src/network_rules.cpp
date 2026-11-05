@@ -340,7 +340,10 @@ parsed parse_network_rule(const QString &line, network_rule *out, QString *why,
 	r.regex = regex;
 	if (!regex && r.pattern.startsWith(QLatin1String("||"))) {
 		QString h = r.pattern.mid(2);
-		const int end = h.indexOf(QRegularExpression(QStringLiteral("[/^*?:|]")));
+		// Made once: every `||` rule of every list comes through here, and a
+		// new QRegularExpression compiles again. See the note on `isValid` below.
+		static const QRegularExpression host_stop(QStringLiteral("[/^*?:|]"));
+		const int end = h.indexOf(host_stop);
 		if (end >= 0)
 			h = h.left(end);
 		// A host ending in a dot has a wildcard after it, and nothing to file by.
@@ -560,7 +563,13 @@ parsed parse_network_rule(const QString &line, network_rule *out, QString *why,
 	}
 	if (match_case)
 		r.match.setPatternOptions(QRegularExpression::NoPatternOption);
-	if (!r.match.isValid())
+	// **Only what a list wrote as a regular expression can fail to compile.**
+	// `pattern_regex` escapes everything it is given, and `isValid` compiles,
+	// which is what the first match would otherwise do for the few rules ever
+	// reached. Asked of every rule, it and the stop pattern above were most of
+	// the 2 s a phone spent reading the lists before showing a window (SM-F926B,
+	// 2026-11-06). Qt's compile takes a lock, so the request threads can share it.
+	if (regex && !r.match.isValid())
 		return refuse(QStringLiteral("a rule whose pattern does not compile"));
 	// A removal with no pattern is the ordinary kind -- `$removeparam=fbclid`
 	// everywhere -- and takes nothing but the parameter it names.
