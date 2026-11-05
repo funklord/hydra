@@ -341,16 +341,34 @@ FAILED_DIR = $(TESTS_DIR)/failed
 # about the other sixty. A wrapper that second-guesses the tool it wraps is
 # worse than no wrapper, because it is wrong silently.
 #
-# **qmake runs every time, deliberately.** `hydra.pro` globs `src/*.cpp`, and
-# qmake resolves a glob once when it generates the Makefile -- unlike CMake's
+# **qmake reruns when the list of sources does.** `hydra.pro` globs `src/*.cpp`,
+# and qmake resolves a glob once when it generates the Makefile -- unlike CMake's
 # `file(GLOB CONFIGURE_DEPENDS)`, which re-checks. A new source would otherwise
 # be invisible until somebody happened to re-run configure, which is the kind
-# of failure that looks like a linker problem. Re-running costs about a second
-# and is what makes globbing safe here.
-all:
-	@mkdir -p $(BUILD_DIR)
-	@cd $(BUILD_DIR) && $(QMAKE) $(CURDIR)/hydra.pro CONFIG+="$(QMAKE_CONFIG)"
+# of failure that looks like a linker problem. It used to run on every `make`
+# for that reason, which rewrote the generated Makefile each time; a second
+# `make` should write nothing. So the stamp below is rewritten every run but
+# replaced only when the list or the configuration changed, and the generated
+# Makefile reruns qmake itself when `hydra.pro` changes.
+SOURCE_LIST = $(BUILD_DIR)/sources.list
+
+# First, because a bare `make` builds the first target in the file: with the
+# stamp's rule above this one, `make` built only the stamp and said nothing.
+all: $(BUILD_DIR)/Makefile
 	@$(MAKE) --no-print-directory -C $(BUILD_DIR) -j$(JOBS)
+
+$(BUILD_DIR)/Makefile: hydra.pro $(SOURCE_LIST)
+	@cd $(BUILD_DIR) && $(QMAKE) $(CURDIR)/hydra.pro CONFIG+="$(QMAKE_CONFIG)"
+
+# The commit and the date too: qmake writes them into build_stamp.h, which is
+# what --version and About report.
+$(SOURCE_LIST): FORCE
+	@mkdir -p $(@D)
+	@printf '%s\n' '$(QMAKE_CONFIG)' "$$(git rev-parse --short HEAD 2>/dev/null)" \
+	   "$$(date +%F)" $(sort $(wildcard src/*.cpp src/*.h)) > $@.new
+	@if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
+
+FORCE:
 
 # **What this build takes from a real filter list.** The coverage figure in
 # project.md -- what fraction of uBlock's scriptlet rules this catalog
