@@ -44,7 +44,7 @@ signals:
 	void abandoned();
 	// The field took focus -- the moment the window offers what is on the
 	// clipboard (`main_window::offer_clipboard`).
-	void focused();
+	void focused(Qt::FocusReason reason);
 	// What is in the field as somebody sees it, the word the keyboard is still
 	// composing included. `text()` leaves that word out until it is
 	// committed, so on a phone the suggestions followed one word behind.
@@ -113,7 +113,7 @@ protected:
 		QLineEdit::focusInEvent(event);
 		if (event->reason() == Qt::MouseFocusReason)
 			m_select_on_release = true;
-		emit focused();
+		emit focused(event->reason());
 	}
 
 	void mouseReleaseEvent(QMouseEvent *event) override {

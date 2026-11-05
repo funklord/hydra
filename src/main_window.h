@@ -683,6 +683,8 @@ public:
 	// order, wrapping. Returns the tab activated, or null when fewer than two
 	// exist. Public, like the members below, so the shortcut and a test drive it.
 	node *activate_adjacent_tab(bool forward);
+	void note_page_after_delete(const QList<node *> &going);
+	void open_page_after_delete();
 
 	// Show another browser's open tabs as a read-only folder. Public so a
 	// test drives it: the fix here was in the CALLER -- it expanded the whole
@@ -949,6 +951,7 @@ public:
 	QHash<web_view_backend *, QUrl> m_crawler_pending;
 	QAction            *m_save_page_action = nullptr;
 	QAction            *m_close_tab_action = nullptr;
+	QString             m_page_after_delete;
 	bool                m_page_fullscreen = false;
 	web_view_backend   *m_kiosk_view      = nullptr;
 	QAction            *m_key_action    = nullptr;

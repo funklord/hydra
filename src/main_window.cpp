@@ -1,6 +1,8 @@
 #include "main_window.h"
 #include "address_suggest.h"
 #include "blocked_page.h"
+#include <utility>
+
 #include <QAbstractItemView>
 #include <QStandardItemModel>
 #include <QCompleter>
@@ -1080,7 +1082,15 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// the emulator). Chrome on Android offers the copied link the same way.
 	// Queued: the focus arrives inside a touch, and the list moves the page
 	// aside through Java, which is not something to do from in there.
-	connect(address_field, &address_line::focused, this, [this] {
+	//
+	// **Only for focus somebody asked for.** Focus handed on by Qt, or
+	// returned from a popup or another app, opened the editor too. It covers
+	// the toolbar and has no button to leave by, so to the holder the tab
+	// button and its neighbours had vanished under a stretched address.
+	connect(address_field, &address_line::focused, this, [this](Qt::FocusReason reason) {
+		if (reason == Qt::TabFocusReason || reason == Qt::BacktabFocusReason ||
+		    reason == Qt::ActiveWindowFocusReason || reason == Qt::PopupFocusReason)
+			return;
 		QTimer::singleShot(0, this, [this] {
 			if (!m_address->hasFocus())
 				return;
@@ -1313,7 +1323,10 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	if (m_undo_delete_action)
 		m_tree->addAction(m_undo_delete_action);
 	// Say what went, and offer it back, for as long as the offer stands.
+	connect(m_tree, &tab_tree_view::about_to_delete, this,
+	        &main_window::note_page_after_delete);
 	connect(m_tree, &tab_tree_view::deleted, this, [this](const QString &what) {
+		open_page_after_delete();
 		m_status->showMessage(QString("Deleted %1").arg(what), 10000);
 		if (m_undo_delete_button && m_model->can_undo_delete()) {
 			m_undo_delete_button->show();
@@ -2434,13 +2447,35 @@ void main_window::close_current_tab() {
 		return;
 	// Remembered, so Reopen Closed Tab brings it back -- which is why this asks
 	// nothing where the tree's Delete does: one tab, never a folder, and
-	// recoverable. Removal lands on the placeholder, the same as Delete: the
-	// tree is the tab list and stays in view, so the next tab is one click
-	// away. Auto-advancing was considered and declined -- activate_adjacent_tab
-	// cycles only *open* tabs, so it could not reach an unopened neighbour
-	// anyway, and diverging from Delete here would be a second close behaviour
-	// to keep in step.
+	// recoverable. The row beside it comes up, the same as Delete.
+	note_page_after_delete({ n });
 	m_model->remove_node(n, /*remember=*/true);
+	open_page_after_delete();
+}
+
+// **Closing the tab in front of you brings up the row beside it**, as a tab
+// strip does, rather than the empty page. The holder's word, 2026-11-05, on a
+// phone, where the tree is shut and the empty page is a dead end; this used to
+// land there on purpose. Beside means the rows as shown, which is what
+// `page_beside` walks, so an unopened neighbour is opened as well. Asked before
+// the rows go and acted on after, since afterwards there is nothing to ask.
+void main_window::note_page_after_delete(const QList<node *> &going) {
+	m_page_after_delete.clear();
+	web_view_backend *v = current_view();
+	node *shown = v ? m_model->node_by_id(m_views_by_id.key(v)) : nullptr;
+	for (node *n = shown; n; n = n->parent) {
+		if (going.contains(n)) {
+			if (node *next = m_tree->page_beside(going))
+				m_page_after_delete = next->id;
+			return;
+		}
+	}
+}
+
+void main_window::open_page_after_delete() {
+	const QString id = std::exchange(m_page_after_delete, QString());
+	if (node *n = id.isEmpty() ? nullptr : m_model->node_by_id(id))
+		open_node(n);
 }
 
 void main_window::save_page() {
@@ -4653,6 +4688,10 @@ void main_window::set_drawer_open(bool open, bool animate) {
 			web_view_backend *v = current_view();
 			if (v && v->widget())
 				v->widget()->setFocus(Qt::OtherFocusReason);
+			else if (m_address_editor)
+				// Not the address: focus there opens the editor over the
+				// toolbar, for a person who only closed the drawer.
+				m_stack->setFocus(Qt::OtherFocusReason);
 			else if (m_address)
 				m_address->setFocus(Qt::OtherFocusReason);
 		}
@@ -4758,6 +4797,10 @@ void main_window::open_node(node *n, bool load_now) {
 	m_model->refresh_node(n);
 	apply_zoom(view, n->id);
 	m_stack->setCurrentWidget(view->widget());
+	// A page brought up under an open drawer stays covered: on Android it is
+	// composited above the drawer, which would otherwise vanish behind it.
+	if (m_drawer_mode && m_drawer_open)
+		view->set_obscured(true);
 	// The tree follows the page. Without this the highlight stayed on whatever
 	// was last clicked, so the row that was showing and the row that looked
 	// selected were different rows -- and `selected_parent()` reads the second
@@ -6515,11 +6558,16 @@ void main_window::page_changed() {
 			}
 		}
 		refresh_media_affordance(v->url().host());
-	} else if (m_media_action) {
+	} else {
 		// No page at all, so there is nothing to offer media for. Said
 		// separately because `refresh_media_affordance` asks the current view
 		// for its host and there is not one.
-		m_media_action->setVisible(false);
+		if (m_media_action)
+			m_media_action->setVisible(false);
+		// Nor an address: the bar went on naming the tab just closed. Something
+		// typed there is the person's, and stays.
+		if (m_address && !m_address->isModified())
+			m_address->clear();
 	}
 	if (m_find)
 		m_find->clear_result();

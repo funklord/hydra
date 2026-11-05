@@ -21719,16 +21719,30 @@ That is why it needs no confirmation where Delete does. It is greyed when no
 page is showing.
 
 It removes the current node through `remove_node(n, remember=true)`, the same
-removal Delete runs, whose `about_to_remove` signal tears the view down and
-lands the stack on the placeholder. **Auto-advancing to a neighbour was
-considered and declined**, and the reason is worth recording because the
-obvious version does not work: `activate_adjacent_tab`, the call Ctrl+PageDown
-uses, cycles only *open* tabs -- `collect_open_tabs` gathers `open_tab` and
-`suspended_tab`, not an `unopened_tab` a session restored but never viewed --
-so it could not reach an unopened neighbour anyway, and where it could, the
-tab it lands on is one click away in the tree, which is always in view as the
-tab list. Diverging from Delete here would be a second close behaviour to keep
-in step for a gain the tree already provides.
+removal Delete runs, whose `about_to_remove` signal tears the view down.
+
+**Then the row beside it comes up**, for Close Tab and for the tree's Delete alike.
+This declined auto-advancing until 2026-11-05, on the grounds that
+`activate_adjacent_tab` cycles only open tabs and that the tree is always in view
+as the tab list. On a phone it is not in view, and the holder asked for the
+neighbour. `tab_tree_view::page_beside` walks the rows as shown, so it reaches an
+unopened neighbour, opens it, passes over folders, and starts from the outermost
+shut folder around a hidden row. The empty page is left for when no page remains.
+Deleting a row that is not in front moves nothing.
+
+Two things had to follow on Android, and neither shows on a desktop. The page
+brought up under the open drawer is told it is obscured, or it would be composited
+over the drawer. And that row carries the phone's X exactly where the finger just
+was, which the earlier rule against an X under the finger had prevented; a second
+press of the X within 600 ms is swallowed, and Undo covers the rest.
+
+**The toolbar that vanished.** Reported the same day: after closing a tab with its
+X, the tab button and its neighbours went and the address stretched over them.
+Reproduced on the emulator. With no page left, shutting the drawer handed focus to
+the address bar, focus there opens the full-width editor, and the editor covers
+the toolbar. So the handover now goes to the page stack, and the editor opens only
+for focus somebody asked for, not for focus moved by Tab, a popup or a window
+returning. The bar also stops naming the tab just closed.
 
 The test opens two tabs, views the first, closes it, and asserts the closed
 tab is gone from the tree, its view is torn down, the other tab remains, and

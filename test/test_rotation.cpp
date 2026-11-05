@@ -1202,6 +1202,63 @@ int main(int argc, char **argv) {
 		       "so Reopen Closed Tab brings the closed one back");
 	}
 
+	section("closing the tab in front brings up the row beside it");
+	{
+		main_window m(&factory, &policy, &filter);
+		m.show();
+		spin(200);
+		node *a = m.m_model->add_tab(nullptr, "a", "https://a.example/");
+		node *folder = m.m_model->add_folder(nullptr, "a folder");
+		node *b = m.m_model->add_tab(nullptr, "b", "https://b.example/");
+		node *c = m.m_model->add_tab(nullptr, "c", "https://c.example/");
+		const QString ida = a->id, idb = b->id, idc = c->id;
+		auto shown = [&] {
+			for (auto i = m.m_views_by_id.cbegin(); i != m.m_views_by_id.cend(); ++i)
+				if (i.value()->widget() == m.m_stack->currentWidget())
+					return i.key();
+			return QString();
+		};
+		auto open = [&](node *n) {
+			emit m.m_tree->activated(m.m_proxy->mapFromSource(m.m_model->index_for_node(n)));
+			spin(100);
+		};
+		open(b);
+		m.close_current_tab();
+		spin(150);
+		check(shown() == idc, "the row below comes up, though it was never opened");
+		m.close_current_tab();
+		spin(150);
+		check(shown() == ida,
+		      "with nothing below, the nearest above, passing over the folder");
+		check(m.m_model->node_by_id(folder->id) != nullptr, "and the folder is left alone");
+
+		node *d = m.m_model->add_tab(nullptr, "d", "https://d.example/");
+		const QString idd = d->id;
+		m.m_tree->confirm_and_remove(d);
+		spin(150);
+		check(shown() == ida, "deleting a row that is not in front moves nothing");
+		check(m.m_model->node_by_id(idd) == nullptr, "though it is deleted");
+
+		node *e = m.m_model->add_tab(nullptr, "e", "https://e.example/");
+		open(e);
+		m.m_tree->confirm_and_remove(e);
+		spin(150);
+		check(shown() == ida, "the tree's own delete does the same as Close Tab");
+
+		node *kid = m.m_model->add_tab(folder, "kid", "https://kid.example/");
+		open(kid);
+		m.m_tree->collapse(m.m_proxy->mapFromSource(m.m_model->index_for_node(folder)));
+		m.m_tree->confirm_and_remove(kid);
+		spin(150);
+		check(shown() == ida, "a tab inside a shut folder still has a neighbour");
+
+		m.m_tree->confirm_and_remove(a);
+		spin(150);
+		check(shown().isEmpty(), "with no page left, the empty page");
+		check(m.m_address->text().isEmpty(),
+		      "and the bar no longer names the tab just closed");
+	}
+
 	section("Reload Ignoring Cache asks the backend to bypass its cache");
 	{
 		main_window m(&factory, &policy, &filter);

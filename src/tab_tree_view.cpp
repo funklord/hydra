@@ -657,7 +657,39 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 // entry asks first". The first half was a real decision; the second was not
 // true, and the key was bound at the window instead. A safety property that
 // one file states and another file has to provide is one that drifts.
-bool tab_tree_view::confirm_and_remove(node *n) {
+node *tab_tree_view::page_beside(const QList<node *> &going) const {
+	auto gone = [&](const node *n) {
+		for (; n; n = n->parent)
+			if (going.contains(const_cast<node *>(n)))
+				return true;
+		return false;
+	};
+	auto walk = [&](QModelIndex i, bool down) -> node * {
+		while ((i = down ? indexBelow(i) : indexAbove(i)).isValid()) {
+			node *n = node_at_index(i);
+			if (n && !n->is_folder() && !gone(n))
+				return n;
+		}
+		return nullptr;
+	};
+	for (node *n : going) {
+		QModelIndex at = view_index(n);
+		if (!at.isValid())
+			continue;
+		// A row inside a shut folder is not shown, so it has no neighbours:
+		// start from the outermost shut folder around it.
+		for (QModelIndex p = at.parent(); p.isValid(); p = p.parent())
+			if (!isExpanded(p))
+				at = p;
+		if (node *found = walk(at, true))
+			return found;
+		if (node *found = walk(at, false))
+			return found;
+	}
+	return nullptr;
+}
+
+bool tab_tree_view::confirm_and_remove(node *n, bool clear_current) {
 	tab_tree_model *m = source_model();
 	if (!n || !m)
 		return false;
@@ -681,8 +713,12 @@ bool tab_tree_view::confirm_and_remove(node *n) {
 	    QMessageBox::question(this, "Delete", what) != QMessageBox::Yes)
 		return false;
 	const QString title = n->title.isEmpty() ? n->url : n->title;
+	emit about_to_delete({ n });
 	if (!m->remove_node(n, /*remember=*/true))
 		return false;
+	// Before `deleted`, which may bring up the next page and its row.
+	if (clear_current && selectionModel())
+		selectionModel()->clearCurrentIndex();
 	emit deleted(kids > 0 ? QString("\"%1\" and %2 inside").arg(title).arg(kids)
 	                      : QString("\"%1\"").arg(title));
 	return true;
@@ -730,6 +766,7 @@ bool tab_tree_view::confirm_and_remove_selection() {
 	if (m_ask_before_delete &&
 	    QMessageBox::question(this, "Delete", what) != QMessageBox::Yes)
 		return false;
+	emit about_to_delete(roots);
 	const int gone = m->remove_nodes(roots, /*remember=*/true);
 	if (gone > 0)
 		emit deleted(QString("%1 items").arg(gone));
@@ -819,9 +856,19 @@ void tab_tree_view::mousePressEvent(QMouseEvent *event) {
 				// current with its X exactly where the finger was -- on the
 				// emulator a folder, so a second tap would have taken a folder
 				// and everything in it (2026-11-03). Nothing is current until
-				// somebody picks a row.
-				if (confirm_and_remove(n) && selectionModel())
-					selectionModel()->clearCurrentIndex();
+				// somebody picks a row, or the page beside it comes up.
+				//
+				// That row is a page and it does get an X there, so a tap
+				// doubled by accident is swallowed. A second close on purpose
+				// comes later than this; Undo covers the rest.
+#ifdef Q_OS_ANDROID
+				if (m_since_x.isValid() && m_since_x.elapsed() < 600) {
+					event->accept();
+					return;
+				}
+				m_since_x.start();
+#endif
+				confirm_and_remove(n, /*clear_current=*/true);
 			}
 			event->accept();
 			return;

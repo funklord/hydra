@@ -6,6 +6,7 @@
 #include <QPoint>
 
 class QTimer;
+#include <QElapsedTimer>
 #include <QTreeView>
 
 class QLabel;
@@ -47,7 +48,11 @@ public:
 	// because both ways of asking for a deletion -- this view's context menu
 	// and the window's Edit menu, which also owns the Delete key -- must put
 	// the same question. Returns whether anything was removed.
-	bool confirm_and_remove(node *n);
+	bool confirm_and_remove(node *n, bool clear_current = false);
+	// The page in the row beside `going`, as the rows are shown: the next one
+	// below them, else the nearest above. Folders are passed over, and so is
+	// anything inside `going`. Null when no page is left.
+	node *page_beside(const QList<node *> &going) const;
 	// Delete the whole current selection (the tree is ExtendedSelection), each
 	// subtree reopenable, behind one confirmation. Falls back to the single
 	// question for a lone selection. Returns whether anything was removed.
@@ -147,6 +152,7 @@ protected:
 	bool m_ask_before_delete = false;
 	// The row under the pointer, whose delete button is drawn.
 	QPersistentModelIndex m_hover;
+	QElapsedTimer         m_since_x;   // Android: since the X last deleted a row
 	// The row a delete button belongs on: the hovered one, or on a device
 	// with no hover the current one.
 	bool shows_delete_button(const QModelIndex &index) const;
@@ -185,6 +191,8 @@ signals:
 	// Something was deleted, so the shell can offer to undo it. `what` names
 	// it: the title of a lone row, or a count.
 	void deleted(const QString &what);
+	// Rows are about to go, for what has to be asked while they are there.
+	void about_to_delete(const QList<node *> &going);
 
 public:
 	// **Hold the folds across a search, and give them back afterwards.**
