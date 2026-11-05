@@ -41068,6 +41068,22 @@ Measured on the phone: every request says `"Google Chrome";v="156"` and
 The desktop constant still has to be maintained by hand. `try_cdp`'s 140s are that
 driver's own fixture, not the claim, and are left alone.
 
+**Open, and the holder's: the desktop claim may have cost something.** Run
+2026-11-05 at `9e41320` with a throwaway profile, 36 public sites including the
+Swedish banks and the sign-in pages gave no refusal and no crash at 156 on engine
+122. But a same-binary comparison on nine thin pages, overriding the claim through
+DevTools and alternating 156, 140, 156, 140, split on one: Stack Overflow stopped at
+Cloudflare's "Just a moment..." both times at 156 and loaded both times at 140.
+Reddit's challenge appeared once, on the first load only, so it does not separate
+them. Two samples each, cookies not cleared between loads, so this is a lead and not
+a cause.
+
+It was not pursued. A run stepping through claims to find which one such a check
+accepts was refused as bot-check circumvention, and that is a fair description of
+it: do not repeat it. The honest remedy is the one *the engine says what it is*
+points at, a smaller gap between claim and engine by moving to Qt 6.10. The choices
+are the holder's: keep 156, go back to 140, or move the engine.
+
 ## mplayer is started in a terminal, because its controls are there
 
 Reported 2026-10-22: mplayer started from Watch played, and nothing could
