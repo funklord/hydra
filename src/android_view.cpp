@@ -1176,19 +1176,22 @@ QString android_view::clean_url(const QString &url) {
 // the address editor opens over the page rather than over grey. Dropped if
 // the page is back by the time it arrives.
 extern "C" JNIEXPORT void JNICALL
-Java_se_vibes_hydra_HydraWebView_onSnapshot(JNIEnv *env, jclass, jlong id, jbyteArray data) {
-	if (!data)
+Java_se_vibes_hydra_HydraWebView_onSnapshot(JNIEnv *env, jclass, jlong id, jobject pixels,
+                                            jint width, jint height) {
+	const void *from = pixels ? env->GetDirectBufferAddress(pixels) : nullptr;
+	if (!from || width <= 0 || height <= 0)
 		return;
-	const jsize n = env->GetArrayLength(data);
-	QByteArray bytes(n, Qt::Uninitialized);
-	env->GetByteArrayRegion(data, 0, n, reinterpret_cast<jbyte *>(bytes.data()));
-	android_view::deliver_snapshot(id, bytes);
+	// Copied, since the buffer is Java's and is gone once this returns. Android
+	// lays an ARGB_8888 bitmap out as RGBA bytes, and a page has no alpha.
+	android_view::deliver_snapshot(
+	  id, QImage(static_cast<const uchar *>(from), width, height, width * 4,
+	             QImage::Format_RGBX8888).copy());
 }
 
-void android_view::deliver_snapshot(qint64 id, const QByteArray &jpeg) {
-	QMetaObject::invokeMethod(qApp, [id, jpeg] {
+void android_view::deliver_snapshot(qint64 id, const QImage &picture) {
+	QMetaObject::invokeMethod(qApp, [id, picture] {
 		if (android_view *v = s_views.value(id))
-			v->show_snapshot(jpeg);
+			v->show_snapshot(picture);
 	}, Qt::QueuedConnection);
 }
 
@@ -1675,11 +1678,11 @@ bool android_view::eventFilter(QObject *o, QEvent *e) {
 	return web_view_backend::eventFilter(o, e);
 }
 
-void android_view::show_snapshot(const QByteArray &jpeg) {
+void android_view::show_snapshot(const QImage &picture) {
 	if (!m_widget || !(m_obscured || m_blocked))
 		return;
-	QPixmap p;
-	if (!p.loadFromData(jpeg, "JPEG"))
+	QPixmap p = QPixmap::fromImage(picture);
+	if (p.isNull())
 		return;
 	p.setDevicePixelRatio(m_widget->devicePixelRatioF());
 	// Edge to edge, where the page was: the label's margin is for the text it

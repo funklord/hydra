@@ -801,8 +801,13 @@ QRect tab_tree_view::delete_button_rect(const QModelIndex &index) const {
 		return QRect();
 	// A square the row's height at the viewport's right edge, inset a little,
 	// so it sits over whatever column is last and never under a scrollbar.
+	//
+	// **And never under the drawer's grip**, which is invisible, raised over the
+	// tree, and stands just inside the scrollbar. With tabs enough to scroll it
+	// lay across the X: a tap on the X dragged the drawer's edge, narrowing it,
+	// and deleted nothing (emulator, 2026-11-05).
 	const int side = qMax(16, r.height() - 4);
-	return QRect(viewport()->width() - side - 4,
+	return QRect(viewport()->width() - side - 4 - k_drawer_grip_width,
 	             r.top() + (r.height() - side) / 2, side, side);
 }
 

@@ -2153,7 +2153,8 @@ public class HydraWebView {
         });
     }
 
-    public static native void onSnapshot(long id, byte[] jpeg);
+    public static native void onSnapshot(long id, java.nio.ByteBuffer pixels,
+                                         int width, int height);
 
     private static void snapshot(final long id, final WebView w, final Runnable then) {
         try {
@@ -2167,10 +2168,15 @@ public class HydraWebView {
             android.view.PixelCopy.request(a.getWindow(), r, b,
                 new android.view.PixelCopy.OnPixelCopyFinishedListener() {
                     @Override public void onPixelCopyFinished(int result) {
+                        // **The raw pixels, handed over.** This was a JPEG,
+                        // encoded here on the UI thread and decoded again on
+                        // the Qt thread, for every menu and dialog. Qt cannot
+                        // put a popup on screen until this thread is free, so
+                        // each one waited for the encode.
                         if (result == android.view.PixelCopy.SUCCESS) {
-                            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-                            b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, out);
-                            onSnapshot(id, out.toByteArray());
+                            java.nio.ByteBuffer px = java.nio.ByteBuffer.allocateDirect(b.getByteCount());
+                            b.copyPixelsToBuffer(px);
+                            onSnapshot(id, px, b.getWidth(), b.getHeight());
                         }
                         b.recycle();
                         then.run();

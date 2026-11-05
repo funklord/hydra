@@ -1259,6 +1259,27 @@ int main(int argc, char **argv) {
 		      "and the bar no longer names the tab just closed");
 	}
 
+	section("the drawer's grip stands clear of a row's X");
+	{
+		main_window m(&factory, &policy, &filter);
+		m.resize(360, 640);
+		m.show();
+		spin(200);
+		for (int i = 0; i < 60; ++i)
+			m.m_model->add_tab(nullptr, QString("tab %1").arg(i), "https://x.example/");
+		m.m_drawer_action->trigger();
+		spin(300);
+		QWidget *grip = m.findChild<QWidget *>("drawer_grip");
+		QScrollBar *bar = m.m_tree->verticalScrollBar();
+		check(grip && bar && bar->isVisible(), "a phone's drawer, with tabs enough to scroll");
+		if (grip) {
+			const int x_right = m.m_tree->viewport()->mapTo(m.m_sidebar, QPoint(
+			    m.m_tree->viewport()->width() - 4 - k_drawer_grip_width, 0)).x();
+			check(x_right <= grip->x(),
+			      QString("the X ends at %1, the grip starts at %2").arg(x_right).arg(grip->x()));
+		}
+	}
+
 	section("Reload Ignoring Cache asks the backend to bypass its cache");
 	{
 		main_window m(&factory, &policy, &filter);

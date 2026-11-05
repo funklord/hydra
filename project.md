@@ -10476,7 +10476,8 @@ Three ways to build the same tree had been measured and none chosen. The
 decision is two: **Makefile + qmake** as the one people run, and **fmake** as
 the second opinion. CMakeLists.txt and test/CMakeLists.txt are gone.
 
-**What each does now.** `make` runs qmake against `hydra.pro` and builds into
+**What each does now.** `make` runs qmake against `hydra.pro` when the sources, the
+commit, the day or the configuration changed, and builds into
 `build/`; `make test` drives `test/Makefile`; `make android` runs the Android
 kit's own qmake and then androiddeployqt. `fmake -C src` builds the same
 sources from no build file.
@@ -41101,6 +41102,63 @@ and 156 costs a click on that page at most.
 It was not pursued. A run stepping through claims to find which one such a check
 accepts was refused as bot-check circumvention, and that is a fair description of
 it: do not repeat it.
+
+## Menus on a phone: what was measured, and what the emulator cannot say
+
+Reported 2026-11-05: several temporary hangs opening menus, and things not closing
+on a tap outside. Walked on the emulator with a temporary stall probe, a 25 ms
+timer on the Qt thread logging any gap and the events before it, and stacks from
+`debuggerd -b` (the emulator allows `adb root`).
+
+**Each menu blocked the Qt thread 0.7 to 1.3 s, and that figure is not the phone's.**
+Sampled mid-stall, the Qt thread was in `eglSwapBuffers`, waiting on the emulator's
+software GPU through its qemu pipe, and the Android UI thread was idle. So the
+emulator cannot answer this, and the deadlock between the two threads that
+`on_qt_thread` warns of is not what an ordinary menu meets. **What the phone does is
+still open**; the probe is the instrument, and it is not in the tree. Opening the
+shield took 2 s here, which may be its own cost: it builds fifteen rows of dropdowns.
+
+**The snapshot was suspected and is not the cause.** Every window over the page has
+the page copied for a stand-in picture. That was a JPEG, encoded on the UI thread and
+decoded on the Qt thread, which looked like the hang; with raw pixels the copy is 25
+to 50 ms and the stalls barely moved. The raw pixels stayed, as less work on both
+threads for nothing lost.
+
+**A dropdown in the shield was a ghost.** Its list stayed on screen after a tap
+outside, and looked stuck. The probe showed Qt had already closed it: the active
+popup was the shield again, and taps went through the drawn list to the rows beneath,
+so nothing on it could be picked. The shield was a `Qt::Popup`, and this was one popup
+inside another; the tree's Sort dropdown, inside no popup, was fine. Why Android keeps
+the surface is not established. On Android the shield is now a plain dialog. It fills
+the screen there, so it has no outside to tap, and Done and Back leave it.
+
+**The X lay under the drawer's grip.** With tabs enough to scroll, the grip, which
+is invisible and stands just inside the scrollbar so as not to take its presses,
+covered the row's X. A tap on the X dragged the drawer's edge and deleted nothing, and
+the drawer narrowed a little each time: 874 to 830 to 732 device pixels over one
+session. Short test trees have no scrollbar and could not show it. The X now stands
+clear by the grip's width, `k_drawer_grip_width`, in `test_rotation` as X ending at 258
+and the grip starting at 262.
+
+**A tap on the menu bar with the drawer open** shut the drawer and opened nothing, so
+every menu took two taps from there. The bar is not under the drawer, so the press now
+carries on, as the status bar's already did. The toolbar stays as it was: its first
+button is what toggles the drawer, and a press that shut the drawer and then reached
+the button would open it again.
+
+**Two things that looked like faults here and are not.** The File menu opens over the
+toolbar, so a tap meant for the Tab tree button with File open lands on New Tab. And
+Hydra died once going to the background, in `libEGL_emulation.so`, the emulator's own
+driver. The stack is in Qt's flush, with no hydra frame. It says nothing about a phone.
+
+`uiautomator` went blind after that new tab, listing no Qt nodes at all, so a state
+read from it is not evidence; pictures were.
+
+**The emulator's app data outlives a run**, and repeated runs of `emulator_checks.py`
+piled up tabs: at 23 a restart took long enough that Find and the paste check failed
+on their fixed waits. Cleared, both passed, and `patches recorded` failed instead,
+since a fresh install has no lists yet. Neither says anything about the code; clear
+the data and run twice before believing a new failure in those three.
 
 ## mplayer is started in a terminal, because its controls are there
 

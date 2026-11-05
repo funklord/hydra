@@ -31,6 +31,10 @@ struct node;
 // same shape as every "wired but never exercised" defect in this project's
 // history. The flag is gone: the answer is derived from the proxy at the moment
 // of the gesture, so there is nothing to keep in sync.
+// How wide the drawer's grip is, which runs down the inside of its right edge.
+// Here because the row's delete button has to stand clear of it.
+constexpr int k_drawer_grip_width = 14;
+
 class tab_tree_view : public QTreeView {
 	Q_OBJECT
 public:

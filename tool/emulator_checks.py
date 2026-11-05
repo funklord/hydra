@@ -742,7 +742,7 @@ def main():
 				tap_bar()
 				time.sleep(2)
 				check(copied == "copied true" and tap_row(0, 2),
-				      "Paste and go with the desktop site's address")
+				      f"Paste and go with the desktop site's address ({copied[:80]})")
 				def arrived():
 					return probe("location.href").strip() == target
 				check(wait_for("the desktop site", arrived, 30, step=3),
@@ -1153,6 +1153,79 @@ def main():
 			shown = probe("document.body ? document.body.innerText.slice(0, 2000) : ''").strip()
 			check("<title>Rivers rise</title>" in shown,
 			      f"the new tab shows the markup ({shown[:120]!r})")
+
+			print("\n== closing the tab in front brings up its neighbour ==")
+			def nodes():
+				adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+				tree = et.fromstring(adb("shell", "cat", "/sdcard/ui.xml") or "<x/>")
+				return [(n.get("content-desc") or n.get("text") or "",
+				         [int(v) for v in re.findall(r"\d+", n.get("bounds") or "")],
+				         n.get("class") or "") for n in tree.iter("node")]
+			def tabs():
+				return adb("shell", "run-as", APP, "cat", "files/tree.txt")
+			# Fresh each time: after a menu closes the window's controls leave
+			# the accessibility tree.
+			adb("shell", "am", "force-stop", APP)
+			open_url(f"http://127.0.0.1:{port}/article", wait=15)
+			before = tabs().count(f"127.0.0.1:{port}/")
+			check(tap("Tab tree", exact=False), "the tree opens")
+			time.sleep(3)
+			seen = nodes()
+			row = [n for n in seen if n[0].startswith("Rivers rise")]
+			area = [n for n in seen if n[0].startswith("Tab tree, Open tabs")]
+			check(bool(row and area), "the page's row is on screen")
+			if row and area:
+				y = (row[-1][1][1] + row[-1][1][3]) // 2
+				# A fixed step past the row's text, which ends where the tree's
+				# viewport does less the X and the grip beside it.
+				x = row[-1][1][2] + 15
+				# Twice at once: the second lands where the row below now is.
+				adb("shell", f"input tap {x} {y}; input tap {x} {y}")
+				# The tree is saved a moment after it changes.
+				time.sleep(6)
+				check(tabs().count(f"127.0.0.1:{port}/") == before - 1,
+				      "a doubled tap on the X closes one tab")
+				adb("shell", "input", "tap", str(area[0][1][2] + 90), "1500")
+				time.sleep(4)
+				seen = [n[0] for n in nodes()]
+				check(not any("Editing the address" in n for n in seen),
+				      "a tap beside the drawer leaves no address editor over the toolbar")
+				check(any(n.startswith("Back") for n in seen), "and the toolbar is all there")
+				url = probe("location.href").strip()
+				check(url.startswith("http"), f"the neighbour is in front ({url[:60]})")
+
+			print("\n== a tap on the menu bar shuts the drawer and opens the menu ==")
+			adb("shell", "am", "force-stop", APP)
+			open_url(f"http://127.0.0.1:{port}/article", wait=15)
+			check(tap("Tab tree", exact=False), "the tree opens")
+			time.sleep(3)
+			check(tap("File", exact=True), "File, with the drawer open")
+			time.sleep(3)
+			check(on_screen("New Tab"), "and the menu is up, from the one tap")
+			adb("shell", "input", "tap", "540", "1900")
+			time.sleep(3)
+
+			print("\n== a dropdown in the shield can be picked from, and shuts ==")
+			adb("shell", "am", "force-stop", APP)
+			open_url(f"http://127.0.0.1:{port}/article", wait=15)
+			check(tap("Shield", exact=False), "the shield opens")
+			time.sleep(4)
+			combo = [n for n in nodes() if n[2].endswith("Spinner")]
+			check(bool(combo), "with its scope dropdown")
+			if combo:
+				x1, y1, x2, y2 = combo[0][1]
+				cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+				adb("shell", "input", "tap", str(cx), str(cy))
+				time.sleep(3)
+				adb("shell", "input", "tap", str(cx), "1400")
+				time.sleep(3)
+				adb("shell", "input", "tap", str(cx), str(cy))
+				time.sleep(3)
+				adb("shell", "input", "tap", str(cx), str(y1 + (y2 - y1) * 5 // 2))
+				time.sleep(3)
+				check(any("Global" in n[0] for n in nodes() if n[2].endswith("Spinner")),
+				      "the last row is picked after an outside tap shut the list")
+			check(tap("Done", exact=True), "Done leaves it")
 		finally:
 			adb("reverse", "--remove", f"tcp:{port}")
 			# The AVD keeps its data between runs, so what this run wrote

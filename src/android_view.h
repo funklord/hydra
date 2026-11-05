@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QImage>
+
 #include "bridge_invoker.h"
 #include <QSet>
 #include "web_view_backend.h"
@@ -144,8 +146,8 @@ public:
 	// navigation go; the filter is safe to ask from any thread.
 	static QString clean_url(const QString &url);
 	// The page's picture while something covers it (Java's `onSnapshot`).
-	void show_snapshot(const QByteArray &jpeg);
-	static void deliver_snapshot(qint64 id, const QByteArray &jpeg);
+	void show_snapshot(const QImage &picture);
+	static void deliver_snapshot(qint64 id, const QImage &picture);
 
 	// **Whether this page may set or send a third-party cookie.** The same
 	// per-site policy the desktop applies, reached the same way -- through the

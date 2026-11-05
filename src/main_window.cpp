@@ -4158,7 +4158,7 @@ void main_window::layout_drawer() {
 		// six pixels in, so the grip landed at 444..457 across a bar at
 		// 453..466 and still took its presses. Asking where the bar IS
 		// answers for whatever the layout did.
-		const int grip = 14;
+		const int grip = k_drawer_grip_width;
 		QScrollBar *const bar = m_tree ? m_tree->verticalScrollBar() : nullptr;
 		int right = w;
 		if (bar && bar->isVisible()) {
@@ -4434,9 +4434,12 @@ bool main_window::eventFilter(QObject *watched, QEvent *event) {
 		// ran out (2026-11-03).
 		const bool in_status = hit && m_status &&
 		                       (hit == m_status || m_status->isAncestorOf(hit));
+		// **Nor the menu bar, which it does not cover either.** A tap on File
+		// shut the drawer and opened nothing, so every menu took two taps from
+		// here (emulator, 2026-11-05). The drawer shuts and the press carries on.
 		if (ours && !in_drawer && !in_status) {
 			set_drawer_open(false);
-			return true;
+			return !qobject_cast<QMenuBar *>(hit);
 		}
 	}
 #endif

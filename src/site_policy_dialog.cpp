@@ -145,7 +145,15 @@ static_assert(layout_covers_every_feature(),
 
 site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
   : QDialog(parent), m_engine(engine) {
+#ifdef Q_OS_ANDROID
+	// **A plain dialog on a phone.** It fills the screen there, so there is no
+	// outside to tap, and a dropdown inside a popup was closed by Qt while its
+	// list stayed drawn: taps went through it to the rows beneath, and nothing
+	// on it could be picked (emulator, 2026-11-05). Done and Back leave it.
+	setWindowFlags(Qt::Dialog);
+#else
 	setWindowFlags(Qt::Popup);
+#endif
 	setWindowTitle("Site controls");
 
 	auto *outer = new QVBoxLayout(this);
