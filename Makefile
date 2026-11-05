@@ -843,6 +843,7 @@ android: android-build
 	 echo "$$out"; \
 	 echo "  native code: $$abis (read from the apk, not assumed)"; \
 	 echo "  install it with: adb install -r $$out"
+	$(call android_verify_signature,$(ANDROID_ARTIFACT))
 
 # **Ask the kit what it is; do not read it off the path.** The Qt6Core a kit
 # ships carries the ABI in its filename in Android's own spelling --
