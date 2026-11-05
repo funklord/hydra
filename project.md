@@ -41086,9 +41086,7 @@ and 156 costs a click on that page at most.
 
 It was not pursued. A run stepping through claims to find which one such a check
 accepts was refused as bot-check circumvention, and that is a fair description of
-it: do not repeat it. The honest remedy is the one *the engine says what it is*
-points at, a smaller gap between claim and engine by moving to Qt 6.10. The choices
-are the holder's: keep 156, go back to 140, or move the engine.
+it: do not repeat it.
 
 ## mplayer is started in a terminal, because its controls are there
 
