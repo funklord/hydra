@@ -910,7 +910,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	bar->addAction(reload_act);
 	m_drawer_action->setIcon(themed_icon("drawer", { "view-list-symbolic", "view-list-details",
 		                                      "format-justify-fill" }, style(),
-		                                    QStyle::SP_FileDialogDetailedView));
+	                                            QStyle::SP_FileDialogDetailedView));
 	m_drawer_action->setStatusTip("Show or hide the tab tree");
 	// **Checkable, and shown at every width.** It used to appear only on a
 	// window narrow enough to put the tree in a drawer, so on a desktop there
@@ -1197,7 +1197,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_media_action = bar->addAction("Media");
 	m_media_action->setIcon(themed_icon("media", { "applications-multimedia",
 		                                     "media-playback-start" }, style(),
-		                                   QStyle::SP_MediaPlay));
+	                                           QStyle::SP_MediaPlay));
 	m_media_action->setToolTip("Watch or download media on this page");
 	m_media_action->setVisible(false);
 	connect(m_media_action, &QAction::triggered, this, &main_window::open_media);
@@ -1267,7 +1267,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_annoyed_action = bar->addAction("Annoyed");
 	m_annoyed_action->setIcon(themed_icon("annoyed", { "face-angry", "face-sad",
 		                                       "emblem-important" }, style(),
-		                                     QStyle::SP_MessageBoxWarning));
+	                                             QStyle::SP_MessageBoxWarning));
 	m_annoyed_action->setToolTip("Something got through here");
 	m_annoyed_action->setStatusTip("Record what this page was doing, and pick a "
 	                                "tool if one fits");
@@ -1283,7 +1283,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_confirm_action = bar->addAction("Still working?");
 	m_confirm_action->setIcon(themed_icon("confirm", { "face-smile", "dialog-question",
 		                                       "emblem-default" }, style(),
-		                                     QStyle::SP_MessageBoxQuestion));
+	                                             QStyle::SP_MessageBoxQuestion));
 	m_confirm_action->setToolTip("New rules were applied here — did they break "
 	                              "anything?");
 	m_confirm_action->setVisible(false);
@@ -1293,7 +1293,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	QAction *shield_act = bar->addAction("Shield");
 	shield_act->setIcon(themed_icon("shield", { "security-high", "security-medium",
 		                                 "channel-secure" }, style(),
-		                               QStyle::SP_VistaShield));
+	                                       QStyle::SP_VistaShield));
 	shield_act->setToolTip("Site controls");
 	shield_act->setStatusTip("Permissions and filtering for this site");
 	connect(shield_act, &QAction::triggered, this, &main_window::open_site_controls);
