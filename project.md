@@ -1516,15 +1516,10 @@ shape:
   rather than only here, because a mapping recorded away from the code that
   implements it is one that drifts.
 
-  One field is still not honoured, and deliberately: `setSupportMultipleWindows`
-  would route `window.open` to a `WebChromeClient.onCreateWindow` this class
-  does not implement, and an unhandled one drops the request without a word,
-  so switching it on would make "popups allowed" mean "popups silently
-  discarded". Left off, an allowed `window.open` navigates the same WebView —
-  not the desktop's new tab under the page that asked, but it happens, and it
-  still goes through the navigation decider. Wiring `new_window_requested`
-  through from `onCreateWindow` is the real answer and is a piece of work
-  rather than a flag.
+  `setSupportMultipleWindows` is on since 2026-11-05: `onCreateWindow` hands a
+  window a page asks for to the shell as `new_window_requested`, a tab under
+  that page as on the desktop. See *A link that opens a new window, on
+  Android* near the end of this file.
 
   Zoom has a platform difference worth stating rather than papering over.
   Android's `setInitialScale` is a viewport scale in device pixels, so 100 is
@@ -4745,9 +4740,9 @@ does not make a slot narrower than its signal.** Adding `load_now` broke
 slot requiring more arguments than the signal provides. A lambda at the call
 site is the fix.
 
-Android is untouched: `android_view` never emitted this signal, so it has no
-popup path to break. The Android WebView's analogue is `onCreateWindow` with a
-`WebViewTransport`, and it is not written.
+Android was untouched then: `android_view` did not emit this signal. It does
+now, from `onCreateWindow`, without an opener; see *A link that opens a new
+window, on Android*.
 
 ### A crash that was the build, and a false proof that it was not
 
@@ -42441,6 +42436,29 @@ holds now: `~navigating_page` raises a shared flag before the base destructor
 runs, and all three script paths check it. `try_autofill` starts a probe and
 deletes the widget at once. With the flag disabled the driver dies with 139
 at that section; with it, it passes.
+
+### A link that opens a new window, on Android
+
+`target=_blank` and `window.open` replaced the page they came from on
+Android, because `setSupportMultipleWindows` was off: with it on, an
+unhandled `onCreateWindow` drops the request. It is on now (2026-11-05).
+`onCreateWindow` gives the engine a throwaway WebView whose only job is to
+learn the address the window is sent to; that goes to the shell through the
+new `onNewWindow` as `new_window_requested`, the desktop's path, so the popup
+policy and external schemes apply, and the throwaway is destroyed. A window
+that never navigates is destroyed after ten seconds. `app.bankid.com` goes
+to its app first, as the page hook does.
+
+**What it does not do:** the new tab has no `window.opener`. It did not have
+one when these replaced the page either, so nothing is lost, but a sign-in
+popup that posts back to its opener still does not work on Android.
+
+On the emulator a `target=_blank` link makes a sub-tab under its opener,
+which stays, and a script's `window.open` with no gesture stays refused under
+the default policy. The saved tree file is the evidence. The full emulator
+suite failed in places at load 14 to 17, so it was run with this one line
+switched off as a control: the same torrent and menu failures appeared, more
+of them, so they are not from this change.
 
 ## Fold, 2026-11-04: where the 2026-11-03 session left things
 

@@ -299,6 +299,12 @@ Java_se_vibes_hydra_HydraWebView_linkMenu(JNIEnv *env, jclass, jstring link,
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onNewWindow(JNIEnv *env, jclass, jlong id,
+                                             jstring url, jboolean user) {
+	android_view::report_new_window(id, java_string(env, url), user);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_se_vibes_hydra_HydraWebView_onLinkMenu(JNIEnv *env, jclass, jlong id,
                                             jstring action, jstring value) {
 	android_view::report_link_menu(id, java_string(env, action),
@@ -1386,6 +1392,13 @@ void android_view::report_console(qint64 id, const QString &text) {
 	QMetaObject::invokeMethod(qApp, [id, text] {
 		if (android_view *v = s_views.value(id))
 			emit v->console_message(0, text, 0, QString());
+	}, Qt::QueuedConnection);
+}
+
+void android_view::report_new_window(qint64 id, const QString &url, bool user) {
+	QMetaObject::invokeMethod(qApp, [id, url, user] {
+		if (android_view *v = s_views.value(id))
+			emit v->new_window_requested(QUrl(url), user, false, nullptr);
 	}, Qt::QueuedConnection);
 }
 

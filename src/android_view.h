@@ -71,13 +71,9 @@ class request_filter;
 // `apply_settings()` maps four of `view_settings`' five fields onto
 // `WebSettings` calls that mean what the desktop's `QWebEngineSettings`
 // attributes mean, and the fifth -- scrollbars -- onto the View's own
-// scrollbar flags. What is *not* set is `setSupportMultipleWindows`: it routes
-// `window.open` to a `WebChromeClient.onCreateWindow` this class does not
-// implement, and an unhandled one drops the request silently, so switching it
-// on would make "popups allowed" mean "popups discarded". Left off, an allowed
-// `window.open` navigates this same WebView -- not a new tab under the page
-// that asked, but visibly something. `HydraWebView.applySettings` carries the
-// detail.
+// scrollbar flags. `setSupportMultipleWindows` is on: a window a page asks for
+// arrives at `HydraWebView`'s `onCreateWindow` and comes here as
+// `new_window_requested`, a tab under the page that asked, as on the desktop.
 //
 // **File inputs open the system picker**, through Qt's own `QFileDialog` -- on
 // Android that is the document picker, and what comes back is a `content:` url
@@ -394,6 +390,7 @@ public:
 	static void report_console(qint64 id, const QString &text);
 	// What was chosen from the long-press menu (`link_menu.h`): `action` is
 	// the word `link_menu::encode` wrote, `value` the address or the text.
+	static void report_new_window(qint64 id, const QString &url, bool user);
 	static void report_link_menu(qint64 id, const QString &action,
 	                             const QString &value);
 	// A file to save, from the WebView's download listener or the menu's

@@ -764,7 +764,10 @@ def main():
 			adb("shell", "input", "tap", "540", "1300")
 			check(wait_for("the tapped link's tab", lambda: "/popped-tapped" in asked(), 20, step=2),
 			      "a link the person taps opens its tab")
-			check("popped-tapped" in adb("shell", "run-as", APP, "cat", "files/tree.txt"),
+			# A row of its own now, written out on the save timer rather than
+			# already there when its page is fetched.
+			check(wait_for("the tree file", lambda: "popped-tapped" in
+			               adb("shell", "run-as", APP, "cat", "files/tree.txt"), 20, step=2),
 			      "and the tree has it")
 
 			print("\n== an ad is hidden on a page that allows no inline style ==")

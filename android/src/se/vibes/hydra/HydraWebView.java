@@ -249,6 +249,8 @@ public class HydraWebView {
     public static native String linkMenu(String link, String image);
     /** One entry of that menu was chosen. */
     public static native void onLinkMenu(long id, String action, String value);
+    /** The page asked for a window at this address; user means a person did. */
+    public static native void onNewWindow(long id, String url, boolean user);
     /** A file to save, with what this WebView would have sent to fetch it. */
     public static native void onDownload(long id, String url, String cookie,
                                          String userAgent, String referer,
@@ -1055,6 +1057,67 @@ public class HydraWebView {
                     }
                 });
                 w.setWebChromeClient(new WebChromeClient() {
+                    /**
+                     * A window the page asked for: target=_blank, window.open.
+                     *
+                     * The engine wants a WebView to put it in and does not say
+                     * where it is going, so it gets one that exists only to
+                     * learn that: the first address it is sent to goes to the
+                     * shell, whose new_window_requested is the same path the
+                     * desktop takes, popup policy and external schemes
+                     * included, and the throwaway is destroyed. A window that
+                     * never navigates is destroyed by the timeout. There is
+                     * no opener in the tab that results, as there was not when
+                     * these replaced the page they came from.
+                     */
+                    @Override
+                    public boolean onCreateWindow(WebView parent, boolean dialog,
+                                                  final boolean gesture,
+                                                  android.os.Message result) {
+                        if (result == null
+                            || !(result.obj instanceof WebView.WebViewTransport))
+                            return false;
+                        final WebView scout = new WebView(parent.getContext());
+                        final boolean[] done = { false };
+                        final Runnable finish = new Runnable() {
+                            @Override public void run() {
+                                if (done[0])
+                                    return;
+                                done[0] = true;
+                                scout.stopLoading();
+                                scout.destroy();
+                            }
+                        };
+                        scout.setWebViewClient(new WebViewClient() {
+                            private void take(String url) {
+                                if (done[0] || url == null || url.isEmpty()
+                                    || url.equals("about:blank"))
+                                    return;
+                                final Uri u = Uri.parse(url);
+                                if (!("app.bankid.com".equals(u.getHost())
+                                      && HydraIntents.openInOwnApp(parent.getContext(), url)))
+                                    onNewWindow(id, url, gesture);
+                                // Not from inside the scout's own callback.
+                                scout.post(finish);
+                            }
+                            @Override
+                            public boolean shouldOverrideUrlLoading(WebView v,
+                                                                    WebResourceRequest r) {
+                                take(r.getUrl().toString());
+                                return true;
+                            }
+                            @Override
+                            public void onPageStarted(WebView v, String url,
+                                                      android.graphics.Bitmap icon) {
+                                take(url);
+                            }
+                        });
+                        ((WebView.WebViewTransport) result.obj).setWebView(scout);
+                        result.sendToTarget();
+                        parent.postDelayed(finish, 10000);
+                        return true;
+                    }
+
                     /**
                      * The page patches' report of what ran, and nothing else
                      * a page logs: the shell files it with the site's other
@@ -2051,21 +2114,10 @@ public class HydraWebView {
             s.setMediaPlaybackRequiresUserGesture(!autoplay);
             // The counterpart of QWebEngineSettings::JavascriptCanOpenWindows.
             //
-            // setSupportMultipleWindows is deliberately NOT set alongside it,
-            // and this is the one thing in this method left undone on
-            // purpose. With it on, window.open stops being a navigation and
-            // becomes a WebChromeClient.onCreateWindow callback; this class
-            // implements none, and an unhandled onCreateWindow drops the
-            // request without a word. "Popups allowed" would then mean
-            // "popups silently discarded" -- a setting that does the
-            // opposite of what it says, which is worse than the gap it would
-            // close. Left off, an allowed window.open loads in this same
-            // WebView: not the desktop's new tab under the page that asked,
-            // but the navigation does happen, and it goes through
-            // shouldOverrideUrlLoading so the shell's navigation decider
-            // still sees it. The real fix is new_window_requested wired
-            // through to the shell from onCreateWindow, which is a piece of
-            // work rather than a flag.
+            // With multiple windows on, a window a page asks for arrives at
+            // onCreateWindow, which hands it to the shell as a new tab under
+            // this one, as on the desktop.
+            s.setSupportMultipleWindows(true);
             s.setJavaScriptCanOpenWindowsAutomatically(popups);
             // On the View rather than on WebSettings, because Android has no
             // WebSettings equivalent of ShowScrollBars. Same meaning as Qt's:
