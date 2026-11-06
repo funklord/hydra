@@ -1909,7 +1909,7 @@ QMenuBar *main_window::build_menu_bar() {
 	// widget-scoped shortcut, so a page's text field and the address bar
 	// keep their own undo, which is the reason Undo Reorganize is on
 	// Ctrl+Shift+Z.
-	m_undo_delete_action = edit_menu->addAction("Undo &Delete", this,
+	m_undo_delete_action = edit_menu->addAction("Undo D&elete", this,
 	                                             &main_window::undo_delete);
 	m_undo_delete_action->setShortcut(QKeySequence::Undo);
 	m_undo_delete_action->setShortcutContext(Qt::WidgetWithChildrenShortcut);

@@ -241,6 +241,15 @@ skip_reason() {
 		try_tap)     echo "takes a url; needs a page that plays through MSE" ;;
 		try_taprow)  echo "takes a url; needs a page with a video" ;;
 		try_ytdlp)   echo "takes a watch-page url to hand to yt-dlp" ;;
+		# Run by hand for what they print. Counted as failures, they were seven of
+		# the eight in the 2026-11-06 sweep, and the eighth was a real fault.
+		try_challenge)  echo "takes a url and a mode" ;;
+		try_store_view) echo "takes a view and a seed directory" ;;
+		try_cdp)        echo "prints what a page is told; nothing to judge" ;;
+		try_filter_cost|try_scriptlet_cost)
+			echo "a measurement over the person's own lists" ;;
+		try_media_model) echo "a measurement; prints what a model answered" ;;
+		try_youtube_wall) echo "reads the person's own lists and needs the network" ;;
 		# **Cannot pass offscreen, and that is the platform rather than the
 		# driver.** It hands a url to another application through
 		# QDesktopServices::openUrl, and the offscreen platform plugin has no

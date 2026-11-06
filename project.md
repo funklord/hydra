@@ -15186,8 +15186,9 @@ the selection. It does not. `QWebEngineSettings::ScreenCaptureEnabled` defaults 
 off, nothing here had ever set it, and `INVALID_STATE` is what a selection gets
 with it off. Every build below failed for that reason, the reproducer included: it
 was written to link nothing of this project, and so inherited the same default.
-**No bug report should be filed.** `repro_share`, on Debian's 6.8.2 and the
-installer's 6.12.0 alike, with the first and last rows measured on both:
+**No bug report should be filed.** `repro_share`, on Debian's Qt 6.8.2 with its
+WebEngine then at 6.10.2 (`qVersion` says only the first) and the installer's
+6.12.0 alike, with the first and last rows measured on both:
 
     attribute off, permission granted     AbortError: Invalid state
     attribute on,  permission unanswered  promise never settles
@@ -28877,9 +28878,12 @@ has refused file access from file urls by default since API 16.
 on Chromium's in-process GPU thread as a view opens, in ten of twelve drivers.
 Measured at `37baa27`, before any of this work, with the same result, so it is not
 these changes; the installed binary run by hand did not trap, which is not
-explained. The drivers run on Xvfb with `SWEEP_ONSCREEN=1`. A window manager there
-needs `dbus-run-session` as well, or `xfwm4` dies: read `_NET_CLIENT_LIST` on the
-root window before believing one is up.
+explained; `libqt6webenginecore6` moved to 6.10.2 on 2026-11-05, which is a
+candidate and no more. The drivers run on Xvfb with `SWEEP_ONSCREEN=1`. A window
+manager there needs `dbus-run-session` as well, or `xfwm4` dies: read
+`_NET_CLIENT_LIST` on the root window before believing one is up. Run that way on
+2026-11-06: 38 passed, 9 report-only, 8 skipped, and one real fault, two Edit items
+on Alt+D, fixed. Seven tools counted as failures are skipped by name now.
 
 ## Every claim the settings page makes, checked against the code
 
