@@ -72,8 +72,18 @@ struct tally {
 	int windows = -1;
 };
 
+// The one on the screen. Background tabs are warmed into views of their own, so
+// the first child or the last is whichever was made then, and a click sent there
+// reaches a page nobody is asking: every case read `idle` and measured nothing.
+QWebEngineView *shown_view(main_window &w) {
+	for (QWebEngineView *v : w.findChildren<QWebEngineView *>())
+		if (v->isVisible())
+			return v;
+	return nullptr;
+}
+
 void click_page(main_window &w) {
-	auto *view = w.findChild<QWebEngineView *>();
+	QWebEngineView *view = shown_view(w);
 	QWidget *widget = view ? view->focusProxy() : nullptr;
 	QWidget *t = widget ? widget : view;
 	if (!t)
@@ -88,12 +98,12 @@ void click_page(main_window &w) {
 }
 
 QString page_result(main_window &w) {
-	const auto views = w.findChildren<QWebEngineView *>();
-	if (views.isEmpty())
+	QWebEngineView *view = shown_view(w);
+	if (!view)
 		return QString();
 	QString out;
 	QEventLoop loop;
-	views.last()->page()->runJavaScript(
+	view->page()->runJavaScript(
 	  QStringLiteral("window.__r"), [&](const QVariant &v) {
 		out = v.toString();
 		loop.quit();
@@ -114,11 +124,11 @@ QString page_result(main_window &w) {
 // request had gone anywhere. Resetting the variable is the thing actually
 // wanted, and it cannot be satisfied by a stale value.
 void reset_page(main_window &w) {
-	const auto views = w.findChildren<QWebEngineView *>();
-	if (views.isEmpty())
+	QWebEngineView *view = shown_view(w);
+	if (!view)
 		return;
 	QEventLoop loop;
-	views.last()->page()->runJavaScript(QStringLiteral(
+	view->page()->runJavaScript(QStringLiteral(
 	  "(function(){if(window.__s){try{window.__s.getTracks()"
 	  ".forEach(function(t){t.stop();});}catch(e){}window.__s=null;}"
 	  "window.__r=\"idle\";return \"ok\";})()"),
@@ -139,26 +149,13 @@ QString wait_settled(main_window &w, int ms = 25000) {
 	return r.isEmpty() ? QStringLiteral("(no answer)") : r;
 }
 
-// What the engine did with a selection we handed over correctly.
-//
-// **Reported rather than asserted, and the asymmetry is deliberate.** Qt
-// discards the selection on every version available here -- 6.8.2 and 6.10.2
-// both, `INVALID_STATE` underneath a `NotAllowedError` and an `AbortError`
-// respectively -- while Chromium's own picker, on the same display and the
-// same XRandR source, hands back a stream. Asserting a stream would leave this
-// driver permanently red for somebody else's defect, which is how a sweep
-// stops being read at all; asserting the failure would lock the bug in as
-// expected behaviour and go quiet on the day it is fixed. So the failure is a
-// note and only a *stream* is a check -- the sweep stays honest, and the news
-// arrives by itself when Qt starts working.
+// What the engine did with a selection we handed over correctly. A stream is
+// asserted: until 2026-11-06 this was a note, because a refusal here was taken for
+// Qt's defect, and it was `ScreenCaptureEnabled` being off in this project.
 void engine_answer(const QString &r, const char *how) {
-	if (r.startsWith("stream:"))
-		check(true, QStringLiteral("Qt accepts a selection made %1 -- "
-		                            "the upstream defect is gone")
-		              .arg(QLatin1String(how)));
-	else
-		std::printf("  known  Qt discards a selection made %s (%s); "
-		             "Chromium's own picker does not\n", how, qPrintable(r));
+	check(r.startsWith("stream:"),
+	      QStringLiteral("the page gets a stream from a selection made %1 (%2)")
+	        .arg(QLatin1String(how), r));
 }
 
 }  // namespace
@@ -251,6 +248,14 @@ int main(int argc, char *argv[]) {
 		             "nothing below would mean anything\n");
 		return 1;
 	}
+	// Tabs are warmed while the fixture starts, so this one loaded the fixture's
+	// page before the asking page replaced it on disk. Without this every case
+	// clicked a page with no script, and `window.__r` was only the reset's.
+	if (QWebEngineView *view = shown_view(f.window)) {
+		view->reload();
+		spin(1500);
+		f.wait_idle();
+	}
 	spin(800);
 
 	section("refused outright");
@@ -336,7 +341,10 @@ int main(int argc, char *argv[]) {
 	// run, and every case above needs the real one.
 	section("no dialog at all: answered straight from the callback");
 	{
-		auto *v = f.window.findChild<qtwebengine_view *>();
+		qtwebengine_view *v = nullptr;
+		for (qtwebengine_view *each : f.window.findChildren<qtwebengine_view *>())
+			if (each->widget()->isVisible())
+				v = each;
 		if (!v) {
 			std::printf("  note  no view to install a chooser on\n");
 		} else {

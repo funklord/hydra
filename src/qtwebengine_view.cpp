@@ -528,8 +528,20 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 			// permissions get, and without it "we refused" and "we granted and
 			// the engine could not deliver" looked identical from the page's
 			// side, which cost a diagnosis once already.
+			//
+			// **Except the one that follows a choice.** Selecting a surface is not
+			// the end of the flow: the engine then asks this permission, and
+			// refusing it stranded the stream. Granted only straight after a
+			// pick, and spent there, so that it never stands for anything but a
+			// surface somebody just chose. Asked any other way, it is refused.
 			case PT::DesktopVideoCapture:
 			case PT::DesktopAudioVideoCapture:
+				if (*m_surface_chosen) {
+					*m_surface_chosen = false;
+					perm.grant();
+					return;
+				}
+				[[fallthrough]];
 			case PT::LocalFontsAccess:
 			case PT::Unsupported:
 			default:
@@ -676,8 +688,10 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 		// same discipline costs one copy here and removes the question of
 		// whether the view is still alive when somebody finally answers.
 		const capture_chooser chooser = m_capture_chooser;
+		const std::shared_ptr<bool> surface_chosen = m_surface_chosen;
 		m_decider(origin, policy::feature::screen_share,
-		           [request, origin, debug, give_up, chooser](bool granted) {
+		           [request, origin, debug, give_up, chooser,
+		            surface_chosen](bool granted) {
 			if (!granted) {
 				give_up("the shield refused this site");
 				return;
@@ -688,7 +702,7 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 			}
 			chooser(
 			  origin, request.screensModel(), request.windowsModel(),
-			  [request, debug, give_up](bool is_screen, int row) {
+			  [request, debug, give_up, surface_chosen](bool is_screen, int row) {
 				if (row < 0) {
 					give_up("nothing was chosen");
 					return;
@@ -708,6 +722,7 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 					qWarning("capture: selecting %s row %d of %d",
 					          is_screen ? "screen" : "window", row,
 					          model->rowCount());
+				*surface_chosen = true;
 				if (is_screen)
 					request.selectScreen(at);
 				else
@@ -1030,6 +1045,12 @@ void qtwebengine_view::apply_settings(const view_settings &s) {
 	// decision and is made on the signal below; this only makes the request
 	// reach it.
 	set->setAttribute(QWebEngineSettings::FullScreenSupportEnabled, true);
+	// **The same shape as the line above, and it cost more.** Off by default, and
+	// with it off a selection comes back from the engine as INVALID_STATE: the
+	// picker opened, the choice was handed over, and the page got an error. That
+	// read as a Qt defect for weeks. It decides nothing about any site: a request
+	// still goes through the shield and the picker.
+	set->setAttribute(QWebEngineSettings::ScreenCaptureEnabled, true);
 	// **A PDF is shown, not silently saved.** Qt's built-in viewer needs
 	// plugins on, and Qt defaults them off -- so every PDF opened in a tab
 	// became a download into ~/Downloads while the tab stayed blank. Found on

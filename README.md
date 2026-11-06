@@ -306,8 +306,8 @@ Kept here rather than left for you to discover.
 
 - **Android geolocation is built but unproven**: no page has yet asked for a
   position on a real handset.
-- **Android has no screen sharing**, and the desktop's has never met a real
-  `getDisplayMedia` — everything up to the engine call is tested against fakes.
+- **Android has no screen sharing.** The desktop's delivers a stream to a real
+  `getDisplayMedia`, tested under Xvfb; a real meeting has not been tried.
 - **Android cannot keep local addresses from WebRTC.** The desktop offers a page
   only the default route's interface unless a site is allowed more; Android's
   WebView has no such setting.

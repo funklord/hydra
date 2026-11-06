@@ -1,11 +1,9 @@
 // getDisplayMedia through Qt WebEngine, with nothing of hydra linked.
 //
-// `try_share` beside this drives the real shell and proves what *this*
-// project does with a display-capture request. It cannot answer the question
-// that came after it: the request is answered correctly and Chromium still
-// refuses with INVALID_STATE, so the fault is below us -- and a driver that
-// links the whole browser cannot say whether "below us" means Qt or the way
-// Qt was packaged.
+// `try_share` beside this drives the real shell. This one links only Qt, so what
+// it shows is what Qt needs: it was written to prove a defect in Qt, and what it
+// proved in the end is that a page gets a stream on every build once
+// `ScreenCaptureEnabled` is on and the permission after the picker is granted.
 //
 // This is the smaller instrument. It links Qt and nothing else, so a failure
 // here belongs to Qt or to the machine, and it builds against any kit whose
@@ -30,6 +28,8 @@
 #include <QUrl>
 #include <QWebEngineDesktopMediaRequest>
 #include <QWebEnginePage>
+#include <QWebEnginePermission>
+#include <QWebEngineSettings>
 #include <QWebEngineView>
 #include <QtGlobal>
 #include <cstdio>
@@ -64,6 +64,15 @@ int main(int argc, char **argv) {
 
 	QWebEngineView view;
 	view.resize(640, 480);
+
+	// Both of these are required, and leaving them out is what this file used to
+	// do: it reported INVALID_STATE on three Qt builds and passed for a Qt defect.
+	// Without the attribute a selection is refused; without the permission the
+	// page waits for ever. REPRO_NO_ATTRIBUTE=1 shows the first.
+	if (!qEnvironmentVariableIsSet("REPRO_NO_ATTRIBUTE"))
+		view.page()->settings()->setAttribute(QWebEngineSettings::ScreenCaptureEnabled, true);
+	QObject::connect(view.page(), &QWebEnginePage::permissionRequested,
+	                  [](QWebEnginePermission permission) { permission.grant(); });
 
 	int seen = 0;
 	QObject::connect(view.page(), &QWebEnginePage::desktopMediaRequested,

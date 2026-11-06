@@ -493,9 +493,9 @@ reads.
 | `try_share` | nothing | `getDisplayMedia` through the real shell, cut where the *dialogs* differ rather than where the outcomes do: the shield's prompt and the picker inside it, the picker alone, and an answer from the callback with no dialog anywhere. It fails on every variant for a reason outside this tree -- see `repro_share` below -- and stays because it will pass the day that stops being true |
 
 **`repro_share` is not a driver and is not in the table**, because it links Qt
-and nothing of this project: it exists so that a display-capture failure can be
-attributed to Qt rather than to the browser around it, which a driver linking
-the whole shell cannot do. It builds against whichever kit `PKG_CONFIG_PATH`
+and nothing of this project: it shows what display capture needs of Qt with no browser
+around it, which a driver linking the whole shell cannot do. It once blamed Qt
+for this project's own missing setting, and `REPRO_NO_ATTRIBUTE=1` repeats that. It builds against whichever kit `PKG_CONFIG_PATH`
 points at, so a distribution's Qt and an official one can be compared without
 editing anything, and it takes its rpath from the same query so the binary runs
 as it is:

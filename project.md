@@ -15178,7 +15178,42 @@ error to its own stderr. **Check the artifact, not the thing that generates it**
 is this project's own rule and it was broken by the person who keeps writing it
 down.
 
-## The screen-share picker works, and Qt throws the answer away
+## The screen-share picker works, and this project threw the answer away
+
+**Corrected 2026-11-06, and everything below under this heading is the record of
+a wrong conclusion, kept because the reasoning is the lesson.** It says Qt discards
+the selection. It does not. `QWebEngineSettings::ScreenCaptureEnabled` defaults to
+off, nothing here had ever set it, and `INVALID_STATE` is what a selection gets
+with it off. Every build below failed for that reason, the reproducer included: it
+was written to link nothing of this project, and so inherited the same default.
+**No bug report should be filed.** `repro_share`, on Debian's 6.8.2 and the
+installer's 6.12.0 alike, with the first and last rows measured on both:
+
+    attribute off, permission granted     AbortError: Invalid state
+    attribute on,  permission unanswered  promise never settles
+    attribute on,  permission granted     stream:1
+
+`try_share` gets `stream:1` through the real shell by all three routes, 16 of 16,
+and refusing the permission turns exactly those three checks red. **Only a screen
+has been shared**: `windowsModel()` is empty under Xvfb, so sharing a window is
+still unmeasured.
+
+`try_share` had also stopped measuring anything, and still printed its tally. Tab
+warming loads the fixture's page before the driver writes its own over it, so every
+case clicked a page with no script, and `window.__r` held only the driver's reset.
+It reloads now, and asks for the view on the screen, not the first child.
+
+So there were two faults, and the second would have hidden a fix for the first.
+Selecting a surface is not the end of the flow: the engine then asks
+`DesktopVideoCapture`, and this project refused it, its comment explaining that
+screen sharing does not go that way. It is granted now only straight after a pick.
+
+**What the investigation missed is worth more than the fix.** It compared three Qt
+builds, two vendors, eighteen Chromium versions and a Chromium control, and every
+one of those varied the thing that was not at fault. Nothing asked which setting
+the working control had that the failing program did not. Chromium's own picker
+worked because Chromium's default is on. Found by listing Qt's attribute defaults,
+which took a minute, while chasing something else.
 
 Reported from the desktop: "desktop sharing at least shows the picker, but
 then, no error, nothing". The picker is ours, so the fault looked like ours,
@@ -15359,6 +15394,8 @@ and the new build has not been put on a live display, which is not this
 session's to occupy.
 
 ### The report is written, and it could not be filed from here
+
+**Do not file it**: see the correction at the head of this section.
 
 `bugreports.qt.io` answers HTTP 401 to an anonymous identity and there is no
 credential on this machine, so filing is the copyright holder's in the literal
@@ -27728,19 +27765,11 @@ carried along as amendments to a list item.
    `block` floor back over that raise for ever, and nobody chose the floor.
    The reproduction is pinned in `test_settings`.
 
-   **And meet a real `getDisplayMedia`, which is now blocked on Qt rather than
-   on a compositor.** Everything up to the engine call is proven against fakes
-   -- the shield is consulted, the picker shown, the answer turned into a
-   `selectScreen` or `selectWindow` on the right model, and every other path
-   cancels. The last hop fails in Qt: see *Official Qt binaries fail
-   identically* above, where a standalone reproducer that links nothing of
-   this project is refused by Debian's 6.8.2 and by the Qt installer's
-   6.12.0, on the same display, in the same run of the same program -- and
-   the earlier session's 6.10.2 makes three. So a meeting on the desktop is
-   not the test any more: it would fail for a reason that is not this
-   project's. What is outstanding is a bug report, and that is the copyright
-   holder's to file; the reproducer, the three builds and the controls are
-   recorded for it.
+   **`getDisplayMedia` delivers a stream**, measured through the real shell by
+   `try_share` on 2026-11-06 under Xvfb. What this item used to call a Qt defect
+   awaiting a bug report was this project's: see *The screen-share picker works*.
+   A real meeting on a real desktop has still not been tried, and that is the
+   holder's to try.
 
    Two capabilities stay blocked on purpose and are not outstanding work.
    Clipboard reading is gated by the engine behind `JavascriptCanAccessClipboard`
@@ -37651,8 +37680,8 @@ session was told directly as well.
 work above, because the cheapest thing a session can do wrong here is
 invent a task while a list exists:
 
-    1  permissions      holder's: a policy-file upgrade decision, a Qt bug
-                        report, and two device claims
+    1  permissions      holder's: a policy-file upgrade decision and two
+                        device claims (the Qt bug report it named was wrong)
     2  Android reports  a design question, holder's
     3  accessibility    controls are named and asserted; the rest needs
                         TalkBack on the holder's handset or an at-spi

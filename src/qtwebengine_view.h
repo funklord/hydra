@@ -109,6 +109,9 @@ private:
 	certificate_chooser m_certificate_chooser;
 	QWebEngineView *m_view = nullptr;
 	QWebEnginePage *m_page = nullptr;
+	// A surface was picked and the engine's permission question has not come yet.
+	// Shared because the picker's answer may outlive this object.
+	std::shared_ptr<bool> m_surface_chosen = std::make_shared<bool>(false);
 	// The same object as m_page, typed so the decider can be handed over
 	// without a downcast. Owned by the view, like m_page.
 	navigating_page *m_nav_page = nullptr;
