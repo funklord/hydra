@@ -7,6 +7,7 @@
 #include <QGridLayout>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QComboBox>
 #include <QHostAddress>
 #include <QStandardItemModel>
@@ -226,6 +227,8 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 		// Text set by `refresh_default_labels()`, because what this entry
 		// means depends on the global default and that changes under us.
 		combo->addItem("Default");
+		// Qt's own policy measures once, which would be this short word.
+		combo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
 		combo->addItem("Allow");
 		combo->addItem("Block");
 		// **Present on every row, enabled on six.** Greyed rather than absent:
@@ -302,6 +305,7 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 	auto *rows = new QWidget(this);
 	rows->setLayout(grid);
 	auto *scroll = new QScrollArea(this);
+	m_scroll = scroll;
 	scroll->setObjectName("shield_scroll");
 	scroll->setWidget(rows);
 	scroll->setWidgetResizable(true);
@@ -438,6 +442,19 @@ void site_policy_dialog::refresh_default_labels() {
 		     : d == setting::ask ? QStringLiteral("Default (ask each time)")
 		                          : QStringLiteral("Default (allowed)"));
 
+	}
+
+	// **As wide as what the rows now say.** A scroll area with no horizontal bar
+	// asks for no width of its own, so "Default (ask each time)" was cut to
+	// "Default" on every row. A size and not a minimum: a phone must still be able
+	// to squeeze this, where a combo's arrow opens the whole text.
+	if (m_scroll && m_scroll->widget()) {
+		// The grid keeps the size it worked out before these texts were set.
+		m_scroll->widget()->layout()->invalidate();
+		const int want = m_scroll->widget()->sizeHint().width() +
+		                 m_scroll->verticalScrollBar()->sizeHint().width();
+		const int around = sizeHint().width() - m_scroll->sizeHint().width();
+		resize(qMax(width(), want + qMax(0, around)), sizeHint().height());
 	}
 }
 

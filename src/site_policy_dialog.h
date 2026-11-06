@@ -5,6 +5,7 @@
 #include <QString>
 
 class QComboBox;
+class QScrollArea;
 class QLabel;
 class policy_engine;
 
@@ -37,5 +38,6 @@ private:
 	QLabel             *m_host_label = nullptr;
 	QComboBox          *m_scope      = nullptr;
 	QVector<QComboBox *> m_combos;
+	QScrollArea *m_scroll = nullptr;
 	bool                m_populating = false;
 };
