@@ -9044,6 +9044,7 @@ void main_window::list_resolved_media(const QString &host, const QUrl &page,
 			item.height      = f.height;
 			item.chapters    = chapters;
 			item.sheet       = sheet_json;
+			item.format_id   = f.format_id;
 			item.chunk_size  = f.chunk_size;
 			item.has_video = f.has_video;
 			item.has_audio = f.has_audio;
@@ -9145,6 +9146,7 @@ void main_window::list_resolved_media(const QString &host, const QUrl &page,
 		// Kept for this page, and listed only if it is still the page in
 		// front: an answer arriving after somebody moved on waits in the
 		// cache for the next time they open Find Media there.
+		media_detector::name_apart(&rows, media_dialog::k_save_max_height);
 		m_lookups.finish(page, rows, said, QDateTime::currentDateTimeUtc());
 		save_lookups();
 		if (media_lookups::key(m_lookup_page) == media_lookups::key(page))

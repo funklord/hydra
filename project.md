@@ -40924,6 +40924,13 @@ and a sidecar would stay in app-private storage.
 **A mix already saved gets its files by saving it again:** the file is refused as
 already there, and the tracklist files are written beside it.
 
+**No two rows of one video share a file name** (`media_detector::name_apart`). yt-dlp's
+name holds the video and the extension, so a VP9 row and an Opus row were both
+`.webm`, and saving the second was refused as already saved. What Save chooses keeps
+the plain name and the rest take `.f<format>`, yt-dlp's own spelling. A browser would
+number the second file instead; that was rejected because the name would then depend
+on what is on disk, and saving one row twice would double it rather than be refused.
+
 **The times are the source's and no finer.** Descriptions give whole seconds, so a
 cue sheet's frames add no precision, and the text says "to the second". A source
 giving `1:02:03.250` keeps it now, which `entry_of` used to drop. **Refining a mark

@@ -70,6 +70,7 @@ struct media_item {
 	QString chapters;
 	// What goes beside it if it is a mix (`media_sheet`, as JSON); empty if not.
 	QString sheet;
+	QString format_id;         // yt-dlp's, for telling rows apart by name
 	int height = 0;            // the picture's, where something knows it; 0 if not
 	// Where an authoritative answer places it, highest first; 0 for anything
 	// detected, which keeps the hit-count order below the ranked rows.
@@ -234,6 +235,14 @@ public:
 	// a direct file first; where none is that small, the smallest there is.
 	static int best_sound(const QList<media_item> &items);
 	static int best_picture(const QList<media_item> &items, int max_height);
+	// **No two rows of one video share a file name.** yt-dlp's name holds the
+	// video and the extension, and VP9 with Opus are both `.webm`, so saving the
+	// second was refused as "already saved" about a file it had never saved.
+	// What Save chooses keeps the plain name and the rest take `.f<format>`,
+	// yt-dlp's own spelling for the same problem. A name that depends only on
+	// the format, not on what is on disk, so saving one row twice is still
+	// refused rather than doubled.
+	static void name_apart(QList<media_item> *items, int max_height);
 
 signals:
 	// Queued to the UI thread by Qt because the emit happens off it.

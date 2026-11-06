@@ -25,6 +25,11 @@ class stream_assembly;
 class media_dialog : public QDialog {
 	Q_OBJECT
 public:
+	// The tallest picture one Save takes, by the holder's choice 2026-10-12:
+	// 2160p of an hour-long set is 4.2 GB, 1080p about one. The rows still
+	// offer everything.
+	static constexpr int k_save_max_height = 1080;
+
 	media_dialog(media_detector *detector, player_launcher *players,
 	              download_manager *downloads, local_proxy *proxy,
 	              mse_tap *tap, stream_assembly *assembly,
@@ -71,10 +76,6 @@ private:
 	// choice: whether a person wants the sound, the picture or both is not
 	// something a kind decides.
 	enum class save_choice { sound, picture, both };
-	// The tallest picture one Save takes, by the holder's choice 2026-10-12:
-	// 2160p of an hour-long set is 4.2 GB, 1080p about one. The rows still
-	// offer everything.
-	static constexpr int k_save_max_height = 1080;
 	void save_as(save_choice choice);
 
 	media_detector   *m_detector  = nullptr;

@@ -1,4 +1,6 @@
 #include "media_detector.h"
+
+#include <QSet>
 #include "policy_engine.h"
 
 #include <QFileInfo>
@@ -247,6 +249,31 @@ media_item media_detector::primary_for(const QString &site_host,
                                         const QUrl &page) const {
 	const QList<media_item> list = items_for(site_host, page);
 	return list.isEmpty() ? media_item{} : list.first();
+}
+
+void media_detector::name_apart(QList<media_item> *items, int max_height) {
+	QSet<QString> taken;
+	QSet<int> plain;
+	for (const int at : { best_picture(*items, max_height), best_sound(*items) }) {
+		if (at < 0 || taken.contains(items->at(at).file_name))
+			continue;
+		taken.insert(items->at(at).file_name);
+		plain.insert(at);
+	}
+	for (int i = 0; i < items->size(); ++i) {
+		if (plain.contains(i))
+			continue;
+		media_item &row = (*items)[i];
+		if (!taken.contains(row.file_name) || row.format_id.isEmpty()) {
+			taken.insert(row.file_name);
+			continue;
+		}
+		const int dot = row.file_name.lastIndexOf(QLatin1Char('.'));
+		const QString mark = QStringLiteral(".f") + row.format_id;
+		row.file_name = dot > 0 ? row.file_name.left(dot) + mark + row.file_name.mid(dot)
+		                        : row.file_name + mark;
+		taken.insert(row.file_name);
+	}
 }
 
 void media_detector::add_item(const QString &site_host, const media_item &item) {

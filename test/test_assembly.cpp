@@ -35,6 +35,7 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
+#include <QSet>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QTcpServer>
@@ -2412,6 +2413,44 @@ int main(int argc, char **argv) {
 		QFile kept(path);
 		kept.open(QIODevice::ReadOnly);
 		check(kept.readAll() == "bytes", "and the file is left as it was");
+	}
+
+	section("no two rows of one video share a file name");
+	{
+		const auto row = [](const char *id, const char *name, int height, bool audio) {
+			media_item m;
+			m.format_id = id;
+			m.file_name = name;
+			m.height    = height;
+			m.has_video = height > 0;
+			m.has_audio = audio;
+			m.url       = QUrl(QString("https://example.test/") + id);
+			return m;
+		};
+		QList<media_item> rows = { row("313", "v.webm", 2160, false),
+		                           row("248", "v.webm", 1080, false),
+		                           row("137", "v.mp4", 1080, false),
+		                           row("399", "v.mp4", 1080, false),
+		                           row("251", "v.webm", 0, true) };
+		rows[1].audio = rows[2].audio = rows[3].audio = QUrl("https://example.test/251");
+		const int picked = media_detector::best_picture(rows, 1080);
+		const QString plain = rows.value(picked).file_name;
+		media_detector::name_apart(&rows, 1080);
+		QSet<QString> names;
+		for (const media_item &r : rows)
+			names.insert(r.file_name);
+		check(names.size() == rows.size(), QString("no two share a name (%1)")
+		        .arg(QStringList(names.values()).join(' ')));
+		check(rows.value(picked).file_name == plain, "what Save takes keeps the plain name");
+		check(names.contains("v.f251.webm") || rows.last().file_name == "v.webm",
+		      "and a sound in a picture's container takes its format");
+		QList<media_item> again = { row("248", "v.webm", 1080, false),
+		                            row("251", "v.webm", 0, true) };
+		media_detector::name_apart(&again, 1080);
+		media_detector::name_apart(&again, 1080);
+		check(again.first().file_name != again.last().file_name &&
+		      !again.last().file_name.contains(".f251.f251"),
+		      "and naming twice adds nothing");
 	}
 
 	// The file is opened before the manifest is fetched, so one that fails there
