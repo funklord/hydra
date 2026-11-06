@@ -281,8 +281,7 @@ void local_proxy::serve_file(QTcpSocket *client, const entry &e,
 		QElapsedTimer idle;
 		idle.start();
 
-		// **A hazard by construction, and NOT a defect anybody has seen
-		// fire.** `on_connection` wires `disconnected` to `deleteLater()`,
+		// **A hazard by construction, and it did fire.** `on_connection` wires `disconnected` to `deleteLater()`,
 		// and both waits below run the event loop -- so the socket this frame
 		// holds by raw pointer is owned by a slot that can delete it while
 		// the loop is pumping. The next `state()`, `write()` or
@@ -295,12 +294,11 @@ void local_proxy::serve_file(QTcpSocket *client, const entry &e,
 		// to report never fired, because `serve_file` runs at a deeper event
 		// loop level than that probe and Qt delivers a deferred delete only
 		// when the level permits. So the hazard is real and its reachability
-		// through this path is unproven.
+		// through this path needed a loop deeper than this one, which that
+		// probe did not have. `test_assembly` has it now.
 		//
-		// Held weakly anyway. It costs a pointer and removes a dependence on
-		// Qt's loop-level bookkeeping, which is not a thing this code should
-		// have to reason about to be correct. It is not a fix for the media
-		// crash reported from use; that is still unexplained.
+		// Held weakly, and that alone was not enough: see `on_connection`,
+		// which is why nothing of the socket's is above this frame any more.
 		while (left > 0 && alive &&
 		        client->state() == QAbstractSocket::ConnectedState) {
 			const qint64 have = readable_now();
@@ -381,7 +379,18 @@ void local_proxy::on_connection() {
 
 			const QByteArray body = buf.mid(end + 4, int(len));
 			m_incoming.remove(client);
-			serve(client, head, body);
+			// **Never from inside this signal.** `serve_file` runs the event loop
+			// for as long as a stream lasts, and this frame is the socket's own
+			// `readyRead`. A player that leaves while something deeper is running
+			// has the socket deleted under it, and the weak pointer in `serve_file`
+			// protects only `serve_file`: Qt, on the way back out of here, goes on
+			// to emit `channelReadyRead` on the freed object. Queued, nothing of
+			// the socket's is on the stack when the stream runs.
+			QPointer<QTcpSocket> alive(client);
+			QMetaObject::invokeMethod(this, [this, alive, head, body] {
+				if (alive)
+					serve(alive, head, body);
+			}, Qt::QueuedConnection);
 		});
 	}
 }

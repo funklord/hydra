@@ -24329,9 +24329,32 @@ manifest lands before the stale retry fires, so the resurrected chain
 fetches the new stream's segments rather than the old one's. Kept as a cheap
 check on a different failure mode, labelled so nobody counts it twice.
 
-### The media crash: a hazard found, an attribution withdrawn
+### The media crash: a hazard found, an attribution withdrawn, then reached
 
-**The crash is still unexplained.** This entry exists because a plausible
+**Found 2026-11-06, and the entry below was right about the hazard and wrong to
+stop.** `try_watch` died in `QIODevice::channelReadyRead` 4 runs in 5 as soon as
+Watch was pressed and the player left, which is what closing a player does. So this
+is very likely the crash reported from use; nothing here can prove it is the same
+one, and the holder's next few Watches are the test.
+
+`serve_file` runs the event loop for the length of a stream, and it ran **inside
+the socket's own `readyRead`**. A deferred delete fires on coming back out to a
+shallower loop than the one it was posted from, so a disconnect heard at
+`serve_file`'s depth waits for the stack to unwind, which is why the experiment
+below saw nothing. Heard inside anything deeper, a dialog or a menu, the socket is
+deleted the moment control is back in `serve_file`. The weak pointer protects that
+frame and cannot protect Qt's above it: on the way out Qt emits `channelReadyRead`
+on the freed object. `gdb` gave the signal index, 4, and that named it.
+
+`on_connection` now queues `serve`, so nothing of the socket's is on the stack
+while a stream runs. `test_assembly` reaches the free deterministically with one
+nested loop, with frames matching `try_watch`'s, and passes with the fix; `try_watch`
+went past Watch 8 runs in 8. ASan had passed the same driver once, on timing, which
+is what a clean run of an intermittent fault is worth.
+
+The rest of this entry is what was thought before that.
+
+This entry exists because a plausible
 mechanism was found, announced as the cause, and then failed the experiment
 that would have confirmed it -- and the wrong half is the part worth keeping.
 

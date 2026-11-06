@@ -873,8 +873,7 @@ int main(int argc, char **argv) {
 	// It passes with the guards and without them, and an instrumented guard
 	// never fired against it, so it does not demonstrate the hazard below --
 	// it is a smoke test that a player vanishing mid-stream leaves the proxy
-	// serving. Strengthening it means reaching the free, which nothing here
-	// has managed.
+	// serving. The section after this one reaches the free.
 	//
 	// `serve_file` holds a raw pointer to the client
 	// across `processEvents` and `waitForBytesWritten`, both of which run the
@@ -954,6 +953,61 @@ int main(int argc, char **argv) {
 		         .arg(got.size()));
 		second.abort();
 		pump(800);
+	}
+
+	section("a player that leaves during a nested event loop takes nothing with it");
+
+	// **This reaches the free the section above could not.** The difference is a
+	// loop deeper than `serve_file`'s own. A deferred delete runs only on coming
+	// back out to a shallower loop than the one it was posted from, so a
+	// disconnect heard at `serve_file`'s depth waits for the stack to unwind, and
+	// nothing happens. Heard inside anything deeper -- a dialog, a menu, a spin
+	// like this one -- the socket is deleted the moment control is back in
+	// `serve_file`. `alive` covers that frame. It cannot cover Qt's own above it:
+	// `serve_file` ran inside the socket's `readyRead`, and on the way out Qt goes
+	// on to emit `channelReadyRead` on the object just freed. SIGSEGV, in
+	// `QIODevice::channelReadyRead`, which is how `try_watch` died 2 runs in 3.
+	{
+		QTemporaryDir served;
+		const QString path = served.filePath("arriving.bin");
+		{
+			QFile f(path);
+			f.open(QIODevice::WriteOnly);
+			f.write(QByteArray(64 * 1024, 'x'));
+		}
+		local_proxy p3;
+		check(p3.start(), "a proxy serving a file that is still arriving");
+		// Promised larger than it is, so the reader catches up and the loop waits.
+		const QUrl u = p3.publish_file(path, "application/octet-stream",
+		                               [] { return qint64(64 * 1024); },
+		                               [] { return qint64(1024 * 1024); });
+		const QByteArray req = ("GET " + u.path() + " HTTP/1.1\r\nHost: "
+		                         + u.host() + "\r\n\r\n").toUtf8();
+
+		QTcpSocket player;
+		QByteArray seen;
+		bool gone = false;
+		QObject::connect(&player, &QTcpSocket::connected, [&] { player.write(req); });
+		QObject::connect(&player, &QTcpSocket::readyRead, [&] {
+			seen += player.readAll();
+			if (gone || seen.size() < 64 * 1024)
+				return;
+			gone = true;
+			player.abort();
+			QEventLoop deeper;
+			QTimer::singleShot(400, &deeper, &QEventLoop::quit);
+			deeper.exec();
+		});
+		player.connectToHost(u.host(), quint16(u.port()));
+		QElapsedTimer t;
+		t.start();
+		while (t.elapsed() < 8000 && !gone)
+			QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+		check(gone, "the player read what there was and left");
+		t.restart();
+		while (t.elapsed() < 800)
+			QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+		check(true, "and the process is still here to say so");
 	}
 
 	section("a retry pending from one assembly does not wake into the next");
