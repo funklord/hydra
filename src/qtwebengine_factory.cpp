@@ -588,11 +588,6 @@ qtwebengine_factory::~qtwebengine_factory() {
 	delete m_scheme_handler;
 	m_scheme_handler = nullptr;
 
-	// Unparented, for the reason above: this class is not a QObject, so nothing
-	// deletes the jar but this line.
-	delete m_cookies;
-	m_cookies = nullptr;
-
 	// **Ours now, so we delete it** -- it used to be Qt's default profile,
 	// which must not be deleted. It is only safe once every page using it has
 	// gone, and what makes that true is not the order two locals happen to be
@@ -608,6 +603,14 @@ qtwebengine_factory::~qtwebengine_factory() {
 	// it made -- and no caller does either.
 	delete m_profile;
 	m_profile = nullptr;
+
+	// **After the profile, because the cookie handlers read the jar until the
+	// store goes.** Deleted first, a cookie the engine dropped on the way out
+	// reached `m_cookies->deleteCookie` through a null pointer: Hydra died with
+	// 139 on exit after three of six visits to a real site (2026-11-06).
+	// Unparented, as this class is not a QObject, so nothing else deletes it.
+	delete m_cookies;
+	m_cookies = nullptr;
 }
 
 QString qtwebengine_factory::cookie_header_for(const QUrl &url) const {
