@@ -161,6 +161,8 @@ struct download_hints {
 	// twice is otherwise one download; "Both, as two files" fetches a sound
 	// once alone and once for its picture, and wants both.
 	bool    separate = false;
+	// What to leave beside the file (`media_sheet`, as JSON); empty for nothing.
+	QString sheet;
 };
 
 // A source's report on a job. Fields left at their defaults mean "unchanged",

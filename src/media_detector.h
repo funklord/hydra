@@ -68,6 +68,8 @@ struct media_item {
 	// The tracklist the reading chose, as chapters for the saved file
 	// (`media_remux::ffmetadata`); empty for none.
 	QString chapters;
+	// What goes beside it if it is a mix (`media_sheet`, as JSON); empty if not.
+	QString sheet;
 	int height = 0;            // the picture's, where something knows it; 0 if not
 	// Where an authoritative answer places it, highest first; 0 for anything
 	// detected, which keeps the hit-count order below the ranked rows.

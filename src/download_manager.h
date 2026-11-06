@@ -22,6 +22,7 @@ struct download_job {
 	QString     file_name;            // what to save as; empty: from the url
 	qint64      chunk_size = 0;       // as `download_request::chunk_size`
 	QString     chapters;             // as `download_hints::chapters`
+	QString     sheet;                // as `download_hints::sheet`
 	QString     error;
 	download_state status = download_state::queued;
 
@@ -190,6 +191,8 @@ private:
 	void settle_pair(int picture_id);
 	// A finished file with a tracklist: write it in as chapters.
 	void add_chapters(int id);
+	// The job's file is final: leave its tracklist files beside it, and say so.
+	void write_sheet(download_job *j);
 	// The chapters beside `path`, for ffmpeg to read; empty if not written.
 	static QString write_chapters(const QString &path, const QString &chapters);
 

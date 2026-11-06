@@ -678,7 +678,7 @@ void media_dialog::save(const media_item &item, bool separate) {
 	    item.audio_file_name.isEmpty() ? QFileInfo(item.audio.path()).fileName()
 	                                   : item.audio_file_name);
 	const download_hints hints{ item.known_media, item.chunk_size, item.chapters,
-	                            separate };
+	                            separate, item.sheet };
 	const download_hints sound_hints{ item.known_media, item.audio_chunk_size, {},
 	                                  separate };
 	// A learned stream carries the headers its CDN checks; without them the

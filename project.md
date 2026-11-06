@@ -40626,9 +40626,8 @@ disagree with rather than two.
 `.style-gate.toml`'s excludes, and named in `code-style.md` -- because they
 are third parties' data in the scripts their names are written in.
 
-**Not built**: the tracklist saved beside the file (a `.cue`) and as
-chapters in it; video, audio or both asked once per kind and remembered;
-corrections per channel.
+**Not built**: corrections per channel. The tracklist in the file and beside it,
+and asking video, audio or both, are in the sections below.
 
 ### Three models scored
 
@@ -40898,9 +40897,44 @@ reads chapters (mpv, VLC) can then skip track by track.
   name, because by then it is the only file.
 - The metadata file is written beside the download and removed afterwards.
 
-**Not done: a `.cue` beside the file.** Chapters cover the players here, and
-a second file per download would be the first sidecar Hydra writes. If a
-tool that reads only `.cue` comes up, it is a small addition.
+### What a mix leaves beside it
+
+The holder, 2026-11-06: a mix should have its tracklist in a text file and/or an
+`.m3u`, "time-granular enough for mixing", perhaps the whole description with the
+title as a header, and "in any case we still wanna know if there is a tracklist".
+Chapters reach a player and not a mixing program. So `media_sheet` writes, beside
+the final file, once it has its last name:
+
+- **`<file>.tracklist.txt`**, always for a mix: title as a header, who, from where,
+  length, the tracklist or `Tracklist: none found.`, candidates not taken, and the
+  whole description, uncapped.
+- **`<file>.m3u`** with VLC's `#EXTVLCOPT:start-time`/`stop-time`, when there are
+  times. VLC honours those; mpv does not, and takes the chapters instead.
+- **`<file>.cue`**, added to what was asked because it is what DJ and audio software
+  reads: `INDEX 01 mm:ss:ff`, 1/75 s, minutes past sixty, ninety-nine tracks at most,
+  beyond which it is not written. This entry used to say a cue sheet waited for a tool
+  that needed one; mixing is that.
+
+**A mix** is a reading of `is_set`, or one with a tracklist chosen. Named from the
+whole file name so "Both, as two files" gets a set each. An existing file is left
+alone. The status line and the job's row say what was found, and a setting under
+Downloads turns the files off. Not on Android: the file is copied to shared storage
+and a sidecar would stay in app-private storage.
+
+**The times are the source's and no finer.** Descriptions give whole seconds, so a
+cue sheet's frames add no precision, and the text says "to the second". A source
+giving `1:02:03.250` keeps it now, which `entry_of` used to drop. **Refining a mark
+against the audio is not built:** a continuous mix has no silence to find, so it
+wants beat analysis, which is a project of its own.
+
+**"The video" is read as what the site says about it:** its chapters, its description
+and the top twenty comments. Pixels and sound are not read, so a tracklist burned
+into the picture is not found, nor is a mix identified by listening.
+
+**A tracklist with no times now counts**, as `media_evidence::untimed`: three or more
+"Artist - Title" lines with no address on them, since a link list is the commonest
+thing of that shape. It goes in the text and not the playlist, which has no positions
+to give, and it is not offered to the reading, which chooses what can be chaptered.
 
 ## yt-dlp is told every JavaScript runtime it can use
 

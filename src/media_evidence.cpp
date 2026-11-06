@@ -4,6 +4,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QtMath>
 
 namespace {
 
@@ -22,13 +23,13 @@ bool media_evidence::entry_of(const QString &raw, entry *out) {
 	// under sixty; digits on neither side, so `2026:10` or `12:345` are not
 	// read as times.
 	static const QRegularExpression stamp(
-	  QStringLiteral("(?<![\\d:])(?:(\\d{1,2}):)?(\\d{1,2}):(\\d{2})(?![\\d:])"));
+	  QStringLiteral("(?<![\\d:])(?:(\\d{1,2}):)?(\\d{1,2}):(\\d{2})(?:\\.(\\d{1,3}))?(?![\\d:])"));
 	// A time in brackets goes with its brackets -- `[1:00:00]`, `(7:45)` --
 	// and what is left at the ends of a line is trimmed of separators only,
 	// so a bracket that belongs to the text, as in `Track [ID]`, stays.
 	static const QRegularExpression bracketed(
-	  QStringLiteral("[\\[(]\\s*(?:\\d{1,2}:)?\\d{1,2}:\\d{2}"
-	                 "(?:\\s*[-\\x{2013}]\\s*(?:\\d{1,2}:)?\\d{1,2}:\\d{2})?"
+	  QStringLiteral("[\\[(]\\s*(?:\\d{1,2}:)?\\d{1,2}:\\d{2}(?:\\.\\d{1,3})?"
+	                 "(?:\\s*[-\\x{2013}]\\s*(?:\\d{1,2}:)?\\d{1,2}:\\d{2}(?:\\.\\d{1,3})?)?"
 	                 "\\s*[\\])]"));
 	static const QRegularExpression framing(
 	  QStringLiteral("^[\\s\\-\\x{2013}\\x{2014}|:.,]+|"
@@ -48,7 +49,10 @@ bool media_evidence::entry_of(const QString &raw, entry *out) {
 	rest.remove(framing);
 	if (rest.isEmpty())
 		return false;
-	out->start = h * 3600 + mi * 60 + s;
+	// A fraction where the source gives one, which a mix needs and few give.
+	const QString part = m.captured(4);
+	out->start = h * 3600 + mi * 60 + s +
+	             (part.isEmpty() ? 0.0 : part.toInt() / qPow(10.0, part.size()));
 	out->text  = rest;
 	return true;
 }
@@ -84,6 +88,34 @@ QList<QList<media_evidence::entry>> media_evidence::timestamped_runs(
 	}
 	if (!run.isEmpty())
 		runs << run;
+	return runs;
+}
+
+// A blank line does not end a run, as for the timed ones, and anything else
+// does. An address on a line is a link list, the commonest thing shaped like
+// this: `Instagram - https://...`.
+QList<QStringList> media_evidence::untimed_runs(const QString &text) {
+	static const QRegularExpression track(
+	  QStringLiteral("^(?:\\d{1,3}[.)]\\s+)?\\S.{0,80}\\s[-\\x{2013}\\x{2014}]\\s\\S.{0,100}$"));
+	QList<QStringList> runs;
+	QStringList run;
+	const auto close = [&] {
+		if (run.size() >= k_min_entries)
+			runs << run;
+		run.clear();
+	};
+	for (const QString &raw : text.split(QLatin1Char('\n'))) {
+		const QString line = raw.trimmed();
+		if (line.isEmpty())
+			continue;
+		entry timed;
+		if (track.match(line).hasMatch() && !line.contains(QLatin1String("://")) &&
+		    !line.contains(QLatin1String("www.")) && !entry_of(line, &timed))
+			run << line;
+		else
+			close();
+	}
+	close();
 	return runs;
 }
 
@@ -171,5 +203,11 @@ media_evidence media_evidence::from_json(const QByteArray &json) {
 	for (int i = 0; i < ev.comments.size(); ++i)
 		add_runs(ev.comments.at(i).text, QString("comment %1").arg(i + 1),
 		         QString("comment %1.").arg(i + 1) + QStringLiteral("%1"));
+
+	for (const QStringList &run : untimed_runs(ev.description))
+		ev.untimed << untimed_list{ QStringLiteral("description"), run };
+	for (int i = 0; i < ev.comments.size(); ++i)
+		for (const QStringList &run : untimed_runs(ev.comments.at(i).text))
+			ev.untimed << untimed_list{ QString("comment %1").arg(i + 1), run };
 	return ev;
 }

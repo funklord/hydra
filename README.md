@@ -182,6 +182,9 @@ not do them, or does something adjacent that is not the same thing.
   incomplete file to your player.
 - **In-page magnet links work**, rather than dead-ending on a scheme the browser
   does not own.
+- **A mix keeps its tracklist.** A saved set gets chapters, and beside it a text file
+  with its title, tracklist and whole description, plus an `.m3u` and a `.cue` for
+  software that mixes. If it has no tracklist, it says so.
 - **Downloads can use a VPN your browsing does not.** Hydra sets up no VPN. Choose
   one your system already has, and files, saved streams and torrents leave by it
   alone while pages stay on your ordinary connection; if it drops, downloads stop

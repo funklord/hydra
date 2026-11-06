@@ -75,6 +75,15 @@ struct media_evidence {
 		QList<entry> entries;    // in the source's own order
 	};
 	QList<tracklist> tracklists;
+	// **A tracklist with no times is still a tracklist**: three or more lines
+	// reading as "Artist - Title", with no address on them. Not offered to the
+	// reading, which chooses what can be chaptered, but a person asking whether
+	// a mix has one wants to hear about it.
+	struct untimed_list {
+		QString     source;
+		QStringList lines;
+	};
+	QList<untimed_list> untimed;
 
 	static constexpr int k_description_cap = 6000;
 	static constexpr int k_comment_cap     = 3000;
@@ -98,4 +107,6 @@ struct media_evidence {
 	// is a candidate of its own.
 	static QList<QList<entry>> timestamped_runs(const QString &text);
 	static bool entry_of(const QString &line, entry *out);
+	// The runs of a text that read as an untimed tracklist.
+	static QList<QStringList> untimed_runs(const QString &text);
 };

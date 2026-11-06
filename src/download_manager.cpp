@@ -1,4 +1,5 @@
 #include "download_manager.h"
+#include "media_sheet.h"
 #include "media_remux.h"
 
 #include <QDir>
@@ -166,6 +167,7 @@ void download_manager::settle_pair(int picture_id) {
 			                .arg(s && s->status == download_state::failed
 			                       ? "failed (" + s->error + ")"
 			                       : QStringLiteral("was cancelled"));
+			write_sheet(p);
 		}
 		return;
 	}
@@ -191,6 +193,7 @@ void download_manager::settle_pair(int picture_id) {
 			  : meta.isEmpty() ? QStringLiteral("Picture and sound, combined.")
 			  : QStringLiteral("Picture and sound, combined, with the tracklist "
 			                   "as chapters.");
+			write_sheet(p);
 		}
 		// Its file is inside the combined one now, and a row pointing at a
 		// file that is gone is a row nobody can act on.
@@ -201,6 +204,22 @@ void download_manager::settle_pair(int picture_id) {
 	});
 	mux->start_mux(p->path, s->path, out, meta);
 	emit changed();
+}
+
+void download_manager::write_sheet(download_job *j) {
+	if (j->sheet.isEmpty() || j->path.isEmpty())
+		return;
+#ifdef Q_OS_ANDROID
+	// The file is copied to shared storage and this would stay private to the
+	// app, where nobody could reach it.
+	return;
+#endif
+	const media_sheet sheet = media_sheet::from_json(j->sheet);
+	j->sheet.clear();   // once: a job can pass here again on its way out
+	QString error;
+	const QString said = sheet.write_beside(j->path, &error)
+	  ? QString("Mix: %1.").arg(sheet.summary()) : error;
+	j->detail = j->detail.isEmpty() ? said : j->detail + QLatin1Char(' ') + said;
 }
 
 QString download_manager::write_chapters(const QString &path,
@@ -253,6 +272,7 @@ void download_manager::add_chapters(int id) {
 			                                "different name: the original name "
 			                                "could not be taken.")
 			               : "Saved without chapters: " + message;
+			write_sheet(j);
 		}
 		emit changed();
 		persist_history();
@@ -337,6 +357,7 @@ int download_manager::enqueue(const QUrl &url, const QString &node_id,
 	job.file_name            = file_name;
 	job.chunk_size           = hints.chunk_size;
 	job.chapters             = hints.chapters;
+	job.sheet                = hints.sheet;
 
 	m_jobs.push_back(job);
 	emit changed();
@@ -474,6 +495,7 @@ void download_manager::on_finished(int id, bool ok, const QString &message) {
 			add_chapters(id);
 		} else if (ok) {
 			j->status = download_state::done;
+			write_sheet(j);
 		} else {
 			j->status = download_state::failed;
 			j->error  = message;

@@ -1,4 +1,5 @@
 #include "stream_assembly.h"
+#include "media_sheet.h"
 #include "download_route.h"
 
 #include "download_manager.h"
@@ -139,7 +140,7 @@ void stream_assembly::assemble(const media_item &item,
 		}
 	});
 
-	connect(m_assembler, &hls_assembler::completed, this, [this, out, play_it] {
+	connect(m_assembler, &hls_assembler::completed, this, [this, out, play_it, sheet = item.sheet] {
 		// A live list has no end, so running out of segments is the end of the
 		// *window it published* and not the end of the stream. `hls_assembler`
 		// said as much in a comment and told nobody; saying "saved" with no
@@ -215,11 +216,19 @@ void stream_assembly::assemble(const media_item &item,
 		  : QString("Saved %1; combining video and audio…%2").arg(out, note));
 		auto *remux = new media_remux(this);
 		connect(remux, &media_remux::finished, this,
-		         [this, remux, note](bool ok, const QString &path,
-		                              const QString &why) {
-			emit status(ok ? QString("Saved %1.%2").arg(path, note)
-			                : why.isEmpty() ? QString("Saved %1.%2").arg(path, note)
-			                : QString("Saved %1 — %2%3").arg(path, why, note));
+		         [this, remux, note, sheet](bool ok, const QString &path,
+		                                     const QString &why) {
+			// The file's last name: a rewrap changes it.
+			QString mix;
+			if (!sheet.isEmpty()) {
+				const media_sheet s = media_sheet::from_json(sheet);
+				QString error;
+				mix = s.write_beside(path, &error)
+				  ? QString(" Mix: %1.").arg(s.summary()) : QLatin1Char(' ') + error;
+			}
+			emit status(ok ? QString("Saved %1.%2%3").arg(path, note, mix)
+			                : why.isEmpty() ? QString("Saved %1.%2%3").arg(path, note, mix)
+			                : QString("Saved %1 — %2%3%4").arg(path, why, note, mix));
 			remux->deleteLater();
 		});
 		if (audio.isEmpty())

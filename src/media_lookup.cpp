@@ -125,6 +125,7 @@ QJsonObject to_json(const media_item &m) {
 		{ "chunk", double(m.chunk_size) },
 		{ "sound_chunk", double(m.audio_chunk_size) },
 		{ "chapters", m.chapters },
+		{ "sheet", m.sheet },
 		{ "height", m.height },
 		{ "rank", m.rank },
 		{ "group", m.group },
@@ -155,6 +156,7 @@ media_item from_json(const QJsonObject &o) {
 	m.chunk_size       = qint64(o.value("chunk").toDouble());
 	m.audio_chunk_size = qint64(o.value("sound_chunk").toDouble());
 	m.chapters         = o.value("chapters").toString();
+	m.sheet            = o.value("sheet").toString();
 	m.height           = o.value("height").toInt();
 	m.rank             = o.value("rank").toInt();
 	m.group            = o.value("group").toString();
@@ -175,9 +177,17 @@ bool media_lookups::save(const QString &path, const QDateTime &now) const {
 		const media_lookup &e = it.value();
 		if (e.st == media_lookup::state::running || e.expires <= now)
 			continue;
+		// A page's rows share one sheet, and it holds a whole description, so
+		// the first row carries it and `load` hands it back to the others.
 		QJsonArray rows;
-		for (const media_item &r : e.rows)
-			rows.append(to_json(r));
+		bool sheet_written = false;
+		for (const media_item &r : e.rows) {
+			QJsonObject row = to_json(r);
+			if (sheet_written)
+				row.remove("sheet");
+			sheet_written = sheet_written || !r.sheet.isEmpty();
+			rows.append(row);
+		}
 		out.append(QJsonObject{
 			{ "page", it.key() },
 			{ "failed", e.st == media_lookup::state::failed },
@@ -217,6 +227,12 @@ bool media_lookups::load(const QString &path, const QDateTime &now) {
 			continue;
 		for (const QJsonValue &r : o.value("rows").toArray())
 			e.rows << from_json(r.toObject());
+		QString sheet;
+		for (const media_item &r : e.rows)
+			if (!r.sheet.isEmpty())
+				sheet = r.sheet;
+		for (media_item &r : e.rows)
+			r.sheet = sheet;
 		m_entries.insert(o.value("page").toString(), e);
 	}
 	return true;

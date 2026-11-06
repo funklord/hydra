@@ -293,6 +293,7 @@ private:
 
 	QLineEdit      *m_dir          = nullptr;
 	QComboBox      *m_route        = nullptr;
+	QCheckBox      *m_mix_files    = nullptr;
 	QSpinBox       *m_conn_global  = nullptr;
 	QSpinBox       *m_conn_torrent = nullptr;
 	QDoubleSpinBox *m_seed_ratio   = nullptr;
@@ -334,6 +335,10 @@ namespace settings_store {
 // See the definition: every setting in the file goes through this.
 void store_choice(QSettings &s, const QString &key, const QVariant &value,
                   const QVariant &fallback);
+
+// Whether a mix leaves its tracklist files beside it (`media_sheet`).
+bool save_mix_files();
+void set_save_mix_files(bool on);
 
 void load_into(player_launcher *players, download_manager *downloads,
                 torrent_download_source *torrents, ollama_provider *local_ai,

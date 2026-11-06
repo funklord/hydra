@@ -171,6 +171,11 @@ int main(int argc, char *argv[]) {
 						            qPrintable(list->topLevelItem(i)->text(0)));
 				// =sound chooses Save, Sound only, from the button's menu.
 				if (qEnvironmentVariable("HYDRA_TRY_SAVE") == "sound") {
+					// The lookup runs in this window now, and Save appears with its
+					// rows; choosing before that does nothing, silently.
+					auto *save = dlg->findChild<QPushButton *>("media_save");
+					if (!save || !save->isVisible())
+						continue;
 					for (QAction *a : dlg->findChildren<QAction *>())
 						if (a->objectName() == "media_save_sound") {
 							std::printf("  choosing Save, Sound only\n");
@@ -290,7 +295,11 @@ int main(int argc, char *argv[]) {
 				std::printf("  job: %s -- %s\n", qPrintable(QFileInfo(j.path).fileName()),
 				            qPrintable(j.error.isEmpty() ? j.detail : j.error));
 		QString combined;
-		const QFileInfoList files = dl.entryInfoList(QDir::Files);
+		QFileInfoList files = dl.entryInfoList(QDir::Files);
+		files.removeIf([](const QFileInfo &f) {
+			return f.fileName().endsWith(".tracklist.txt") || f.suffix() == "m3u" ||
+			       f.suffix() == "cue";
+		});
 		if (ended() && files.size() == 1 && files.first().size() > 0)
 			combined = files.first().absoluteFilePath();
 		for (const QFileInfo &fi : dl.entryInfoList(QDir::Files))
@@ -327,7 +336,30 @@ int main(int argc, char *argv[]) {
 			}
 			for (const QFileInfo &fi : dl.entryInfoList(QDir::Files))
 				std::printf("  left: %s\n", qPrintable(fi.fileName()));
-			check(dl.entryList(QDir::Files).size() == 1, "and nothing else is left");
+			// What a mix leaves beside it, and nothing else. mpv reads the cue
+			// sheet as an outside opinion: `test_sheet` only reads what this
+			// program wrote.
+			const QString text = combined + ".tracklist.txt";
+			const QString cue  = combined + ".cue";
+			QStringList rest = dl.entryList(QDir::Files);
+			for (const QString &side : { combined, text, combined + ".m3u", cue })
+				rest.removeAll(QFileInfo(side).fileName());
+			check(rest.isEmpty(), QString("and nothing else is left (%1)").arg(rest.join(' ')));
+			check(QFile::exists(text), "a mix leaves its text file");
+			QFile sheet(text);
+			if (sheet.open(QIODevice::ReadOnly))
+				std::printf("%s\n", sheet.read(900).constData());
+			if (QFile::exists(cue)) {
+				QProcess reader;
+				reader.start("mpv", { "--no-config", "--vo=null", "--ao=null", "--length=0.2",
+				                      "--term-playing-msg=cue-tracks=${chapter-list/count}",
+				                      cue });
+				reader.waitForFinished(30000);
+				const QString out = QString::fromLocal8Bit(reader.readAllStandardOutput());
+				std::printf("  mpv: %s\n", qPrintable(out.simplified().left(300)));
+				check(out.contains(QString("cue-tracks=%1").arg(marks)),
+				      QString("and mpv finds the same %1 tracks in the cue sheet").arg(marks));
+			}
 		}
 	}
 

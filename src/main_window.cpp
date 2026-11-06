@@ -70,6 +70,7 @@
 #include "media_interpretation.h"
 #include "media_evidence.h"
 #include "media_remux.h"
+#include "media_sheet.h"
 #include "channel_rules.h"
 #include "tab_investigation.h"
 #include "investigation.h"
@@ -9009,6 +9010,19 @@ void main_window::list_resolved_media(const QString &host, const QUrl &page,
 				chapters = media_remux::ffmetadata(marks, ev.duration);
 			}
 		}
+		// **A mix leaves its tracklist beside the file too**, and says so when it
+		// has none: whether there is one is worth knowing either way.
+		media_sheet sheet;
+		const bool mix = r.is_set || !r.tracklist.isEmpty();
+		if (mix) {
+			const QJsonObject whole = QJsonDocument::fromJson(m.json).object();
+			sheet = media_sheet::from_evidence(media_evidence::from_json(m.json),
+			                                   r.tracklist, r.artist, r.title,
+			                                   m.webpage_url,
+			                                   whole.value("description").toString());
+		}
+		const QString sheet_json = mix && settings_store::save_mix_files()
+		                             ? sheet.to_json() : QString();
 		int added = 0;
 		int order = 0;
 		QList<media_item> rows;
@@ -9029,6 +9043,7 @@ void main_window::list_resolved_media(const QString &host, const QUrl &page,
 			item.known_media = true;
 			item.height      = f.height;
 			item.chapters    = chapters;
+			item.sheet       = sheet_json;
 			item.chunk_size  = f.chunk_size;
 			item.has_video = f.has_video;
 			item.has_audio = f.has_audio;
@@ -9111,8 +9126,8 @@ void main_window::list_resolved_media(const QString &host, const QUrl &page,
 		        .arg(kind, r.is_set ? QStringLiteral(" (a set)") : QString(),
 		             r.artist, r.title)
 		  : QStringLiteral("yt-dlp found nothing playable.");
-		if (added && !r.tracklist.isEmpty())
-			said += QString(" Tracklist: %1.").arg(r.tracklist);
+		if (added && mix)
+			said += QString(" Tracklist: %1.").arg(sheet.summary());
 		if (added && ai && r.model_answered)
 			said += QString(" Read by %1%2.").arg(model_id(ai),
 			    r.from_model.size() < 4

@@ -293,6 +293,16 @@ void set_preload_background_tabs(bool on) {
 	s.sync();
 }
 
+bool save_mix_files() {
+	return open_settings().value("media/mixFiles", true).toBool();
+}
+
+void set_save_mix_files(bool on) {
+	QSettings s = open_settings();
+	store_choice(s, "media/mixFiles", on, true);
+	s.sync();
+}
+
 bool ask_before_delete() {
 	QSettings s = open_settings();
 	// **Off by default** (holder, 2026-11-03): Undo brings a deleted row back
@@ -1760,6 +1770,7 @@ void settings_dialog::restore_page_defaults(int page) {
 		download_manager fresh;
 		put_value(m_dir, fresh.directory());
 		fill_route_choices(QString());
+		m_mix_files->setChecked(true);
 		if (m_torrents) {
 			// The torrent knobs read their defaults from a fresh source, which
 			// is only constructible when the build has libtorrent -- and when it
@@ -2827,6 +2838,15 @@ void settings_dialog::build_download_page(QWidget *page) {
 	                           "Where a download lands unless something says "
 	                           "otherwise.", where, page, /*wide=*/true));
 
+	m_mix_files = new QCheckBox(page);
+	m_mix_files->setObjectName("mix_files");
+	v->addWidget(settings_row(
+	  "Keep a mix's tracklist beside it",
+	  "When a saved video or sound reads as a mix: a text file with its title, "
+	  "tracklist and whole description, saying so if it has no tracklist, and a "
+	  "playlist and cue sheet with the times where it has them.",
+	  m_mix_files, page));
+
 	// sec 11.4: Hydra ships no VPN. This points downloads at one the system
 	// already has, and the row says what that does and does not cover.
 	m_route = new QComboBox(page);
@@ -3266,6 +3286,7 @@ void settings_dialog::load() {
 	if (m_downloads)
 		put_value(m_dir, m_downloads->directory());
 	fill_route_choices(download_route::shared().interface_name());
+	m_mix_files->setChecked(settings_store::save_mix_files());
 
 	if (m_torrents) {
 		m_conn_global->setValue(m_torrents->connection_limit_global());
@@ -3495,6 +3516,7 @@ void settings_dialog::apply() {
 		}
 	}
 
+	settings_store::set_save_mix_files(m_mix_files->isChecked());
 	const QString route = m_route->currentData().toString();
 	const bool route_moved = route != download_route::shared().interface_name();
 	download_route::shared().set_interface_name(route);
