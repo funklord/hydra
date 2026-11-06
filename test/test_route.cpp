@@ -288,11 +288,43 @@ static QStringList who_asked(const QString &what) {
 	return out;
 }
 
+// A magnet naming a tracker and a peer on the far side, both of which only write
+// down who called. The session is started and left to dial.
+static void swarm(const QString &directory, int port, const QString &tag) {
+	download_manager manager;
+	manager.set_directory(directory);
+	manager.add_source(new torrent_download_source);
+	manager.set_consent("torrent", true);
+	const QString hash = tag == "plain" ? QString(40, 'a') : QString(40, 'b');
+	// Joined rather than through `arg`, which reads the escapes as its markers.
+	const QString magnet = "magnet:?xt=urn:btih:" + hash + "&tr=" +
+	                       QUrl::toPercentEncoding(far_end + "/announce-" + tag) +
+	                       "&x.pe=198.51.100.1:" + QString::number(port);
+	QString refused;
+	check(manager.enqueue(QUrl(magnet), "node", &refused) != 0,
+	      QString("the %1 magnet is accepted (%2)").arg(tag, refused));
+	const QString tcp = QString("/peer-tcp-%1").arg(port);
+	wait_for([&tcp, &tag] {
+		return !who_asked(tcp).isEmpty() && !who_asked("/announce-" + tag).isEmpty();
+	}, 40000);
+}
+
 static void through_tunnel() {
 	std::printf("-- through a real tunnel\n");
 	download_route &route = download_route::shared();
 	QTemporaryDir dir;
 	http_download_source source;
+
+	// The control: the witnesses work, and show the other address.
+	if (torrent_download_source::available()) {
+		swarm(dir.path(), 6882, "plain");
+		check(who_asked("/peer-tcp-6882") == QStringList{ ordinary_address } &&
+		      who_asked("/announce-plain").contains(ordinary_address),
+		      QString("unbound, a torrent calls its peer and tracker from the "
+		              "ordinary route, and announces on every device (%1, %2)")
+		        .arg(who_asked("/peer-tcp-6882").join(','),
+		             who_asked("/announce-plain").join(',')));
+	}
 
 	outcome got = fetch(source, QUrl(far_end + "/plain.mp4"), dir.path(), "plain.mp4", 1, 20000);
 	check(got.ok && who_asked("/plain.mp4") == QStringList{ ordinary_address },
@@ -342,6 +374,18 @@ static void through_tunnel() {
 		check(who_asked("/fetched.torrent") == QStringList{ tunnel_address },
 		      QString("a .torrent fetched from an address goes by the tunnel (%1 %2)")
 		        .arg(who_asked("/fetched.torrent").join(','), refused));
+	}
+
+	if (torrent_download_source::available()) {
+		swarm(dir.path(), 6883, "bound");
+		check(who_asked("/peer-tcp-6883") == QStringList{ tunnel_address },
+		      QString("a torrent dials its peer by the tunnel (%1)")
+		        .arg(who_asked("/peer-tcp-6883").join(',')));
+		check(who_asked("/peer-utp-6883") == QStringList{ tunnel_address },
+		      QString("and over uTP (%1)").arg(who_asked("/peer-utp-6883").join(',')));
+		check(who_asked("/announce-bound") == QStringList{ tunnel_address },
+		      QString("and announces by it (%1)")
+		        .arg(who_asked("/announce-bound").join(',')));
 	}
 
 	ytdlp_resolver lookup;

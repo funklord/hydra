@@ -2889,15 +2889,14 @@ a page hands over is saved as a file here rather than started.
 **How it was checked.** `test_route` runs itself again in a user namespace with a
 real WireGuard device that has no route, beside a server logging who asked, so the
 tunnel and the ordinary route are two addresses in a file: 10.9.0.2 and 10.0.0.2.
-File, stream, Watch, a fetched `.torrent` and yt-dlp each arrive from the tunnel; a
+File, stream, Watch, a fetched `.torrent`, and yt-dlp each arrive from the tunnel; a
 request that is not a download does not; with the device deleted mid-transfer
 the job fails and nothing further arrives from either address. Eight sabotages each
 failed the suite: the device option, the watch, the password, and the proxy or
 environment at each of the five call sites. `try_route` reads the page-download
-half off a server through the real shell. **Not measured:** torrent peers across the
-tunnel, where the namespace test reads back what the session was told and the
-measurement in *The VPN sentence is true now* used a stand-in address; and a
-commercial VPN client.
+half off a server through the real shell. A torrent's peer by TCP and by uTP and its tracker all arrive from the tunnel too;
+unbound, libtorrent announces on every device, the tunnel included, so only binding
+keeps a torrent to one. **Not measured:** a commercial VPN client.
 
 **What it does not do:**
 

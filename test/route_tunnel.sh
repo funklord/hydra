@@ -55,8 +55,28 @@ ip addr add 10.9.0.2/24 dev wg0
 ip link set wg0 up
 
 cat > "$scratch/serve.py" <<'PY'
-import http.server, socketserver, sys, time
+import http.server, socket, socketserver, sys, threading, time
 seen = open(sys.argv[1], 'a', buffering=1)
+# A peer that only writes down who called, by TCP and by uTP.
+def peer(port):
+    tcp = socket.socket()
+    tcp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    tcp.bind(('198.51.100.1', port))
+    tcp.listen(16)
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp.bind(('198.51.100.1', port))
+    def calls():
+        while True:
+            c, a = tcp.accept()
+            seen.write('%s /peer-tcp-%d\n' % (a[0], port))
+            c.close()
+    def datagrams():
+        while True:
+            seen.write('%s /peer-utp-%d\n' % (udp.recvfrom(2048)[1][0], port))
+    threading.Thread(target=calls, daemon=True).start()
+    threading.Thread(target=datagrams, daemon=True).start()
+peer(6882)
+peer(6883)
 class handler(http.server.BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.0'
     def log_message(self, *a): pass
