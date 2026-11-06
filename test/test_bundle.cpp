@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
 	{
 		policy_engine p;
 		p.set_global_default(policy::feature::javascript, policy::setting::allow);
-		p.set_global_default(policy::feature::popups, policy::setting::allow);
+		p.set_global_default(policy::feature::popups, policy::setting::block);
 		p.set_setting("news.example", policy::feature::javascript,
 		               policy::setting::block);
 		p.set_setting("news.example", policy::feature::cookies,
@@ -330,7 +330,7 @@ int main(int argc, char **argv) {
 		QFile::remove(ini);
 
 		policy_engine p;
-		p.set_global_default(policy::feature::popups, policy::setting::block);
+		p.set_global_default(policy::feature::popups, policy::setting::allow);
 		p.set_setting("news.example", policy::feature::javascript,
 		               policy::setting::block);
 		p.set_setting("*.ads.example", policy::feature::ads, policy::setting::block);
@@ -344,7 +344,7 @@ int main(int argc, char **argv) {
 
 		policy_engine back;
 		check(back.load(ini), "it loads");
-		check(back.global_default(policy::feature::popups) == policy::setting::block,
+		check(back.global_default(policy::feature::popups) == policy::setting::allow,
 		      "the default comes back");
 		check(back.setting_for("news.example", policy::feature::javascript) ==
 		          policy::setting::block, "and the site rule");
