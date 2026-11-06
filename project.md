@@ -16595,10 +16595,11 @@ restoring the original loader turns the window test red on `load_tree refuses
 a tree it cannot read` -- and then **hangs**, which is how the QSaveFile
 measurement above came to be taken at all.
 
-### Still open
+### ~~Still open~~ -- closed by `keep_or_disown`
 
-The same shape is in the other five stores, and this change does not touch
-them. `policy_engine`, `filter_list`, `site_rules`, `annoyance_log` and
+Each store now gives up a file it could not read rather than saving over it, in
+`load_tree`, and this entry had gone on calling that the next piece of work.
+What it said at the time: the same shape was in the other five stores. `policy_engine`, `filter_list`, `site_rules`, `annoyance_log` and
 `extractor_store` each load a file whose absence and whose unreadability are
 the same `false`, and each is saved back. `site_rules` is the sharpest: its
 caller *handles* the failure, with `cr = site_rules::defaults()`, and a later

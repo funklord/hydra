@@ -14,6 +14,7 @@
 #include "ollama_stub.h"
 #include "filter_list.h"
 #include "download_manager.h"
+#include "download_route.h"
 #include "player_launcher.h"
 #include "torrent_download_source.h"
 #include "ollama_provider.h"
@@ -31,6 +32,8 @@
 #include <QRadioButton>
 #include <QSettings>
 #include <QSignalSpy>
+#include <QListWidget>
+#include <QComboBox>
 #include <QTimer>
 #include <cstdio>
 
@@ -254,6 +257,53 @@ int main(int argc, char **argv) {
 		check(dm.directory() == fresh,
 		       QString("and is adopted (%1)").arg(dm.directory()));
 		check(QFileInfo(fresh).isDir(), "and created");
+	}
+
+	section("the connection downloads leave by");
+	{
+		download_manager dm;
+		download_route &route = download_route::shared();
+		route.set_interface_name("hydra-gone0");
+		const auto box_of = [](settings_dialog &d) {
+			return d.findChild<QComboBox *>("download_route");
+		};
+		{
+			settings_dialog d(&players, &dm, nullptr, &local_ai, &external_ai);
+			QComboBox *box = box_of(d);
+			check(box && box->itemData(0).toString().isEmpty(),
+			      "any connection comes first, and names no device");
+			check(box && box->currentText() == "hydra-gone0 (not connected)",
+			      QString("a VPN that is down stays chosen, and says so (%1)")
+			        .arg(box ? box->currentText() : QString()));
+			check(box && box->findData("lo") < 0, "loopback is not on offer");
+			d.reject();
+			check(route.interface_name() == "hydra-gone0", "cancelling changes nothing");
+		}
+		{
+			settings_dialog d(&players, &dm, nullptr, &local_ai, &external_ai);
+			d.accept();
+			check(route.interface_name() == "hydra-gone0",
+			      "OK with it untouched keeps a device that is down");
+		}
+		{
+			settings_dialog d(&players, &dm, nullptr, &local_ai, &external_ai);
+			auto *categories = d.findChild<QListWidget *>();
+			const auto found = categories->findItems("Downloads", Qt::MatchStartsWith);
+			check(!found.isEmpty(), "the Downloads page is listed");
+			if (!found.isEmpty())
+				categories->setCurrentItem(found.first());
+			d.findChild<QPushButton *>("restore_defaults")->click();
+			check(box_of(d)->currentIndex() == 0, "Restore Defaults goes back to any connection");
+			d.accept();
+			check(route.interface_name().isEmpty(), "and OK applies it");
+		}
+		{
+			route.set_interface_name("hydra-gone0");
+			settings_dialog d(&players, &dm, nullptr, &local_ai, &external_ai);
+			box_of(d)->setCurrentIndex(0);
+			d.accept();
+			check(!route.bound(), "choosing any connection by hand does the same");
+		}
 	}
 
 	section("the trusted box is wired, and is what turns the power on");
