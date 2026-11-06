@@ -170,12 +170,14 @@ int main(int argc, char *argv[]) {
 						std::printf("  row %d: %s\n", i,
 						            qPrintable(list->topLevelItem(i)->text(0)));
 				// =sound chooses Save, Sound only, from the button's menu.
-				if (qEnvironmentVariable("HYDRA_TRY_SAVE") == "sound") {
-					// The lookup runs in this window now, and Save appears with its
-					// rows; choosing before that does nothing, silently.
+				// The lookup runs in this window now, and Save appears with its
+				// rows; choosing before that does nothing, silently.
+				if (qEnvironmentVariableIsSet("HYDRA_TRY_SAVE")) {
 					auto *save = dlg->findChild<QPushButton *>("media_save");
 					if (!save || !save->isVisible())
 						continue;
+				}
+				if (qEnvironmentVariable("HYDRA_TRY_SAVE") == "sound") {
 					for (QAction *a : dlg->findChildren<QAction *>())
 						if (a->objectName() == "media_save_sound") {
 							std::printf("  choosing Save, Sound only\n");
