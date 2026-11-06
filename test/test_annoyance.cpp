@@ -3,6 +3,7 @@
 #include "ad_probe.h"
 #include "annoyance_log.h"
 #include "filter_signals.h"
+#include "request_filter.h"
 #include "annoyed_dialog.h"
 #include "reading_log.h"
 #include "readings_dialog.h"
@@ -19,6 +20,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QJSEngine>
 #include <QListWidget>
 #include <QLabel>
 #include <QPushButton>
@@ -589,6 +591,72 @@ int main(int argc, char **argv) {
 		      "while a log that was written reads back");
 
 		QDir(dir).removeRecursively();
+	}
+
+	// The YouTube wall comes rarely and only for a signed-in session, so nothing
+	// here can raise it. What can be checked is that a report filed with it up
+	// reads each thing the cause turns on, from a page shaped like the real one.
+	section("a report made with YouTube's wall up says how far recovery got");
+	{
+		filter_signals sig;
+		request_context ctx;
+		ctx.site_host    = "www.youtube.com";
+		ctx.request_host = "rr4.googlevideo.com";
+		ctx.url = QUrl("https://rr4.googlevideo.com/videoplayback?expire=1712345678&ip=192.0.2.7");
+		request_decision d;
+		d.block = true;
+		d.why   = "/videoplayback/$xhr,3p";
+		sig.on_request(ctx, d);
+		const QString line = sig.refused_for("www.youtube.com").value(0);
+		check(line.contains("expire=1712345678"), QString("a refused stream keeps its expire (%1)").arg(line));
+		check(line.contains("[/videoplayback/$xhr,3p]"), "and names the rule");
+		check(!line.contains("192.0.2.7"), "and leaves the rest of the query out");
+
+		const auto tells_of = [](const QString &page) {
+			QJSEngine js;
+			js.evaluate("var window = this; var EventTarget = function () {};" + page);
+			const QJSValue got = js.evaluate(ad_probe::tells_source());
+			return ad_probe::parse_tells(got.toString());
+		};
+		const QString wall = R"JS(
+			var location = { hostname: 'www.youtube.com' };
+			var ytcfg = { data_: { LOGGED_IN: true, INNERTUBE_CONTEXT: { client: { userAgent: 'x' } } } };
+			var player = {
+				getPlayerResponse: function () { return {
+					playabilityStatus: { status: 'ERROR', reason: 'Ad blockers are not allowed' },
+					playbackTracking: { videostatsPlaybackUrl: { baseUrl: 'https://s/?a=1#reloadxhr' } },
+					adSlots: [] }; },
+				getStatsForNerds: function () { return { buffer_health_seconds: '0.00 s', resolution: '0x0' }; },
+				getProgressState: function () { return { current: 12, duration: 300, loaded: 12 }; } };
+			var document = {
+				scripts: [ { textContent: 'if ("YOUTUBE_PREMIUM_LOGO" === a) b();' } ],
+				querySelectorAll: function () { return []; },
+				querySelector: function (q) {
+					return q.indexOf('enforcement') >= 0 ? { textContent: '  Ad blockers  ' } : null; },
+				getElementById: function (id) { return id === 'movie_player' ? player : null; } };
+		)JS";
+		const QStringList t = tells_of(wall);
+		const QString all = t.join('\n');
+		for (const char *want : { "wall is up", "the wall says \"Ad blockers\"",
+		                          "signed in: true", "recovery script is in the page",
+		                          "playability ERROR: Ad blockers are not allowed",
+		                          "recovery reloaded this video",
+		                          "current player response carries ads",
+		                          "buffer 0.00 s, resolution 0x0",
+		                          "at 12 of 300, loaded to 12" })
+			check(all.contains(QLatin1String(want)), QString("the report says: %1").arg(want));
+
+		QString bare = wall;
+		bare.replace("YOUTUBE_PREMIUM_LOGO", "nothing").replace("#reloadxhr", "");
+		const QString without = tells_of(bare).join('\n');
+		check(without.contains("recovery script is NOT in the page"),
+		      "a page without the recovery script says so");
+		check(without.contains("has not reloaded this video"), "and so does a player it never reloaded");
+
+		QString elsewhere = wall;
+		elsewhere.replace("www.youtube.com", "news.example");
+		check(!tells_of(elsewhere).join('\n').contains("recovery"),
+		      "another site's report says nothing of it");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

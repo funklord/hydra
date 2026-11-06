@@ -39401,6 +39401,20 @@ The phone's report also showed the stand-in working there: `fetch` of
 `static.doubleclick.net/instream/ad_status.js` on `m.youtube.com` returned
 200 with `window.google_ad_status = 1;`.
 
+### What a report filed with the wall up says now
+
+The holder filed the wall a third time 2026-11-06: all 67 scriptlets had run, the
+lists were two days old, and no tell. A signed-out load of the same video played,
+with the recovery script in the page. The report could not say which rule had
+refused a `videoplayback` request, or whether quick-fixes' stall-and-reload had
+fired, since a player with no marker looks the same before it and after. The wall
+comes rarely and only signed in, so it cannot be arranged, and the report has to
+carry the answer when it does: which rule refused each request, a stream's
+`expire`, whether the recovery script is in the page and has reloaded the video,
+the player's playability, buffer and position, and whether the session is signed
+in. `test_annoyance` runs the tells against a stub shaped like YouTube's page; the
+real page's shape is unconfirmed until the next report.
+
 ### The wall was a refused request: `redirect=` is read now
 
 The holder pressed the Annoyed button with the wall up, 2026-10-26. The

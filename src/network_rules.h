@@ -204,6 +204,7 @@ public:
 		QString redirect;        // a `redirect=` rule's resource
 		QString redirect_rule;   // a `redirect-rule=` rule's, for a block
 		bool    block = false;
+		QString block_rule;      // the line that said so, for a report to name
 		bool    important = false;
 		bool    allow = false;
 	};

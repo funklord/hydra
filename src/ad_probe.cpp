@@ -204,6 +204,39 @@ const char *k_tells = R"JS(
     if (p && p.adPlacements !== undefined)
       out.push('youtube: the first player response still carries adPlacements');
   } catch (e) {}
+  // **Everything the wall's cause turns on**, read while it is up, because it
+  // comes rarely and only for a signed-in session, so it cannot be arranged.
+  // quick-fixes answers the wall by stalling on a refused ad segment and
+  // reloading the video with a marker; this says how far that got.
+  try {
+    if (/(^|\.)youtube\.com$/.test(location.hostname)) {
+      var wall = document.querySelector('ytd-enforcement-message-view-model');
+      if (wall)
+        out.push('youtube: the wall says "' + String(wall.textContent).trim().slice(0, 120) + '"');
+      var cfg = window.ytcfg && ytcfg.data_;
+      if (cfg) out.push('youtube: signed in: ' + cfg.LOGGED_IN);
+      var rewritten = Array.prototype.some.call(document.scripts, function (s) {
+        return String(s.textContent).indexOf('YOUTUBE_PREMIUM_LOGO') >= 0;
+      });
+      out.push('youtube: the recovery script is ' + (rewritten ? 'in the page' : 'NOT in the page'));
+      var player = document.getElementById('movie_player');
+      var r = player && player.getPlayerResponse && player.getPlayerResponse();
+      if (r) {
+        var st = r.playabilityStatus || {};
+        out.push('youtube: playability ' + st.status + (st.reason ? ': ' + String(st.reason).slice(0, 120) : ''));
+        var track = ((r.playbackTracking || {}).videostatsPlaybackUrl || {}).baseUrl || '';
+        out.push('youtube: recovery ' + (track.indexOf('reloadxhr') >= 0 ? 'reloaded this video' : 'has not reloaded this video'));
+        if (r.adPlacements !== undefined || r.adSlots !== undefined || r.playerAds !== undefined)
+          out.push('youtube: the current player response carries ads');
+      }
+      var nerds = player && player.getStatsForNerds && player.getStatsForNerds();
+      if (nerds)
+        out.push('youtube: buffer ' + nerds.buffer_health_seconds + ', resolution ' + nerds.resolution);
+      var at = player && player.getProgressState && player.getProgressState();
+      if (at)
+        out.push('youtube: at ' + at.current + ' of ' + at.duration + ', loaded to ' + at.loaded);
+    }
+  } catch (e) { out.push('youtube: reading the player threw ' + e); }
   return JSON.stringify(out);
 })()
 )JS";

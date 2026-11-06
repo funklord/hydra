@@ -1,5 +1,7 @@
 #include "filter_signals.h"
 
+#include <QUrlQuery>
+
 #include <QSet>
 #include <QUrl>
 #include <QDateTime>
@@ -62,10 +64,18 @@ void filter_signals::on_request(const request_context &ctx, const request_decisi
 		// page received something for this one (`network_rules.h`). Seen in
 		// a report from the phone, where ad_status.js was answered and
 		// listed as refused all the same.
-		const QString b = d.redirect.isEmpty()
+		QString b = d.redirect.isEmpty()
 		  ? bare.toString()
 		  : bare.toString() + QStringLiteral(" (answered with ") + d.redirect +
 		      QLatin1Char(')');
+		// **What said so**, and for a stream its `expire`, the one part of a
+		// query a list's rule reads. The rest of the query is left out on
+		// purpose: it identifies the person.
+		const QString expire = QUrlQuery(ctx.url).queryItemValue(QStringLiteral("expire"));
+		if (!expire.isEmpty())
+			b += QStringLiteral(" expire=") + expire;
+		if (!d.why.isEmpty())
+			b += QStringLiteral(" [") + d.why.left(160) + QLatin1Char(']');
 		QStringList &ref = m_refused[ctx.site_host];
 		if (ref.size() < k_max_per_site && !ref.contains(b))
 			ref << b;

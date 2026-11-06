@@ -25,6 +25,9 @@ struct request_decision {
 	// (`network_rules.h`). Empty: refused, if `block`. A backend that cannot
 	// answer a request with a body treats it as a plain block.
 	QString redirect;
+	// What said so, for a report to name: an answer that a request was refused
+	// says nothing about whether uBlock would have refused it too.
+	QString why;
 };
 
 // One request, reduced to what a decision needs -- plus the full URL, which

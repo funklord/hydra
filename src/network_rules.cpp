@@ -842,6 +842,7 @@ network_rule_set::verdict network_rule_set::evaluate(const request &r) const {
 				if (v.important || !applies(rule, r, same))
 					return false;
 				v.block = true;
+				v.block_rule = rule.text;
 				v.important = rule.important;
 				return false;
 			case network_rule::action::allow:

@@ -224,6 +224,8 @@ request_decision request_filter::decide(const request_context &ctx) const {
 		d.redirect = verdict().redirect;
 		return d;
 	}
+	// What the caller says refused it, set here so `refused` stays one shape.
+	QString why;
 	// A list's block: lifted by an exception unless `important`, and
 	// otherwise answered by a `redirect-rule=` where one names it.
 	const auto refused = [&](bool important) {
@@ -233,12 +235,15 @@ request_decision request_filter::decide(const request_context &ctx) const {
 			d.redirect = verdict().redirect_rule;
 		}
 		d.block = true;
+		d.why   = why;
 		return d;
 	};
 
 	// Ads / trackers: block known ad hosts unless this site permits ads.
-	if (blocking && is_ad_host(ctx.request_host))
+	if (blocking && is_ad_host(ctx.request_host)) {
+		why = QStringLiteral("the built-in ad hosts");
 		return refused(false);
+	}
 
 	// The accepted filter rules, which are ads and annoyances by another name and
 	// so answer to the same per-site switch: turning ads back on for a site the
@@ -252,14 +257,19 @@ request_decision request_filter::decide(const request_context &ctx) const {
 	if (ctx.kind != resource_kind::font && m_list && !ads_here &&
 	    m_list->blocks(url(), ctx.site_host)) {
 		d.block = true;
+		d.why   = QStringLiteral("your own rules");
 		return d;
 	}
 	if (blocking) {
 		if (ctx.kind != resource_kind::font && m_subscribed &&
-		    m_subscribed->blocks(url(), ctx.site_host))
+		    m_subscribed->blocks(url(), ctx.site_host)) {
+			why = QStringLiteral("a plain rule in a subscribed list");
 			return refused(false);
-		if (rules && verdict().block)
+		}
+		if (rules && verdict().block) {
+			why = verdict().block_rule;
 			return refused(verdict().important);
+		}
 	}
 
 	// The investigation's trial rules, for its site only.
