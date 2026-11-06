@@ -617,6 +617,12 @@ void extractor_dialog::build_ui() {
 }
 
 void extractor_dialog::on_send() {
+	// What was on offer is withdrawn while a model is asked, or Use This would
+	// take the script somebody just chose not to settle for.
+	m_written_here = false;
+	++m_judging;
+	m_apply->setEnabled(false);
+	m_result->clear();
 	m_send->setEnabled(false);
 	say(QString("Asking %1…").arg(m_provider->name()));
 	m_provider->send(QString::fromLatin1(k_system_prompt), m_payload->toPlainText());
@@ -650,15 +656,18 @@ void extractor_dialog::on_reply(const QString &text) {
 	// callbacks that fill it run on this one.
 	const QSet<QString> manifests = m_manifests;
 	QPointer<extractor_dialog> self(this);
+	// A newer proposal outranks this one: the script offered from a manifest
+	// can still be on the judging thread when somebody presses Send.
+	const int turn = ++m_judging;
 
-	QThread *t = QThread::create([src, page, ev, hs, manifests, self] {
+	QThread *t = QThread::create([src, page, ev, hs, manifests, self, turn] {
 		const extractor_verdict v =
 		  site_extractor::check(src, page, ev, hs, &manifests);
 		// Back to the UI thread, and only if the dialog is still there. A
 		// closed dialog leaves this to find a null QPointer and stop, rather
 		// than writing into freed widgets.
-		QMetaObject::invokeMethod(qApp, [self, v] {
-			if (self)
+		QMetaObject::invokeMethod(qApp, [self, v, turn] {
+			if (self && self->m_judging == turn)
 				self->on_judged(v);
 		}, Qt::QueuedConnection);
 	});
@@ -668,6 +677,13 @@ void extractor_dialog::on_reply(const QString &text) {
 
 // The other half of on_reply, on the UI thread with a verdict in hand.
 void extractor_dialog::on_judged(const extractor_verdict &verdict) {
+	// Refused, it was never anybody's proposal: back to the list, with nothing
+	// to correct a model about.
+	if (m_written_here && !verdict.usable) {
+		m_written_here = false;
+		m_pages->setCurrentIndex(0);
+		return;
+	}
 	m_verdict = verdict;
 	m_apply->setEnabled(m_verdict.usable);
 
@@ -704,7 +720,13 @@ void extractor_dialog::on_judged(const extractor_verdict &verdict) {
 	}
 
 	m_result->setText(
-	  QString("<b>Accepted.</b> %1<br><br>It picks:<br><tt>%2</tt><br><br>"
+	  QString(m_written_here
+	            ? "<b>Found without a model.</b> The server said which address is "
+	              "the playlist, so this script was written from that address's "
+	              "shape and nothing was sent anywhere. Send asks a model instead."
+	              "<br><br>"
+	            : "")
+	  + QString("<b>Accepted.</b> %1<br><br>It picks:<br><tt>%2</tt><br><br>"
 	           "That address is one this page really requested. Using it "
 	           "stores the script for <b>%3</b>, and it will run on this site "
 	           "from now on.")
@@ -777,7 +799,28 @@ void extractor_dialog::probe_candidates() {
 			             "Send.").arg(found)
 			  : QString("The server did not say what any of them serve. The "
 			             "list below is the addresses alone."));
+			offer_from_manifest();
 		});
+	}
+}
+
+// **The server has named the playlist, so there is nothing left to ask a
+// model.** Offered through the same gate as any reply, and nothing leaves this
+// machine for it. Send stays, for somebody who wants a model's answer instead.
+void extractor_dialog::offer_from_manifest() {
+	for (const evidence_request &r : std::as_const(m_evidence)) {
+		const QString at = r.url
+		  .adjusted(QUrl::RemoveFragment | QUrl::StripTrailingSlash).toString();
+		if (!m_manifests.contains(at))
+			continue;
+		const bool dash = m_served.value(r.url.toString()).contains("DASH");
+		const QString script = site_extractor::script_for_manifest(
+		  r.url, dash ? QStringLiteral("dash") : QStringLiteral("hls"));
+		if (script.isEmpty())
+			return;
+		m_written_here = true;
+		on_reply(script);
+		return;
 	}
 }
 

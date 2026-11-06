@@ -175,6 +175,20 @@ int main(int argc, char **argv) {
 			std::printf("could not write the payload to %s\n", dump_to.constData());
 		}
 	}
+	// **What the dialog offers with no model at all**, where the server named
+	// a manifest. The evidence's tokens age, so run this soon after a capture.
+	if (qEnvironmentVariableIsSet("HYDRA_NO_SEND")) {
+		QElapsedTimer settle;
+		settle.start();
+		while (settle.elapsed() < 3000)
+			QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+		QPlainTextEdit *offered = dlg.findChild<QPlainTextEdit *>("proposal");
+		QPushButton *use = button(&dlg, "Use This");
+		std::printf("\n----- offered without a model -----\n%s\n",
+		             offered ? qPrintable(offered->toPlainText()) : "(none)");
+		std::printf("gate: %s\n", use && use->isEnabled() ? "ACCEPTED" : "REJECTED");
+		return 0;
+	}
 	std::printf("sending after %lld ms...\n", qint64(waited.elapsed()));
 	send->click();
 	loop.exec();

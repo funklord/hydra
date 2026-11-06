@@ -311,8 +311,9 @@ Kept here rather than left for you to discover.
 - **The desktop has no application-level camera gate.** Android's OS permission
   stands in front of the camera; on Linux there is no equivalent, so a page that
   asks gets it. Set `camera=ask` in `policy.ini` for a prompt.
-- **The site-extractor loop is not finished**: it does not yet produce a usable
-  extractor reliably on every media host. `project.md` has the measurements.
+- **The site-extractor loop is not finished**: where the server names a manifest
+  it is reliable and needs no model, but where nothing does a local model still
+  misses often. `project.md` has the measurements.
 - **A saved `policy.ini` pins the defaults that were current when it was
   written**, so a default changed later does not reach an existing profile.
 

@@ -1377,6 +1377,76 @@ int main(int argc, char **argv) {
 		      "and so does the tolerant one, so it gives nothing up");
 	}
 
+	section("a manifest the server named needs no model");
+	{
+		QList<evidence_request> ev;
+		int n = 0;
+		auto add = [&](QList<evidence_request> *to, const QString &u, const char *k) {
+			*to << evidence_request{ QUrl(u), QString::fromUtf8(k), n++ };
+		};
+		const QUrl watch("https://site.example/Drama/Show/Episode-24?id=10826");
+		add(&ev, watch.toString(), "other");
+		add(&ev, "https://region1.analytics.example/measurement/conversion?random=1", "other");
+		add(&ev, "https://hls.cdn11.example/hls07/10826/Ep24.v990_index.m3u8", "other");
+		for (int i = 0; i < 5; ++i)
+			add(&ev, QString("https://hls07.fast1.example/10826/Ep24.v990_index%1.ts").arg(i), "other");
+
+		const QUrl manifest("https://hls.cdn11.example/hls07/10826/Ep24.v990_index.m3u8");
+		const QString script = site_extractor::script_for_manifest(manifest, "hls");
+		const QSet<QString> found{ manifest.toString() };
+		const extractor_verdict v = site_extractor::check(script, watch, ev, nullptr, &found);
+		check(v.usable, QString("the gate takes what it writes (%1)").arg(v.message.left(70)));
+		check(v.result.url == manifest && v.result.kind == "hls", "and it is the manifest");
+		check(script.contains("m3u8"), "the digits of an extension stay");
+
+		// The test that matters: another show, another episode, another CDN host.
+		QList<evidence_request> later;
+		const QUrl next("https://site.example/Drama/Other/Episode-3?id=555");
+		add(&later, next.toString(), "other");
+		add(&later, "https://hls.cdn12.example/hls09/555/Ep3_index.m3u8?t=9", "other");
+		add(&later, "https://hls09.fast2.example/555/Ep3.v1201_index0.ts", "other");
+		const extractor_verdict l = site_extractor::check(script, next, later);
+		check(l.usable && l.result.url.path().endsWith("Ep3_index.m3u8"),
+		      QString("and it finds the next visit's, on another host (%1)")
+		          .arg(l.result.url.toString().left(60)));
+
+		// A disguised one: the shape it is known by stays in the script.
+		const QUrl disguised("https://cdn.example/a/cf-master.1774687168.txt");
+		const QString by_name = site_extractor::script_for_manifest(disguised, "hls");
+		check(by_name.contains("master") && !by_name.contains("1774687168"),
+		      "a disguised name is kept and its number is not");
+		const QUrl tokened(
+		  "https://cdn.example/s/abcdef0123456789abcdef0123456789/playlist.m3u8");
+		check(!site_extractor::script_for_manifest(tokened, "hls")
+		           .contains("abcdef0123456789"), "a token in the path is not");
+		check(site_extractor::script_for_manifest(QUrl("https://cdn.example/1/2"), "hls")
+		          .isEmpty(), "a path with nothing to know it by gets no script");
+		check(site_extractor::script_for_manifest(manifest, "dash").contains("kind: 'dash'"),
+		      "the kind it was told goes in");
+
+		// The two ways a model missed this manifest, measured on kisskh.
+		const QString by_type =
+		  "extract = function (page, requests) {\n"
+		  "  var r = requests.find(function (q) {\n"
+		  "    return q.url.includes('application/vnd.apple.mpegurl'); });\n"
+		  "  return r ? { url: r.url, kind: 'hls' } : null; };";
+		const extractor_verdict t = site_extractor::check(by_type, watch, ev, nullptr, &found);
+		check(!t.usable && t.reads_note,
+		      QString("looking for a content type in a url is refused by name (%1)")
+		          .arg(t.message.left(60)));
+		const QString beacon =
+		  "extract = function (page, requests) {\n"
+		  "  var r = requests.find(function (q) {\n"
+		  "    return q.url.includes('measurement/conversion'); });\n"
+		  "  return r ? { url: r.url, kind: 'hls' } : null; };";
+		const extractor_verdict b = site_extractor::check(beacon, watch, ev, nullptr, &found);
+		check(!b.usable && b.not_the_manifest,
+		      QString("a beacon called hls beside a confirmed playlist is refused (%1)")
+		          .arg(b.message.left(60)));
+		check(site_extractor::check(beacon, watch, ev).usable,
+		      "with no playlist confirmed, that rule says nothing");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

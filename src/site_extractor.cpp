@@ -6,6 +6,7 @@
 #include <QSaveFile>
 #include <QJSEngine>
 #include <QJSValue>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QJsonObject>
@@ -139,6 +140,19 @@ bool reads_serves(const QString &source) {
 	static const QRegularExpression access(
 	    R"((\.\s*serves\b)|(\[\s*['"]serves['"]\s*\]))");
 	return access.match(source).hasMatch();
+}
+
+// Does the proposal look for the served type in the address itself?
+//
+// The same mistake as `reads_serves` in another spelling, and the commoner one:
+// on kisskh four runs in five wrote `url.includes('application/vnd.apple.mpegurl')`,
+// taking the note's words for part of the address. No url carries that, so the
+// script finds nothing and looks like a model that missed the stream.
+bool searches_url_for_type(const QString &source) {
+	static const QRegularExpression type(
+	    R"((vnd\.apple\.mpegurl|apple\.mpegurl|x-mpegurl|dash\+xml))",
+	    QRegularExpression::CaseInsensitiveOption);
+	return type.match(source).hasMatch();
 }
 
 QString normalise(const QUrl &u) {
@@ -332,6 +346,65 @@ extraction run(const QString &source, const QUrl &page,
 	return out;
 }
 
+QString script_for_manifest(const QUrl &manifest, const QString &kind) {
+	// `shape_of`'s two folds, for the same reasons, kept as a pattern rather
+	// than a label: a long mixed token, then any run of digits.
+	static const QRegularExpression part("[A-Za-z0-9_*~%]{16,}|[0-9]+");
+	// Not its extension, where a digit is part of the word: `.m3u8`, `.mp4`.
+	const QString file = manifest.fileName();
+	const QString extension = file.contains('.') ? file.mid(file.lastIndexOf('.'))
+	                                             : QString();
+	// **A name that says what it is needs no more than where it lives.** The
+	// stem is the site's naming, and shows differ: kisskh's `Ep24.v990_index.m3u8`
+	// and `Ep1_index.m3u8` sit in the same folders. A disguised one has only its
+	// name to go on, so that stays, numbers made general.
+	const bool plain = extension.compare(QLatin1String(".m3u8"), Qt::CaseInsensitive) == 0 ||
+	                   extension.compare(QLatin1String(".mpd"), Qt::CaseInsensitive) == 0;
+	const QString path = manifest.path().chopped(plain ? file.size() : extension.size());
+	QString pattern;
+	int last = 0, words = 0;
+	auto it = part.globalMatch(path);
+	while (it.hasNext()) {
+		const auto m = it.next();
+		const QString t = m.captured();
+		const bool digits_only = !t.contains(QRegularExpression("[^0-9]"));
+		const bool token = !digits_only && t.contains(QRegularExpression("[0-9]")) &&
+		                   t.contains(QRegularExpression("[A-Za-z]"));
+		if (!digits_only && !token)
+			continue;
+		const QString before = path.mid(last, m.capturedStart() - last);
+		pattern += QRegularExpression::escape(before);
+		words += int(before.count(QRegularExpression("[A-Za-z]")));
+		pattern += digits_only ? QStringLiteral("[0-9]+") : QStringLiteral("[^/]+");
+		last = m.capturedEnd();
+	}
+	const QString tail = path.mid(last) + extension;
+	if (plain) {
+		pattern += QRegularExpression::escape(path.mid(last)) + QStringLiteral("[^/]*") +
+		           QRegularExpression::escape(extension);
+	} else {
+		pattern += QRegularExpression::escape(tail);
+	}
+	words += int(tail.count(QRegularExpression("[A-Za-z]")));
+	if (words < 3)
+		return QString();
+	const QJsonArray quoted{ QStringLiteral("^[a-z]+://[^/]+") + pattern +
+	                         QStringLiteral("(?:[?#]|$)") };
+	const QByteArray literal = QJsonDocument(quoted).toJson(QJsonDocument::Compact);
+	return QStringLiteral(
+	         "// Written from the address the server said is the playlist.\n"
+	         "extract = function (page, requests) {\n"
+	         "  var shape = new RegExp(%1);\n"
+	         "  for (var i = 0; i < requests.length; ++i)\n"
+	         "    if (shape.test(requests[i].url))\n"
+	         "      return { url: requests[i].url, kind: '%2',\n"
+	         "               headers: { Referer: page.url } };\n"
+	         "  return null;\n"
+	         "};\n")
+	    .arg(QString::fromUtf8(literal.mid(1, literal.size() - 2)),
+	         kind == QLatin1String("dash") ? QStringLiteral("dash") : QStringLiteral("hls"));
+}
+
 extractor_verdict check(const QString &source, const QUrl &page,
                          const QList<evidence_request> &evidence,
                          helper_host *helpers, const QSet<QString> *manifests) {
@@ -356,6 +429,14 @@ extractor_verdict check(const QString &source, const QUrl &page,
 		            "field of a request — it is undefined here, and there is "
 		            "nothing to probe on a later visit. Decide from it now and "
 		            "match the address.";
+		return v;
+	}
+	if (searches_url_for_type(source)) {
+		v.reads_note = true;
+		v.message = "Rejected: the script looks for a content type in the "
+		            "address. No address contains one: that was a note for you "
+		            "about what the server answered. Decide from it now and "
+		            "match a stable part of that address's path.";
 		return v;
 	}
 
@@ -551,6 +632,33 @@ extractor_verdict check(const QString &source, const QUrl &page,
 			                     "%1 is made of, and the server confirmed that "
 			                     "address is the playlist. Return the playlist.")
 			                .arg(named.left(80));
+			return v;
+		}
+	}
+
+	// **A playlist in name only.** Measured on kisskh: with the manifest confirmed,
+	// a script returned an analytics beacon as `hls`, every rule above passed it,
+	// and it was accepted and offered. The server has said which address is the
+	// playlist, so calling a different one a playlist needs more than a word. An
+	// address that says so itself keeps its chance, as the tier probes only some;
+	// a `direct` pick claims something else, and the rule above covers its parts.
+	if (manifests && !manifests->isEmpty() &&
+	     !manifests->contains(normalise(v.result.url)) &&
+	     (v.result.kind == QLatin1String("hls") || v.result.kind == QLatin1String("dash"))) {
+		static const QRegularExpression named_so(R"(\.(m3u8|mpd)$)",
+		                                          QRegularExpression::CaseInsensitiveOption);
+		if (!named_so.match(v.result.url.path()).hasMatch()) {
+			QString playlist;
+			for (const evidence_request &r : evidence)
+				if (manifests->contains(normalise(r.url))) {
+					playlist = r.url.fileName();
+					break;
+				}
+			v.not_the_manifest = true;
+			v.message = QString("Rejected: the server confirmed %1 is the playlist, "
+			                     "and this is a different address. Return that one.")
+			                .arg(playlist.isEmpty() ? QStringLiteral("another address")
+			                                        : playlist.left(80));
 			return v;
 		}
 	}

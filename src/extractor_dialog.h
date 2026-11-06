@@ -106,6 +106,7 @@ private:
 	// Ask the server about the likely candidates before the model is asked
 	// anything, and fold the answers into the payload.
 	void probe_candidates();
+	void offer_from_manifest();
 	void rebuild_payload();
 
 	extractor_signals *m_signals  = nullptr;
@@ -123,6 +124,8 @@ private:
 	QUrl               m_page;
 	QList<evidence_request> m_evidence;
 	QString            m_proposal;
+	bool               m_written_here = false;   // not a model's: see offer_from_manifest
+	int                m_judging = 0;            // which proposal the verdict is for
 	QHash<QString, QString> m_served;   // url -> what it actually returned
 	// The same answers, kept as the gate needs them rather than as the payload
 	// prints them: the addresses the tier positively identified as a playlist.

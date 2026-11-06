@@ -48,6 +48,8 @@ struct extractor_verdict {
 	                               // answers for this visit and no other
 	bool       reads_note = false; // it reads the `serves` column at run time,
 	                               // where that column does not exist
+	bool       not_the_manifest = false; // calls something a playlist while the
+	                                     // server named a different one
 	QString    message;
 	extraction result;
 };
@@ -118,6 +120,19 @@ extractor_verdict check(const QString &source, const QUrl &page,
                          const QSet<QString> *manifests = nullptr);
 
 }  // namespace site_extractor
+
+// **The script for a manifest the server has already named**, written here
+// rather than by a model. Once the content-type tier has identified the
+// playlist nothing is left to find, only a way to find it again: its path with
+// the numbers and long tokens made general, on any host, since a CDN's host
+// rotates too. Empty when the path has nothing to recognise it by.
+//
+// Measured on kisskh, 2026-11-06: the probe named the manifest and a 14B wrote
+// nothing usable in five runs, four of them searching the url for the note's
+// MIME type. Nothing is sent anywhere, and `check` still judges what this writes.
+namespace site_extractor {
+QString script_for_manifest(const QUrl &manifest, const QString &kind);
+}
 
 // The per-site store: which script applies to which host, loaded and saved as
 // plain JSON so it can be read, diffed and shared like any other rule set.

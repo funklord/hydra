@@ -27821,7 +27821,30 @@ carried along as amendments to a list item.
    the holder's word. This paragraph used to call it the holder's package
    to add; no package is needed.
 
-4. **The loop works on a disguised manifest; make it work on a noisy capture.**
+4. **Where the server names the manifest, the model is no longer asked.**
+   Measured 2026-11-06 on fresh kisskh captures, `evidence/` having been lost: it
+   was gitignored, so no copy survives, and it is rebuilt from the live site. The
+   stream is now a plain `.m3u8` on `hls.cdnvideo11.shop` among 92 requests. The
+   probe named it, and `qwen2.5-coder:14b` still scored **0 of 5**: four runs
+   searched the url for `application/vnd.apple.mpegurl`, the note's words, and one
+   called an analytics beacon `hls` and was accepted. So a compliance question
+   became a question of why the model is there at all: the note *is* the answer.
+
+   `site_extractor::script_for_manifest` writes the script from the named address,
+   numbers and long tokens made general, on any host, and the dialog offers it
+   through the same gate as soon as the probes finish. Nothing is sent. Learned on
+   episode 24, it found the manifest on episode 23 and on another show: **3 of 3**.
+   The first version kept the file's stem and missed the other show's
+   `Ep1_index.m3u8`, so a name ending `.m3u8` or `.mpd` now matches by folder alone
+   and a disguised name keeps its stem. Send stays, and the model remains the path
+   where no probe names a manifest, which is where the hit rate below still applies.
+   Two gate rules came with it: a content type searched for in a url is refused by
+   name, and with a manifest confirmed an `hls` or `dash` pick that does not end
+   as one is refused. `HYDRA_NO_SEND=1 test_live_model` prints what is offered.
+
+   What follows is the record from before that.
+
+   **The loop works on a disguised manifest; make it work on a noisy capture.**
    Three runs in five on dramafren now return `url.includes('cf-master')` — a
    stable fragment, no tokens, the master manifest on a site with no `.m3u8`
    anywhere. That is the case the whole content-type tier exists for and the

@@ -31,7 +31,7 @@ REPLIES=${HYDRA_REPLIES:-evidence/replies}
 LOGS=${MEASURE_LOGS:-evidence/measure-$TAG}
 mkdir -p "$REPLIES" "$LOGS"
 
-BIN=test/build/test_live_model
+BIN=test/build-make/test_live_model
 [ -x "$BIN" ] || { echo "build it first: make test-one T=test_live_model"; exit 1; }
 
 # The server does the generating, so it is the process that matters. Best
