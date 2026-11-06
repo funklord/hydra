@@ -40921,6 +40921,9 @@ alone. The status line and the job's row say what was found, and a setting under
 Downloads turns the files off. Not on Android: the file is copied to shared storage
 and a sidecar would stay in app-private storage.
 
+**A mix already saved gets its files by saving it again:** the file is refused as
+already there, and the tracklist files are written beside it.
+
 **The times are the source's and no finer.** Descriptions give whole seconds, so a
 cue sheet's frames add no precision, and the text says "to the second". A source
 giving `1:02:03.250` keeps it now, which `entry_of` used to drop. **Refining a mark

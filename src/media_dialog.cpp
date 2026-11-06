@@ -1,5 +1,6 @@
 #include "media_dialog.h"
 #include "download_route.h"
+#include "media_sheet.h"
 #include "list_columns.h"
 
 #include "empty_state.h"
@@ -689,6 +690,18 @@ void media_dialog::save(const media_item &item, bool separate) {
 	                              names.combined, hints, sound_hints)
 	  : m_downloads->enqueue(item.url, m_node_id, &error, item.headers,
 	                         item.file_name, hints);
+	// **A mix saved before this was built**, or before its files were wanted:
+	// the file is refused as already saved, and its tracklist need not be.
+#ifndef Q_OS_ANDROID
+	if (!id && !item.sheet.isEmpty()) {
+		const QString saved = QDir(m_downloads->directory())
+		                        .filePath(pair ? names.combined : item.file_name);
+		QString wrote;
+		if (QFile::exists(saved) &&
+		    media_sheet::from_json(item.sheet).write_beside(saved, &wrote))
+			error += QStringLiteral(" Its tracklist files are beside it.");
+	}
+#endif
 	// Where it lands, as the user will actually find it.
 	//
 	// On Android naming the directory is worse than useless: Qt downloads into

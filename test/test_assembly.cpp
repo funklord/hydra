@@ -21,6 +21,7 @@
 #include "local_proxy.h"
 #include "media_detector.h"
 #include "media_dialog.h"
+#include "media_sheet.h"
 #include "media_lookup.h"
 #include "list_columns.h"
 #include "mse_tap.h"
@@ -2371,6 +2372,46 @@ int main(int argc, char **argv) {
 		      QString("and half a range is the same answer (%1, %2 bytes)")
 		          .arg(status_of(half_junk)).arg(body_of(half_junk).size()));
 		rpx.unpublish_all();
+	}
+
+	// Saved before the tracklist files existed: refused, and given them anyway.
+	section("saving a mix again leaves its tracklist beside the file already there");
+	{
+		const QString name = "already.webm";
+		download_manager mine;
+		mine.set_directory(downloads_dir.path());
+		mine.add_source(new fake_plain_source);
+		const QString path = QDir(mine.directory()).filePath(name);
+		QFile have(path);
+		have.open(QIODevice::WriteOnly);
+		have.write("bytes");
+		have.close();
+		media_sheet sheet;
+		sheet.title = "Already";
+		media_item row;
+		row.kind        = media_kind::direct;
+		row.label       = name;
+		row.url         = QUrl(base + "/already.webm");
+		row.file_name   = name;
+		row.known_media = true;
+		row.sheet       = sheet.to_json();
+		row.has_audio   = true;
+		row.has_video   = false;
+		media_detector here;
+		here.add_item("mix.invalid", row);
+		media_dialog dlg(&here, &players, &mine, &proxy, &tap, &assembly, nullptr);
+		dlg.set_site("mix.invalid", "n1", stream_context{});
+		QPushButton *press = nullptr;
+		for (QPushButton *b : dlg.findChildren<QPushButton *>())
+			if (b->text().contains("Download"))
+				press = b;
+		check(press, "the row offers Download");
+		if (press)
+			press->click();
+		check(QFile::exists(path + ".tracklist.txt"), "the text is written");
+		QFile kept(path);
+		kept.open(QIODevice::ReadOnly);
+		check(kept.readAll() == "bytes", "and the file is left as it was");
 	}
 
 	// The file is opened before the manifest is fetched, so one that fails there
