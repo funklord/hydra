@@ -400,6 +400,7 @@ void load_into(player_launcher *players, download_manager *downloads,
 		torrents->set_listen_interfaces(
 		  s.value("torrent/listen_interfaces").toString());
 		torrents->set_sequential(s.value("torrent/sequential", false).toBool());
+		torrents->set_port_mapping(s.value("torrent/port_mapping", true).toBool());
 	}
 
 	if (local_ai) {
@@ -441,6 +442,7 @@ void save_from(player_launcher *players, download_manager *downloads,
 		s.setValue("torrent/seed_ratio", torrents->seed_ratio());
 		s.setValue("torrent/listen_interfaces", torrents->listen_interfaces());
 		s.setValue("torrent/sequential", torrents->sequential());
+		s.setValue("torrent/port_mapping", torrents->port_mapping());
 	}
 	if (local_ai) {
 		s.setValue("ai/ollama_endpoint", local_ai->endpoint().toString());
@@ -1698,6 +1700,7 @@ void settings_dialog::restore_page_defaults(int page) {
 			m_seed_ratio->setValue(fresh_t.seed_ratio());
 			put_value(m_interfaces, fresh_t.listen_interfaces());
 			m_sequential->setChecked(fresh_t.sequential());
+			m_port_mapping->setChecked(fresh_t.port_mapping());
 		}
 	} else if (name.startsWith("Tabs")) {
 		if (m_live_views)
@@ -2816,6 +2819,14 @@ void settings_dialog::build_download_page(QWidget *page) {
 	// the width wherever there is width to give; the minimum only ever decided
 	// what happened when there was not.
 
+	m_port_mapping = new QCheckBox(bt);
+	m_port_mapping->setObjectName("torrent_port_mapping");
+	bv->addWidget(settings_row(
+	  "Ask the router to open a port",
+	  "Lets other peers reach you, which is most of what makes a swarm fast. It "
+	  "changes your router's settings by UPnP or NAT-PMP, while a torrent runs.",
+	  m_port_mapping, bt));
+
 	// Not a VPN, and says so. sec 11.4 decided Hydra ships no tunnel; this is the
 	// field that makes the user's own system-level choice reliable instead of
 	// competing with it.
@@ -2838,7 +2849,7 @@ void settings_dialog::build_download_page(QWidget *page) {
 		// titles above full-contrast descriptions.
 		for (QWidget *w : QList<QWidget *>{ m_conn_global, m_conn_torrent,
 			                                   m_seed_ratio, m_sequential,
-			                                   m_interfaces }) {
+			                                   m_port_mapping, m_interfaces }) {
 			w->setEnabled(false);
 			w->setToolTip("Built without libtorrent-rasterbar");
 		}
@@ -3173,6 +3184,7 @@ void settings_dialog::load() {
 		m_seed_ratio->setValue(m_torrents->seed_ratio());
 		put_value(m_interfaces, m_torrents->listen_interfaces());
 		m_sequential->setChecked(m_torrents->sequential());
+		m_port_mapping->setChecked(m_torrents->port_mapping());
 	}
 	if (m_local_ai) {
 		put_value(m_ollama_url, m_local_ai->endpoint().toString());
@@ -3400,6 +3412,7 @@ void settings_dialog::apply() {
 		m_torrents->set_seed_ratio(m_seed_ratio->value());
 		m_torrents->set_listen_interfaces(m_interfaces->text().trimmed());
 		m_torrents->set_sequential(m_sequential->isChecked());
+		m_torrents->set_port_mapping(m_port_mapping->isChecked());
 	}
 
 	if (m_local_ai) {

@@ -381,6 +381,10 @@ static void test_consent_with_real_source() {
 	      "the torrent waits");
 	check(job_by_id(m, id)->public_participation,
 	      "and the row is marked for the UI");
+	tor->set_port_mapping(false);
+	check(!tor->capabilities().participation_note.contains("router"),
+	      "and with port mapping off the note does not claim it");
+	tor->set_port_mapping(true);
 	// The source is built at every launch, so this is the whole of what a person
 	// who never answered the question has exposed: a session joins the DHT and
 	// asks the router for a port the moment it exists.
@@ -700,6 +704,12 @@ static void test_outgoing_stays_on_the_interface() {
 		const int id = m.enqueue(QUrl(magnet), "node", &err);
 		check(id != 0, QString("the magnet is accepted (%1)").arg(err));
 		check(tor->session_running(), "consent given, the session has started");
+		check(tor->session_maps_ports() || tag != "out-tun",
+		      "asking the router by default, as the consent note says");
+		if (tag == "out-tun") {
+			tor->set_port_mapping(false);
+			check(!tor->session_maps_ports(), "and not once it is turned off");
+		}
 
 		int peers = 0;
 		QElapsedTimer t;

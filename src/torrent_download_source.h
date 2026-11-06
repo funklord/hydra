@@ -111,6 +111,11 @@ public:
 	// prioritize_streaming() instead; this is the global default.
 	void set_sequential(bool on);
 
+	// Whether to ask the router to open a port, by UPnP and NAT-PMP. Sec 11.4
+	// calls that a security posture change which should not be silently on.
+	void set_port_mapping(bool on);
+	bool session_maps_ports() const;   // what the running session was told
+
 	// Where resume data and the session state live.
 	void set_state_directory(const QString &dir);
 
@@ -121,6 +126,7 @@ public:
 	double  seed_ratio() const { return m_seed_ratio; }
 	QString listen_interfaces() const { return m_listen_interfaces; }
 	bool    sequential() const { return m_sequential; }
+	bool    port_mapping() const { return m_port_mapping; }
 
 	// Ask every live torrent to write resume data now. Called at shutdown;
 	// safe to call at any time.
@@ -148,6 +154,7 @@ private:
 	QString  m_listen_interfaces;
 	double   m_seed_ratio     = 1.0;
 	bool     m_sequential     = false;
+	bool     m_port_mapping   = true;
 	int      m_global_limit   = 800;
 	int      m_torrent_limit  = 200;
 };

@@ -291,6 +291,7 @@ private:
 	QDoubleSpinBox *m_seed_ratio   = nullptr;
 	QLineEdit      *m_interfaces   = nullptr;
 	QCheckBox      *m_sequential   = nullptr;
+	QCheckBox      *m_port_mapping = nullptr;
 
 	QRadioButton *m_ai_auto     = nullptr;
 	// The "Local only" description, kept because the Ollama endpoint field

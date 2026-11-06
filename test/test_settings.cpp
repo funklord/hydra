@@ -134,6 +134,7 @@ int main(int argc, char **argv) {
 		tor->set_seed_ratio(2.5);
 		tor->set_listen_interfaces("tun0:6881");
 		tor->set_sequential(true);
+		tor->set_port_mapping(false);
 		p.set_custom_command("/bin/echo --play %U");
 		p.set_selected(player_launcher::custom_id());
 		p.set_terminal_command("xterm -e");
@@ -155,6 +156,7 @@ int main(int argc, char **argv) {
 		check(tor2->listen_interfaces() == "tun0:6881",
 		      "listen interfaces persists — the system-VPN binding");
 		check(tor2->sequential(), "sequential default persists");
+		check(!tor2->port_mapping(), "and so does turning port mapping off");
 		check(p2.custom_command() == "/bin/echo --play %U", "custom command persists");
 		check(p2.terminal_command() == "xterm -e" && p2.custom_in_terminal(),
 		      "the terminal, and running Custom... in it, persist");

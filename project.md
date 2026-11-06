@@ -15195,8 +15195,19 @@ installer's 6.12.0 alike, with the first and last rows measured on both:
 
 `try_share` gets `stream:1` through the real shell by all three routes, 16 of 16,
 and refusing the permission turns exactly those three checks red. **Only a screen
-has been shared**: `windowsModel()` is empty under Xvfb, so sharing a window is
-still unmeasured.
+has been shared through the shell.** A window has through plain Qt, below.
+
+**`windowsModel()` "never populates" was the same mistake in another place.** It
+is empty with no window manager. `xfwm4` under `xvfb-run` exits unless it has a
+session bus, without a word, so "a window manager running" was false here and very
+likely in the record below. Checked by `_NET_CLIENT_LIST` on the root window rather
+than by having started one:
+
+    xvfb-run dbus-run-session -- <script starting xfwm4 --compositor=off, then xclock>
+    request: screens=1 windows=1, [clockwin] selected, stream:1
+
+So a real desktop should list its windows. The driver's own window does not count,
+since the engine leaves out this process's windows.
 
 `try_share` had also stopped measuring anything, and still printed its tally. Tab
 warming loads the fixture's page before the driver writes its own over it, so every
@@ -27791,7 +27802,8 @@ carried along as amendments to a list item.
    **`getDisplayMedia` delivers a stream**, measured through the real shell by
    `try_share` on 2026-11-06 under Xvfb. What this item used to call a Qt defect
    awaiting a bug report was this project's: see *The screen-share picker works*.
-   A real meeting on a real desktop has still not been tried, and that is the
+   A window shares too, measured through plain Qt with a real window manager. A
+   real meeting on a real desktop has still not been tried, and that is the
    holder's to try.
 
    Two capabilities stay blocked on purpose and are not outstanding work.
@@ -28795,9 +28807,9 @@ saved `listen_interfaces`.
 
 `start_session` runs from `start`, which the manager reaches only past consent,
 and the settings go in with the session's first pack. A person who agrees is now
-told about the router as well: the consent note says so. **Whether UPnP should be a
-switch is still unbuilt**; the code comment that called it "a setting" was wrong
-and now says it is not one.
+told about the router as well: the consent note says so while it is true, and
+*Ask the router to open a port* in Settings turns UPnP and NAT-PMP off. On by
+default, since a swarm with no inbound peers is slow and the note now tells people.
 
 ## A page holding a microphone could read every address on the machine
 
@@ -28865,8 +28877,9 @@ has refused file access from file urls by default since API 16.
 on Chromium's in-process GPU thread as a view opens, in ten of twelve drivers.
 Measured at `37baa27`, before any of this work, with the same result, so it is not
 these changes; the installed binary run by hand did not trap, which is not
-explained. The drivers run on Xvfb with a window manager: `xvfb-run` around
-`xfwm4` and `SWEEP_ONSCREEN=1`.
+explained. The drivers run on Xvfb with `SWEEP_ONSCREEN=1`. A window manager there
+needs `dbus-run-session` as well, or `xfwm4` dies: read `_NET_CLIENT_LIST` on the
+root window before believing one is up.
 
 ## Every claim the settings page makes, checked against the code
 

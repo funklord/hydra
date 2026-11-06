@@ -139,10 +139,11 @@ bool torrent_download_source::start_session() {
 	sp.set_bool(lt::settings_pack::enable_lsd, true);
 
 	// Port mapping is a security posture change -- asking the router to open a
-	// hole (sec 11.4). On because inbound connectivity is most of what makes a
-	// swarm usable. There is no switch for it yet, so the consent note says so.
-	sp.set_bool(lt::settings_pack::enable_upnp, true);
-	sp.set_bool(lt::settings_pack::enable_natpmp, true);
+	// hole (sec 11.4). On by default because inbound connectivity is most of what
+	// makes a swarm usable; the consent note says so while it is on, and it is a
+	// setting.
+	sp.set_bool(lt::settings_pack::enable_upnp, m_port_mapping);
+	sp.set_bool(lt::settings_pack::enable_natpmp, m_port_mapping);
 
 	sp.set_str(lt::settings_pack::user_agent, "Hydra/0.1 libtorrent/2.0");
 
@@ -202,9 +203,10 @@ source_capabilities torrent_download_source::capabilities() const {
 	c.participation_note   =
 	  "A torrent is not a private download. Your IP address is announced to "
 	  "the tracker and to every peer in the swarm, and peers can see what you "
-	  "are fetching, and Hydra asks your router to open a port for it. Hydra "
-	  "does not tunnel this — if you want it hidden, set up a VPN or proxy at "
-	  "the system level.";
+	  "are fetching. " +
+	  QString(m_port_mapping ? "Hydra asks your router to open a port for it. " : "") +
+	  "Hydra does not tunnel this — if you want it hidden, set up a VPN or proxy "
+	  "at the system level.";
 	return c;
 }
 
@@ -307,6 +309,27 @@ QString torrent_download_source::outgoing_interfaces_for(const QString &listen) 
 			out << name;
 	}
 	return out.join(',');
+}
+
+void torrent_download_source::set_port_mapping(bool on) {
+	m_port_mapping = on;
+#ifdef HYDRA_HAVE_LIBTORRENT
+	if (m_d->session) {
+		lt::settings_pack sp;
+		sp.set_bool(lt::settings_pack::enable_upnp, on);
+		sp.set_bool(lt::settings_pack::enable_natpmp, on);
+		m_d->session->apply_settings(sp);
+	}
+#endif
+}
+
+bool torrent_download_source::session_maps_ports() const {
+#ifdef HYDRA_HAVE_LIBTORRENT
+	return m_d->session && m_d->session->get_settings().get_bool(
+	                         lt::settings_pack::enable_upnp);
+#else
+	return false;
+#endif
 }
 
 void torrent_download_source::set_seed_ratio(double ratio) { m_seed_ratio = ratio; }
