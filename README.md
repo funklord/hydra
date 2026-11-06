@@ -223,6 +223,11 @@ not do them, or does something adjacent that is not the same thing.
   to present last week has not been allowed to present whatever is open today.
 - **The picker says what is at stake** — everything on what you pick is sent,
   including whatever appears on it later.
+- **A file from your disk runs no script.** Browsers built on Qt WebEngine let a
+  page opened from disk read your other files, and a WebSocket carries them away,
+  so a downloaded `.html` is not as inert as it looks. Styles and pictures still
+  load. `local-files=javascript:allow` under `[sites]` in `policy.ini` turns scripts
+  back on, for offline documentation that needs them.
 - **A refusal is visible.** A blocked capability used to reach the page as an
   error and reach you as nothing at all; the shield's decisions are now
   inspectable rather than silent.

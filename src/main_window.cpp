@@ -5109,6 +5109,18 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 			if (m_mse)
 				m_mse->clear_site(u.host());
 			apply_policy(view, u.host());
+#ifndef Q_OS_ANDROID
+			// Said, because a page that quietly lost its scripts reads as broken.
+			// Once a run: it is a rule to learn, not news about each page.
+			if (!m_said_local_scripts && view == current_view() &&
+			    local_document_runs_no_scripts(u) &&
+			    m_policy->setting_for("local-files", policy::feature::javascript) !=
+			      policy::setting::allow) {
+				m_said_local_scripts = true;
+				m_status->showMessage("Scripts do not run in files from this disk: "
+				                      "one could read your other files.", 8000);
+			}
+#endif
 			// And an open Find Media goes with this tab when it is the one
 			// in front of you -- a new video on the same site included.
 			if (view == current_view())
@@ -9430,6 +9442,9 @@ void main_window::apply_policy(web_view_backend *view, const QString &host) {
 	s.autoplay   = m_policy->is_allowed(F::autoplay, host);
 	s.popups     = m_policy->is_allowed(F::popups, host);
 	s.webrtc_local = m_policy->is_allowed(F::webrtc_local, host);
+	// A rule under this name, since a file has no host for the shield to offer.
+	s.local_scripts = m_policy->setting_for("local-files", F::javascript) ==
+	                  policy::setting::allow;
 	// **Scrollbars are the kiosk's, not the policy's, and this used to hand
 	// them back.** `view_settings` is built fresh here and `scrollbars`
 	// defaults to true, so every re-apply -- and one runs on each navigation

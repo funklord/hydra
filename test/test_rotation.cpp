@@ -3552,6 +3552,11 @@ int main(int argc, char **argv) {
 
 		check(!blocked.webrtc_local && allowed.webrtc_local,
 		      "and WebRTC's local addresses follow the same rule");
+		// A file has no host, so this one is a rule under a name of its own.
+		check(!allowed.local_scripts, "and no site's rule lets a local file run scripts");
+		pol.set_setting("local-files", F::javascript, policy::setting::allow);
+		check(settings_for("blocked.example").local_scripts,
+		      "only a rule named for local files does");
 		check(!blocked.javascript && !blocked.images && !blocked.autoplay &&
 		          !blocked.popups,
 		      QString("a blocked site gets none of them (js=%1 img=%2 auto=%3 "
@@ -3574,7 +3579,7 @@ int main(int argc, char **argv) {
 		// unmentioned and untested -- which is exactly how `scrollbars` got
 		// its own comment. This fails to compile when the struct grows, and
 		// the message says what to do about it.
-		static_assert(sizeof(view_settings) == 6,
+		static_assert(sizeof(view_settings) == 7,
 		               "view_settings gained or lost a field: drive it from "
 		               "apply_policy and name it in the two checks above, or "
 		               "say here why it is not policy's to set");

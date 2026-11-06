@@ -417,7 +417,13 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	         [this](const QString &url) { emit link_hovered(QUrl(url)); });
 	// Through the derived type: `m_page` is held as a `QWebEnginePage *` because
 	// nothing else needs to know, and this is the one place that does.
-	page->before_navigate = [this](const QUrl &u) { refresh_permissions_shim(u); };
+	page->before_navigate = [this](const QUrl &u) {
+		refresh_permissions_shim(u);
+		// Here rather than from the shell's `url_changed`, which arrives once the
+		// document exists and its first script may already have run.
+		m_local_document = local_document_runs_no_scripts(u);
+		apply_script_setting();
+	};
 	page->on_console = [this](int level, const QString &text, int line,
 	                           const QString &source) {
 		emit console_message(level, text, line, source);
@@ -1029,9 +1035,16 @@ void qtwebengine_view::reload_bypass_cache() {
 	m_view->triggerPageAction(QWebEnginePage::ReloadAndBypassCache);
 }
 
+void qtwebengine_view::apply_script_setting() {
+	m_page->settings()->setAttribute(
+	  QWebEngineSettings::JavascriptEnabled,
+	  m_local_document ? m_settings.local_scripts : m_settings.javascript);
+}
+
 void qtwebengine_view::apply_settings(const view_settings &s) {
+	m_settings = s;
+	apply_script_setting();
 	QWebEngineSettings *set = m_page->settings();
-	set->setAttribute(QWebEngineSettings::JavascriptEnabled, s.javascript);
 	set->setAttribute(QWebEngineSettings::AutoLoadImages, s.images);
 	set->setAttribute(QWebEngineSettings::PlaybackRequiresUserGesture, !s.autoplay);
 	set->setAttribute(QWebEngineSettings::JavascriptCanOpenWindows, s.popups);

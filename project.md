@@ -28806,6 +28806,45 @@ the allowed site as the control. **Android has no equivalent**: the WebView offe
 no such setting, so the row is greyed there, and whether a script filtering
 candidates would be worth injecting is unmeasured.
 
+## A page opened from disk could read every other file
+
+Qt's `LocalContentCanAccessFileUrls` defaults to on. Measured with a saved page: it
+read `/etc/hostname` by XHR, text out of an iframe and pixels out of a canvas.
+
+**Getting it out took a second measurement, and the first guess was wrong.** Qt's
+`LocalContentCanAccessRemoteUrls` is off, and with a sink and a control it stopped
+six routes that all leak with it on: image, fetch, beacon, script, iframe and
+navigation. It does not govern the rest. Through the real shell:
+
+    WebSocket                 reached the server, nobody touching anything
+    STUN packet               reached a UDP socket, nobody touching anything
+    window.open               reached the server after one click on the page
+
+So a downloaded `.html`, opened once, could take `~/.ssh` and this browser's own
+profile, by a WebSocket whose address carries them.
+
+**Turning the attribute off was rejected, measured.** Qt's off also refuses the
+document's own subresources, same folder included: no stylesheet, no image, no
+script, so a saved page is bare text. What is taken away instead is the reader.
+`local_document_runs_no_scripts` keeps scripts out of a document on this disk, set
+from `acceptNavigationRequest` because `url_changed` is after the first script may
+have run. Styles and pictures still load, and with no script nothing can look at
+another file. A directory listing and the PDF viewer are exempt, being the
+engine's own pages drawn by its own script.
+
+**The cost is real:** offline documentation with a search box loses it. The line
+`local-files=javascript:allow` under `[sites]` in `policy.ini` restores scripts,
+since a file has no host for the shield to offer, and the status bar says what
+happened so a page does not simply look broken. Android needs nothing: the WebView
+has refused file access from file urls by default since API 16.
+
+**`test/live/sweep.sh`'s default, offscreen, traps on this machine now**, `rc=133`
+on Chromium's in-process GPU thread as a view opens, in ten of twelve drivers.
+Measured at `37baa27`, before any of this work, with the same result, so it is not
+these changes; the installed binary run by hand did not trap, which is not
+explained. The drivers run on Xvfb with a window manager: `xvfb-run` around
+`xfwm4` and `SWEEP_ONSCREEN=1`.
+
 ## Every claim the settings page makes, checked against the code
 
 The VPN sentence in the previous section was found by accident, while reading

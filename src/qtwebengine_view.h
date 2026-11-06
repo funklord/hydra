@@ -56,6 +56,7 @@ public:
 	void show_html(const QString &html, const QUrl &base) override;
 	bool can_show_html() const override { return m_view != nullptr; }
 	void apply_settings(const view_settings &s) override;
+	void apply_script_setting();
 	void set_permission_decider(permission_decider fn) override;
 	void set_capture_chooser(capture_chooser fn) override;
 
@@ -109,6 +110,8 @@ private:
 	certificate_chooser m_certificate_chooser;
 	QWebEngineView *m_view = nullptr;
 	QWebEnginePage *m_page = nullptr;
+	view_settings   m_settings;
+	bool            m_local_document = false;   // see local_document_runs_no_scripts
 	// A surface was picked and the engine's permission question has not come yet.
 	// Shared because the picker's answer may outlive this object.
 	std::shared_ptr<bool> m_surface_chosen = std::make_shared<bool>(false);

@@ -154,6 +154,10 @@ struct fixture {
 			                     QUrl::fromLocalFile(two).toString()).toUtf8());
 		tf.close();
 
+		// These pages stand in for the web, so they run scripts as it does.
+		policy.set_setting("local-files", policy::feature::javascript,
+		                   policy::setting::allow);
+
 		window.load_tree(tree);
 		window.resize(1000, 700);
 		window.show();

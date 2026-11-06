@@ -25,7 +25,29 @@ struct view_settings {
 	bool popups     = false;
 	bool scrollbars = true;   // kiosk mode turns these off (architecture doc sec 8)
 	bool webrtc_local = false;   // WebRTC may offer local network addresses
+	bool local_scripts = false;  // scripts run in documents on this disk
 };
+
+// A document on this disk runs no script, unless somebody has said otherwise.
+//
+// The engine lets a local document read any other local file, and Qt's switch for
+// that also refuses its images and stylesheets, which leaves a saved page unusable.
+// Measured with it on: a page opened from disk read /etc/hostname, and text from an
+// iframe and pixels from a canvas as well. Qt keeps such a page off the network for
+// images, fetch and navigation, and not for a WebSocket, which carried what it read
+// out with nobody touching anything. So what is taken away is the reader: without a
+// script the page still shows its styles and pictures, and nothing can look at
+// another file or say what it found.
+//
+// A directory listing and the PDF viewer are the engine's own pages rather than the
+// file's, and are drawn by a script of Chromium's. A url ending in a slash is only
+// ever a directory, and a `.pdf` goes to the viewer whatever is in it.
+inline bool local_document_runs_no_scripts(const QUrl &url) {
+	if (!url.isLocalFile())
+		return false;
+	const QString path = url.path();
+	return !path.endsWith('/') && !path.endsWith(".pdf", Qt::CaseInsensitive);
+}
 
 // One rendered page.
 //

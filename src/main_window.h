@@ -837,6 +837,7 @@ public:
 	QString m_media_bound;   // the tab and address it is showing
 	void bind_media_ui();
 	mse_tap            *m_mse            = nullptr;
+	bool                m_said_local_scripts = false;
 	// HLS assembly, held here because it outlives the dialog that starts it.
 	stream_assembly    *m_assembly       = nullptr;
 	QAction            *m_capture_action = nullptr;

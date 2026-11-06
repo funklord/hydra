@@ -118,7 +118,11 @@ int main(int argc, char *argv[]) {
 		}
 		check(zin && zout && zoff, "the three zoom actions exist");
 
-		auto *view = w.findChild<qtwebengine_view *>();
+		// The one on the screen: the first child may be a warmed background tab.
+		qtwebengine_view *view = nullptr;
+		for (qtwebengine_view *each : w.findChildren<qtwebengine_view *>())
+			if (each->widget()->isVisible())
+				view = each;
 		check(view, "and the page can be asked what it is at");
 		if (zin && zout && zoff && view) {
 			check(qFuzzyCompare(view->zoom_factor(), 1.0), "a page starts at 100%");

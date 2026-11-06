@@ -20,6 +20,7 @@
 #include "accept_language.h"
 #include "user_agent.h"
 #include "torrent_download_source.h"
+#include "web_view_backend.h"
 #include "ollama_provider.h"
 #include "claude_provider.h"
 #include "ai_provider.h"
@@ -1402,6 +1403,34 @@ int main(int argc, char **argv) {
 			check(fresh.is_allowed(policy::feature::webrtc_local, "call.example") &&
 			      !fresh.is_allowed(policy::feature::webrtc_local, "example.com"),
 			      "until one site is named, and only that site");
+		}
+		// The exemptions are the engine's own pages, and nothing else may pass.
+		check(local_document_runs_no_scripts(QUrl("file:///home/a/saved.html")) &&
+		      local_document_runs_no_scripts(QUrl("file:///home/a/picture.svg")) &&
+		      local_document_runs_no_scripts(QUrl("file:///home/a/no-extension")),
+		      "a document on this disk runs no script, whatever it is called");
+		check(local_document_runs_no_scripts(QUrl("file:///home/a/evil.html#.pdf")) &&
+		      local_document_runs_no_scripts(QUrl("file:///home/a/evil.html?.pdf")),
+		      "and a fragment or a query cannot make it a pdf");
+		check(!local_document_runs_no_scripts(QUrl("file:///home/a/manual.PDF")) &&
+		      !local_document_runs_no_scripts(QUrl("file:///home/a/")),
+		      "the pdf viewer and a directory listing are drawn by the engine's script");
+		check(!local_document_runs_no_scripts(QUrl("https://example.com/saved.html")),
+		      "and the web is the policy's to decide");
+		// The README tells people to type this line, so it is read back here.
+		{
+			QTemporaryDir dir;
+			QFile f(dir.filePath("policy.ini"));
+			check(f.open(QIODevice::WriteOnly) &&
+			      f.write("[hydra]\nformat=1\nkind=policy\n"
+			              "[sites]\nlocal-files=javascript:allow\n") > 0,
+			      "a hand-written rule for local files");
+			f.close();
+			policy_engine typed;
+			check(typed.load(dir.filePath("policy.ini")) &&
+			      typed.setting_for("local-files", policy::feature::javascript) ==
+			        policy::setting::allow,
+			      "reads as the rule the shell asks for");
 		}
 		check(policy::feature_from_name("desktopSite") == policy::feature::desktop_site,
 		      "it round-trips through the machine name that files store");
