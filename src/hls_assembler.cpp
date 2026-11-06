@@ -101,9 +101,14 @@ void hls_assembler::stop() {
 	if (m_reply && m_reply->isRunning())
 		m_reply->abort();
 	if (m_file) {
+		// Stopped before a byte arrived: an empty file named like a saved video
+		// is worse than none. `stream_assembly` does this for a failure.
+		const bool nothing = m_file->size() == 0;
 		m_file->close();
 		delete m_file;
 		m_file = nullptr;
+		if (nothing)
+			QFile::remove(m_path);
 	}
 }
 

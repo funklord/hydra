@@ -2453,6 +2453,19 @@ int main(int argc, char **argv) {
 		      "and naming twice adds nothing");
 	}
 
+	section("a stream stopped before its first byte leaves no file");
+	{
+		const QString path = QDir(downloads.directory()).filePath("stopped.ts");
+		{
+			stream_assembly fresh(&players, &downloads, &proxy, nullptr);
+			media_item row = item;
+			row.file_name = "stopped.ts";
+			fresh.save(row, stream_context{});
+			check(QFile::exists(path), "the file is there once the save begins");
+		}
+		check(!QFile::exists(path), "and gone when it is stopped with nothing in it");
+	}
+
 	// The file is opened before the manifest is fetched, so one that fails there
 	// left a 0-byte `.ts` in the downloads folder (holder, 2026-11-06).
 	section("a stream that fails at its manifest leaves no file");
