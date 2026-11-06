@@ -15,6 +15,7 @@
 // a fixture fast enough to complete before the dialog closes would pass with
 // the defect present.
 #include "download_manager.h"
+#include "download_route.h"
 #include "fake_sources.h"
 #include "hls_assembler.h"
 #include "local_proxy.h"
@@ -2370,6 +2371,45 @@ int main(int argc, char **argv) {
 		      QString("and half a range is the same answer (%1, %2 bytes)")
 		          .arg(status_of(half_junk)).arg(body_of(half_junk).size()));
 		rpx.unpublish_all();
+	}
+
+	// **A player that reads manifests fetches the segments itself**, since the
+	// proxy passes a playlist on verbatim, and that is outside any route. So
+	// while downloads have one the stream is assembled here. Unbound is the
+	// control: the same press, on the same row, handed to the player.
+	section("with a route set, a stream is not left to the player");
+	{
+		QTemporaryDir bin;
+		QFile fake(bin.filePath("mpv"));
+		fake.open(QIODevice::WriteOnly);
+		fake.write("#!/bin/sh\nexit 0\n");
+		fake.setPermissions(fake.permissions() | QFile::ExeOwner);
+		fake.close();
+		const QByteArray path = qgetenv("PATH");
+		qputenv("PATH", bin.path().toLocal8Bit() + ":" + path);
+		player_launcher reader;
+		reader.refresh();
+		reader.set_selected("mpv");
+		check(reader.selected_handles_streams(), "a player that reads manifests is selected");
+
+		const auto watch_as = [&](const QString &route) {
+			download_route::shared().set_interface_name(route);
+			stream_assembly fresh(&reader, &downloads, &proxy, nullptr);
+			media_dialog dlg(&detector, &reader, &downloads, &proxy, &tap, &fresh, nullptr);
+			dlg.set_site("example.invalid", "n1", stream_context{});
+			QPushButton *press = nullptr;
+			for (QPushButton *b : dlg.findChildren<QPushButton *>())
+				if (b->text().contains("Watch"))
+					press = b;
+			if (press)
+				press->click();
+			const bool assembling = fresh.running();
+			download_route::shared().set_interface_name(QString());
+			return assembling;
+		};
+		check(!watch_as(QString()), "unbound, the player is handed it");
+		check(watch_as("lo"), "bound, it is assembled here");
+		qputenv("PATH", path);
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

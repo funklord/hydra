@@ -1,4 +1,5 @@
 #include "media_dialog.h"
+#include "download_route.h"
 #include "list_columns.h"
 
 #include "empty_state.h"
@@ -565,7 +566,12 @@ void media_dialog::watch(const media_item &item) {
 	// person through the same status line as any other assembly failure --
 	// later than a warning would, and precise, where a warning at this point
 	// could only guess because nothing has fetched the manifest yet.
-	if (is_assemblable(item) && !m_players->selected_handles_streams()) {
+	//
+	// **And while downloads have a route, whatever the player can do.** The
+	// proxy passes a manifest on verbatim, so a player reading one fetches the
+	// segments for itself, outside the route; assembling is what keeps them in.
+	if (is_assemblable(item) &&
+	    (!m_players->selected_handles_streams() || download_route::shared().bound())) {
 		if (m_assembly)
 			m_assembly->watch(item, m_ctx);
 		else
@@ -595,7 +601,22 @@ void media_dialog::watch(const media_item &item) {
 		else if (k == "cookie")                ctx.cookies    = it.value();
 		else                                   ctx.extra.insert(it.key(), it.value());
 	}
+	// **Refused here, where a raw address would otherwise go to the player**,
+	// which fetches for itself and knows nothing of the route. Through the
+	// proxy is the only way a player's bytes can follow it.
+	QString route_fault;
+	if (!download_route::shared().ready(&route_fault)) {
+		m_status->setText("<b>" + route_fault.toHtmlEscaped() + "</b>");
+		return;
+	}
 	const QUrl via = m_proxy ? m_proxy->publish(item.url, ctx, item.chunk_size) : QUrl();
+	if (!via.isValid() && download_route::shared().bound()) {
+		m_status->setText(QStringLiteral("<b>The local proxy is not running, so a "
+		                                 "player would fetch this outside the "
+		                                 "connection downloads are set to use. "
+		                                 "Nothing was opened.</b>"));
+		return;
+	}
 	// The sound beside a picture-only stream, through the proxy the same way:
 	// it comes from the same answer and the same CDN.
 	const QUrl via_audio = (m_proxy && !item.audio.isEmpty())

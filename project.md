@@ -2866,7 +2866,10 @@ without being:**
 
 - **yt-dlp and Watch.** YouTube's addresses carry the client's IP, so a lookup on
   the ordinary route gives a stream the tunnel is refused. Lookup, Watch and
-  Save therefore share the route, though Watch is not strictly a download.
+  Save therefore share the route, though Watch is not strictly a download. A player
+  is never handed a raw address while bound, and a manifest is assembled here rather
+  than given to it: the proxy relays a playlist verbatim, so the player would fetch
+  the segments itself.
 - **A dead tunnel does not end a TCP connection.** It retransmits into nothing with
   the job saying it is running, so the server looks at the device every two seconds
   and closes its tunnels when it goes. Without that the job was still running when
@@ -2907,8 +2910,6 @@ keeps a torrent to one. **Not measured:** a commercial VPN client.
   `rp_filter=1` and no route back by the tunnel, measured in a namespace, a bound
   connection times out. It fails closed, with nothing sent another way. `0` is
   measured fine; a tunnel holding the default route has a route back.
-- **A player handed a raw address** when the local proxy could not start fetches
-  for itself.
 - **Android has no such choice**, and the row says so: limiting a VPN to certain
   apps is in the system's own settings.
 
