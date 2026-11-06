@@ -28691,7 +28691,7 @@ setting and putting the broken one back, which is what a person does while
 working out why their torrents are slow; the check sets the same value twice
 now and reads 1 then 2. Four sabotages, each caught through its own check.
 
-### Open, and the copyright holder's: the VPN sentence
+### The VPN sentence is true now
 
 The settings row for this field says:
 
@@ -28699,32 +28699,53 @@ The settings row for this field says:
     level, naming its interface here -- tun0:6881, say -- keeps torrent
     traffic on it, and announces stop if that interface goes away.
 
-**That is not what the setting does, per libtorrent's own documentation.**
-`listen_interfaces` governs incoming TCP and uTP, and outgoing uTP, tracker
-and DHT traffic. **Outgoing TCP peer connections are bound by
-`outgoing_interfaces`, which this project does not set at all** -- so they
-leave by the default route. Outgoing TCP is how most peers are contacted, so
-a person relying on that sentence has most of their peer traffic outside the
-tunnel.
+**It was not true, per libtorrent's own documentation and then by measurement.**
+`listen_interfaces` governs incoming TCP and uTP, and outgoing uTP, tracker and
+DHT traffic; **outgoing TCP is `outgoing_interfaces`**, which nothing set. This
+entry stood open for weeks as the holder's, with two ways out: set the option, or
+weaken the sentence. Re-judged 2026-11-06 and decided by the design rather than
+waiting: arch §11.4 says this field exists so a user can "bind the torrent session
+to" their VPN, so the sentence was the intent and the code the gap. `outgoing_interfaces_for` strips
+the ports, and a wildcard anywhere binds nothing, since it confines nothing. An
+empty field changes nothing for anybody who never set it. **The holder can still
+overrule this**; the cost is the one libtorrent documents, that incoming packets to
+a local address not in the list are refused.
 
-Two resolutions, and this is a promise about privacy rather than a wording
-question, so it is not settled here:
+**How far the fault reached is narrower than this entry used to say, and it took
+two wrong tests to learn it.** It claimed outgoing TCP is how most peers are
+contacted and that a dropped tunnel would leak. Measured against a seeder on
+loopback, with the listen address `127.0.0.2` standing in for the tunnel and the
+seeder's peer list as the witness:
 
-- **Set `outgoing_interfaces` from the same field** (it takes names or IPs
-  and no ports, so the port is stripped). The sentence becomes true. The cost
-  is a stronger confinement than exists today and a new failure mode
-  libtorrent documents: with outgoing interfaces set, a device that does not
-  exist makes *every* outgoing peer connection fail, and incoming packets to
-  a local address not in the list are rejected with `peer_blocked_alert`. For
-  a VPN user that is arguably the wanted behaviour -- nothing leaves when the
-  tunnel is down -- and it is a different program from the one shipping now.
-- **Change the sentence** to say it confines incoming connections and leaves
-  outgoing TCP to the system route. Cheap, honest, and records the present
-  behaviour as intended.
+    binding removed, seeder takes uTP     seen from 127.0.0.2   no fault
+    binding removed, seeder refuses uTP   seen from 127.0.0.1   the fault
+    binding in,      seeder refuses uTP   seen from 127.0.0.2
+    device missing, either way            0 peers, nothing dialled
 
-The measurement above is what both answers need. The diagnostic in this
-section is independent of it and is in: whichever way the promise is settled,
-a listen that did not happen should say so.
+So uTP is tried first and leaves by the listen socket, and with nothing listening
+the session dials nobody. The fault is the **TCP fallback while the tunnel is up
+and is not the default route**: a split tunnel, or a peer that will not speak uTP
+on one. The first test used a missing device and stayed green with the binding
+removed; the second took uTP and did too. `test_torrent` now has the seeder refuse
+uTP, and removing the binding at either place it is applied turns it red.
+
+### A browser nobody had used a torrent in was in the swarm
+
+Reading that setter found something larger. `lt::session` was built in the source's
+constructor, and the source is built at every launch, so **every start of this
+browser joined the DHT, multicast on the LAN and asked the router by UPnP and
+NAT-PMP to open a port**, for a person who had never touched a torrent. That is
+ahead of the §11.4 consent, whose whole purpose is that nothing public happens
+before somebody is told, and arch §11.4 says UPnP "should not be silently on".
+The settings page's Reset did it a second time, building a throwaway source to read
+default values. The session also opened on every interface and only then heard the
+saved `listen_interfaces`.
+
+`start_session` runs from `start`, which the manager reaches only past consent,
+and the settings go in with the session's first pack. A person who agrees is now
+told about the router as well: the consent note says so. **Whether UPnP should be a
+switch is still unbuilt**; the code comment that called it "a setting" was wrong
+and now says it is not one.
 
 ## Every claim the settings page makes, checked against the code
 

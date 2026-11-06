@@ -373,12 +373,19 @@ static void test_consent_with_real_source() {
 	check(asked.count() == 1, "consent is demanded before anything starts");
 	check(asked.value(0).value(1).toString().contains("announced to"),
 	      "the note says what leaks");
+	check(asked.value(0).value(1).toString().contains("router"),
+	      "and that the router is asked for a port, which is not silently on");
 	check(asked.value(0).value(1).toString().contains("VPN"),
 	      "and points at the system layer, since we ship no tunnel");
 	check(job_by_id(m, id)->status == download_state::queued,
 	      "the torrent waits");
 	check(job_by_id(m, id)->public_participation,
 	      "and the row is marked for the UI");
+	// The source is built at every launch, so this is the whole of what a person
+	// who never answered the question has exposed: a session joins the DHT and
+	// asks the router for a port the moment it exists.
+	check(!tor->session_running(),
+	      "and nothing has joined the DHT or asked the router for a port");
 }
 
 // Resume data: written on completion, read back on the next launch, and
@@ -559,6 +566,7 @@ static void test_listen_refused() {
 		auto *tor = new torrent_download_source;
 		tor->set_state_directory(QDir(g_tmp).filePath("listen-state"));
 		tor->set_listen_interfaces("203.0.113.1:6881");
+		tor->start_session();
 		// The alerts are drained by a 500 ms timer on the GUI thread, so this
 		// has to let the event loop run rather than sleeping.
 		QElapsedTimer t;
@@ -639,6 +647,101 @@ static void test_listen_refused() {
 	qInstallMessageHandler(prev);
 }
 
+// **The interface named in Listen on is the address the swarm sees.** The settings
+// page says naming a VPN's device keeps torrent traffic on it, and
+// `listen_interfaces` alone does not: outgoing TCP leaves by the system's route, so
+// where the tunnel is not the default route, peers are dialled from the real
+// address. 127.0.0.2 stands in for the tunnel and the seeder's peer list is what a
+// stranger in the swarm sees; the magnet's x.pe makes us the side that dials.
+static void test_outgoing_stays_on_the_interface() {
+	section("the named interface is the address the swarm sees");
+
+	using ts = torrent_download_source;
+	check(ts::outgoing_interfaces_for("tun0:6881") == "tun0", "a device loses its port");
+	check(ts::outgoing_interfaces_for("tun0:6881,10.8.0.2:6881s") == "tun0,10.8.0.2",
+	      "a list stays a list, and a flag goes with the port");
+	check(ts::outgoing_interfaces_for("[fd00::2]:6881") == "fd00::2",
+	      "IPv6 loses its brackets, which this list does not take");
+	check(ts::outgoing_interfaces_for("tun0:6881,tun0:6882") == "tun0", "and is said once");
+	check(ts::outgoing_interfaces_for("0.0.0.0:6881,[::]:6881").isEmpty(),
+	      "a wildcard confines nothing, so nothing is bound");
+	check(ts::outgoing_interfaces_for("tun0:6881,0.0.0.0:6881").isEmpty(),
+	      "and one beside a device still means every interface");
+	check(ts::outgoing_interfaces_for("").isEmpty(), "an empty setting is no binding");
+
+	const auto dial_out = [](const QString &tag, int seed_port,
+	                         const QString &interfaces, int wait_ms,
+	                         bool already_running = false) {
+		struct result { bool done; int seeder_peers; QString seen_from; };
+		fixture fx = build_fixture(tag, {"movie.bin"}, seed_port, 256 * 1024);
+		// Slowly enough for the peer to be read while it is there: at full speed
+		// the transfer ends between two polls and the list is already empty.
+		fx.seed_handle.set_upload_limit(64 * 1024);
+		// And over TCP. uTP is tried first and leaves by the listen socket, which
+		// `listen_interfaces` already binds, so a seeder that takes uTP passes
+		// this with the binding removed. A peer that refuses it is the fallback
+		// the binding is for.
+		lt::settings_pack tcp_only;
+		tcp_only.set_bool(lt::settings_pack::enable_incoming_utp, false);
+		fx.seeder->apply_settings(tcp_only);
+		download_manager m;
+		auto *tor = new torrent_download_source;
+		if (already_running)
+			tor->start_session();
+		tor->set_listen_interfaces(interfaces);
+		tor->set_state_directory(QDir(g_tmp).filePath(tag + "-state"));
+		tor->set_seed_ratio(0.0);
+		m.add_source(tor);
+		m.set_directory(fx.dest);
+		m.set_consent("torrent", true);
+		QString err;
+		const QString magnet = fx.mt.magnet + "&x.pe=127.0.0.1:" +
+		                       QString::number(seed_port);
+		const int id = m.enqueue(QUrl(magnet), "node", &err);
+		check(id != 0, QString("the magnet is accepted (%1)").arg(err));
+		check(tor->session_running(), "consent given, the session has started");
+
+		int peers = 0;
+		QElapsedTimer t;
+		t.start();
+		bool done = false;
+		QString seen_from;
+		while (!done && t.elapsed() < wait_ms) {
+			peers = qMax(peers, fx.seed_handle.status().num_peers);
+			std::vector<lt::peer_info> info;
+			fx.seed_handle.get_peer_info(info);
+			for (const lt::peer_info &p : info)
+				seen_from = QString::fromStdString(p.ip.address().to_string());
+			std::vector<lt::alert *> junk;
+			fx.seeder->pop_alerts(&junk);
+			const download_job *j = job_by_id(m, id);
+			done = j && j->status == download_state::done;
+			spin(100);
+		}
+		return result{ done, peers, seen_from };
+	};
+
+	const auto bound = dial_out("out-tun", 6930, "127.0.0.2:6931", 30000);
+	check(bound.done, "dialling out through the named address reaches the seeder");
+	check(bound.seen_from == "127.0.0.2",
+	      QString("and the seeder sees that address, not the default route's (%1)")
+	          .arg(bound.seen_from));
+
+	const auto changed = dial_out("out-late", 6934, "127.0.0.2:6935", 30000, true);
+	check(changed.seen_from == "127.0.0.2",
+	      QString("and so does a setting changed under a running session (%1)")
+	          .arg(changed.seen_from));
+
+	// Held by libtorrent rather than by the binding: with nothing listening the
+	// session dials nobody, measured by taking the binding out and watching this
+	// stay green. It is here because it is the promise's other half.
+	const auto down = dial_out("out-down", 6932, "nosuchdev0:6933", 8000);
+	check(!down.done && down.seeder_peers == 0,
+	      QString("with the named device gone nothing reaches the swarm "
+	              "(done=%1, the seeder saw %2 peers)")
+	          .arg(down.done).arg(down.seeder_peers));
+}
+
 // **A torrent is known by the name it arrives with, not only by its path.**
 // Sites serve them from `/download?id=...` as `application/x-bittorrent`; the
 // page's download names it `... .torrent` (Android's URLUtil.guessFileName
@@ -711,6 +814,7 @@ int main(int argc, char **argv) {
 		QFile::remove(probe.fileName());
 	}
 
+	test_outgoing_stays_on_the_interface();
 	test_consent_with_real_source();
 	test_single_file_download();
 	test_multi_file_and_seeding();

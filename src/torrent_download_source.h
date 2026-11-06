@@ -82,6 +82,11 @@ public:
 	void prioritize_streaming(int id, const QString &file, bool on) override;
 	qint64 contiguous_bytes(int id, const QString &file) const override;
 
+	// The session starts with the first torrent, never with the source: see
+	// `start_session`. Settings given before that are held and take effect then.
+	bool start_session();
+	bool session_running() const;
+
 	// --- Settings ---------------------------------------------------------
 	// The sec 11.4 caps. `global` is the whole session; `per_torrent` bounds one
 	// swarm. Defaults here are already well above a desktop GUI's, because the
@@ -93,6 +98,10 @@ public:
 	// interface, and announces stop if it disappears. A settings field wired to
 	// a libtorrent option -- not a VPN implementation.
 	void set_listen_interfaces(const QString &interfaces);
+	// What `outgoing_interfaces` has to say for that listen setting: the same
+	// devices and addresses without their ports. Empty when the setting names
+	// a wildcard, which confines nothing, so nothing is bound.
+	static QString outgoing_interfaces_for(const QString &listen);
 
 	// Seeding is a policy question, not a default (sec 11.4). Ratio <= 0 means
 	// "stop as soon as the download completes".
