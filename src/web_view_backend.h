@@ -24,6 +24,7 @@ struct view_settings {
 	bool autoplay   = true;
 	bool popups     = false;
 	bool scrollbars = true;   // kiosk mode turns these off (architecture doc sec 8)
+	bool webrtc_local = false;   // WebRTC may offer local network addresses
 };
 
 // One rendered page.

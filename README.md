@@ -308,6 +308,9 @@ Kept here rather than left for you to discover.
   position on a real handset.
 - **Android has no screen sharing**, and the desktop's has never met a real
   `getDisplayMedia` — everything up to the engine call is tested against fakes.
+- **Android cannot keep local addresses from WebRTC.** The desktop offers a page
+  only the default route's interface unless a site is allowed more; Android's
+  WebView has no such setting.
 - **The desktop has no application-level camera gate.** Android's OS permission
   stands in front of the camera; on Linux there is no equivalent, so a page that
   asks gets it. Set `camera=ask` in `policy.ini` for a prompt.

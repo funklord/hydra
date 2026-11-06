@@ -1136,6 +1136,9 @@ int main(int argc, char **argv) {
 			// pinning it against a future change to that default, which is
 			// the open question this list's own comment points at.
 			"skipSponsorSegments",
+			// Left to the compiled default like the ones above, which already
+			// blocks, and which a profile saved before the feature never pinned.
+			"webrtcLocal",
 		};
 		QStringList unaccounted;
 		for (int i = 0; i < policy::feature_count(); ++i) {
@@ -1385,6 +1388,21 @@ int main(int argc, char **argv) {
 	section("request desktop site is a per-site rule");
 	{
 		policy_engine e;
+		// Blocked before anybody asks, because capture permission is what ends
+		// Chromium's mDNS hiding and the desktop grants capture by default. A
+		// saved file from before the feature must not read as a decision.
+		check(policy::feature_from_name("webrtcLocal") == policy::feature::webrtc_local,
+		      "local addresses are a feature a policy file can name");
+		{
+			policy_engine fresh;
+			check(fresh.global_default(policy::feature::webrtc_local) == policy::setting::block,
+			      "and WebRTC is offered none of them by default");
+			fresh.set_setting("call.example", policy::feature::webrtc_local,
+			                  policy::setting::allow);
+			check(fresh.is_allowed(policy::feature::webrtc_local, "call.example") &&
+			      !fresh.is_allowed(policy::feature::webrtc_local, "example.com"),
+			      "until one site is named, and only that site");
+		}
 		check(policy::feature_from_name("desktopSite") == policy::feature::desktop_site,
 		      "it round-trips through the machine name that files store");
 		check(e.global_default(policy::feature::desktop_site) == policy::setting::block,

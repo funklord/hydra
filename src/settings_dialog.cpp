@@ -524,6 +524,7 @@ constexpr feature_group k_privacy_layout[] = {
 	{ policy::feature::pointer_lock,        "Permissions" },
 	{ policy::feature::screen_share,        "Permissions" },
 	{ policy::feature::referer,             "Sent with requests" },
+	{ policy::feature::webrtc_local,        "Sent with requests" },
 	{ policy::feature::autofill,            "Passwords" },
 };
 
@@ -1405,7 +1406,8 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 #ifndef Q_OS_ANDROID
 			const bool means_nothing = f == policy::feature::desktop_site;
 #else
-			const bool means_nothing = f == policy::feature::screen_share;
+			const bool means_nothing = f == policy::feature::screen_share ||
+			                           f == policy::feature::webrtc_local;
 #endif
 			if (means_nothing) {
 				delete combo;

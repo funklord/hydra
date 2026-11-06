@@ -1021,6 +1021,7 @@ void qtwebengine_view::apply_settings(const view_settings &s) {
 	set->setAttribute(QWebEngineSettings::PlaybackRequiresUserGesture, !s.autoplay);
 	set->setAttribute(QWebEngineSettings::JavascriptCanOpenWindows, s.popups);
 	set->setAttribute(QWebEngineSettings::ShowScrollBars, s.scrollbars);
+	set->setAttribute(QWebEngineSettings::WebRTCPublicInterfacesOnly, !s.webrtc_local);
 	// **Not a per-page policy, so it is set here rather than plumbed through
 	// view_settings.** Qt defaults this off, and with it off the engine refuses
 	// `requestFullscreen()` before the shell is ever asked -- which is why a

@@ -28747,6 +28747,36 @@ told about the router as well: the consent note says so. **Whether UPnP should b
 switch is still unbuilt**; the code comment that called it "a setting" was wrong
 and now says it is not one.
 
+## A page holding a microphone could read every address on the machine
+
+Arch §7.3 maps "WebRTC IP leak" to `WebRTCPublicInterfacesOnly`, and §7.1 lists
+WebRTC as a feature. **Nothing in `src/` had ever set it.** The row read as done
+because the rest of the table is.
+
+Chromium hides local addresses behind mDNS names, so this looked harmless until
+measured, and the hiding ends the moment a page holds capture permission. On the
+desktop camera and microphone default to `allow`, on instruction (see the comment
+in `policy_engine.cpp`), so any page can reach that state without a prompt. A
+standalone probe, same machine, no STUN server:
+
+    public-only off, capture refused    one .local name
+    public-only off, capture granted    172.17.0.1 10.0.0.3 169.254.78.116
+    public-only on,  capture refused    no candidates
+    public-only on,  capture granted    no candidates
+
+That is a stable fingerprint of somebody's network and, for a person on a VPN, the
+tunnel's address and the one beneath it. `webrtc_local` is the feature, default
+block, so a site can be named where a direct call on one network matters; the cost
+of the block is that such a call goes the long way round, by STUN or a relay.
+Default block rather than a constant because §7.1 asks for a feature. It is set on
+the profile too, for pages no policy reaches. A saved `policy.ini` does not pin
+this one, having never held it, so the default reaches existing profiles.
+
+`test/live/try_webrtc` reads it from the page's side through the real shell, with
+the allowed site as the control. **Android has no equivalent**: the WebView offers
+no such setting, so the row is greyed there, and whether a script filtering
+candidates would be worth injecting is unmeasured.
+
 ## Every claim the settings page makes, checked against the code
 
 The VPN sentence in the previous section was found by accident, while reading

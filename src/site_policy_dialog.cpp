@@ -93,6 +93,7 @@ constexpr shield_row k_shield_layout[] = {
 	{ policy::feature::third_party_cookies, "Cookies and site data" },
 
 	{ policy::feature::referer,             "Sent with requests" },
+	{ policy::feature::webrtc_local,        "Sent with requests" },
 	{ policy::feature::autofill,            "Sent with requests" },
 	{ policy::feature::extractor_fetch,     "Sent with requests" },
 
@@ -269,6 +270,12 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 			combo->setEnabled(false);
 			combo->setToolTip("Not available on this platform. Android's "
 			                   "WebView has no screen sharing to allow.");
+		}
+		// The same again: the WebView has no setting to give this to.
+		if (r.f == policy::feature::webrtc_local) {
+			combo->setEnabled(false);
+			combo->setToolTip("Not available on this platform. Android's "
+			                   "WebView decides this by itself.");
 		}
 #endif
 		connect(combo, &QComboBox::currentIndexChanged,

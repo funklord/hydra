@@ -115,6 +115,11 @@ const info k_info[] = {
 		"it on, because it asks that database about each video — by a short "
 		"hash shared with thousands of others, so it is not told which one.",
 		nullptr },
+	{ "webrtcLocal", "Local network addresses",
+		"Whether calls and other direct connections on this site may use, and so "
+		"reveal, this machine's addresses on your local network. They work without "
+		"them; two machines on one network may go the long way round.",
+		nullptr },
 };
 
 // **The pairing that nothing was holding.** Every accessor below bounds its

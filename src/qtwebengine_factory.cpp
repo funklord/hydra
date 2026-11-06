@@ -20,6 +20,7 @@
 #include <QNetworkCookieJar>
 #include <QWebEngineClientHints>
 #include <QWebEngineProfile>
+#include <QWebEngineSettings>
 #include <QWebEngineView>
 #include <QWebEngineUrlRequestJob>
 #include <QWebEngineUrlScheme>
@@ -170,6 +171,10 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 	m_profile->setPersistentCookiesPolicy(
 	  QWebEngineProfile::AllowPersistentCookies);
 	m_profile->setHttpCacheType(QWebEngineProfile::DiskHttpCache);
+	// The profile's answer as well as each page's, for the pages no policy is
+	// applied to: a probe, an extractor's hidden page, a popup's first moments.
+	m_profile->settings()->setAttribute(
+	  QWebEngineSettings::WebRTCPublicInterfacesOnly, true);
 	// **The policy engine is the only decider, and a persistent profile was
 	// about to quietly take that away.** `QWebEnginePage::permissionRequested`
 	// fires only while a permission's state is `Ask`, and

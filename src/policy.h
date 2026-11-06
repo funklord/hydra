@@ -105,6 +105,17 @@ enum class feature : int {
 	// service nobody mentioned would be doing the thing this shield exists to
 	// prevent, however good the privacy arithmetic is.
 	sponsor_skip,
+	// **What WebRTC may say about this machine's network** (sec 7.3). Blocked
+	// means only the interface the default route uses is offered. It is a
+	// feature rather than a constant because a call between two machines on one
+	// network is better direct, and that is a site somebody can name.
+	//
+	// Blocked by default, and more is at stake here than in most browsers:
+	// Chromium hides local addresses behind mDNS names only until a page has
+	// capture permission, and on the desktop camera and microphone default to
+	// allow. Measured: a page that opened a microphone read every interface on
+	// the machine, 10.0.0.3 and docker's among them. A VPN's is one more.
+	webrtc_local,
 	count
 };
 

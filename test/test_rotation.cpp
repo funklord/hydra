@@ -3529,7 +3529,8 @@ int main(int argc, char **argv) {
 		w8.resize(900, 600);
 
 		using F = policy::feature;
-		const F driven[] = { F::javascript, F::images, F::autoplay, F::popups };
+		const F driven[] = { F::javascript, F::images, F::autoplay, F::popups,
+		                     F::webrtc_local };
 		for (auto f : driven)
 			pol.set_setting("blocked.example", f, policy::setting::block);
 		for (auto f : driven)
@@ -3549,6 +3550,8 @@ int main(int argc, char **argv) {
 		const view_settings blocked = settings_for("blocked.example");
 		const view_settings allowed = settings_for("allowed.example");
 
+		check(!blocked.webrtc_local && allowed.webrtc_local,
+		      "and WebRTC's local addresses follow the same rule");
 		check(!blocked.javascript && !blocked.images && !blocked.autoplay &&
 		          !blocked.popups,
 		      QString("a blocked site gets none of them (js=%1 img=%2 auto=%3 "
@@ -3571,7 +3574,7 @@ int main(int argc, char **argv) {
 		// unmentioned and untested -- which is exactly how `scrollbars` got
 		// its own comment. This fails to compile when the struct grows, and
 		// the message says what to do about it.
-		static_assert(sizeof(view_settings) == 5,
+		static_assert(sizeof(view_settings) == 6,
 		               "view_settings gained or lost a field: drive it from "
 		               "apply_policy and name it in the two checks above, or "
 		               "say here why it is not policy's to set");

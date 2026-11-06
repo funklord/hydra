@@ -9429,6 +9429,7 @@ void main_window::apply_policy(web_view_backend *view, const QString &host) {
 	s.images     = m_policy->is_allowed(F::images, host);
 	s.autoplay   = m_policy->is_allowed(F::autoplay, host);
 	s.popups     = m_policy->is_allowed(F::popups, host);
+	s.webrtc_local = m_policy->is_allowed(F::webrtc_local, host);
 	// **Scrollbars are the kiosk's, not the policy's, and this used to hand
 	// them back.** `view_settings` is built fresh here and `scrollbars`
 	// defaults to true, so every re-apply -- and one runs on each navigation

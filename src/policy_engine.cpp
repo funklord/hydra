@@ -128,6 +128,7 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	// everyone wants from a consent banner and is the whole point of the option.
 	set_global_default(feature::cookie_notices,      setting::block);
 	set_global_default(feature::referer,             setting::allow);
+	set_global_default(feature::webrtc_local,        setting::block);
 	// Autofill defaults on; the per-site tri-state and the strict origin gate
 	// are what actually govern it (sec 13.3).
 	set_global_default(feature::autofill,            setting::allow);

@@ -272,7 +272,7 @@ Each rule is one string plus one 64-bit integer; the ruleset serializes to a sma
 | Autoplay media | `QWebEngineSettings::PlaybackRequiresUserGesture` |
 | Camera / mic / geolocation / notifications | `QWebEnginePage::featurePermissionRequested` signal, granted/denied from policy instead of prompting |
 | Referer / custom headers | Interceptor `setHttpHeader` (strip or rewrite `Referer`) |
-| WebRTC IP leak | `WebRTCPublicInterfacesOnly` |
+| WebRTC IP leak | `QWebEngineSettings::WebRTCPublicInterfacesOnly`, per page from `webrtc_local` and on the profile for pages no policy reaches. Android's WebView offers no equivalent |
 
 The whole enforcement surface is one interceptor, one cookie filter, per-navigation attribute application, and two page-level overrides — all reading `PolicyEngine::decide(...)`.
 
