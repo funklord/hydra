@@ -49,6 +49,7 @@
 #include "stream_assembly.h"
 #include "player_launcher.h"
 #include "download_manager.h"
+#include "download_route.h"
 #include "engine_download_source.h"
 #include "http_download_source.h"
 #include "torrent_download_source.h"
@@ -572,6 +573,33 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		// is the whole of what was missing -- an unaccepted download is
 		// cancelled by Qt without a word, so every one of these used to look
 		// like a click that did nothing.
+		// **While downloads have a route, a page's goes by it too.** The server
+		// has already answered the engine, on the ordinary connection, which
+		// nothing here can prevent: what stays off it is the file itself.
+		factory->set_download_divert(
+		  [this](const web_view_factory::diverted_download &d) {
+			if (!m_downloads || !download_route::shared().bound())
+				return false;
+			const QString name = d.file_name.isEmpty()
+			                       ? d.url.fileName() : d.file_name;
+			if (d.posted) {
+				m_status->showMessage(
+				  QString("%1 came from a form, which cannot be sent again through "
+				          "%2, so it was not saved.")
+				    .arg(name, download_route::shared().interface_name()), 12000);
+				return true;
+			}
+			QString error, node_id;
+			if (web_view_backend *v = current_view())
+				node_id = m_views_by_id.key(v);
+			download_hints hints;
+			hints.known_media = true;   // the server said so, not the address
+			if (!m_downloads->enqueue(d.url, node_id, &error, d.headers, name, hints))
+				m_status->showMessage(error, 12000);
+			else
+				m_status->showMessage(QString("Downloading %1…").arg(name), 6000);
+			return true;
+		});
 		factory->set_download_handler(
 		  [this](const web_view_factory::engine_download &d) {
 			// **Adopted, not merely narrated.** This handler used to show a

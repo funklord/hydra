@@ -9,6 +9,7 @@
 
 #include <QtWebEngineCore/qtwebenginecoreglobal.h>
 #include <QVersionNumber>
+#include <QWebEnginePage>
 #include <QWebEngineDownloadRequest>
 #include <QStandardPaths>
 #include <QFileInfo>
@@ -237,6 +238,29 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 	                  m_profile, [this](QWebEngineDownloadRequest *d) {
 		if (!d)
 			return;
+
+		// A `blob:` or `data:` has no network to leave by, and saving this page
+		// is the engine writing what it holds, so neither is diverted.
+		const QString scheme = d->url().scheme();
+		if (m_download_divert && !d->isSavePageDownload() &&
+		    (scheme == QLatin1String("http") || scheme == QLatin1String("https"))) {
+			diverted_download out;
+			out.url       = d->url();
+			out.file_name = d->suggestedFileName();
+			out.posted    = m_interceptor && m_interceptor->was_posted(d->url());
+			const QString cookies = cookie_header_for(d->url());
+			if (!cookies.isEmpty())
+				out.headers.insert(QStringLiteral("Cookie"), cookies);
+			out.headers.insert(QStringLiteral("User-Agent"), m_profile->httpUserAgent());
+			if (QWebEnginePage *page = d->page())
+				out.headers.insert(QStringLiteral("Referer"),
+				                   page->url().toString(QUrl::FullyEncoded));
+			if (m_download_divert(out)) {
+				d->cancel();
+				return;
+			}
+		}
+
 		const QString dir =
 		  QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
 		QDir().mkpath(dir);
@@ -356,6 +380,10 @@ void qtwebengine_factory::set_external_url_handler(external_url_handler fn) {
 
 void qtwebengine_factory::set_download_handler(download_note fn) {
 	m_download_note = std::move(fn);
+}
+
+void qtwebengine_factory::set_download_divert(download_divert fn) {
+	m_download_divert = std::move(fn);
 }
 
 bool qtwebengine_factory::cancel_engine_download(quint64 id) {

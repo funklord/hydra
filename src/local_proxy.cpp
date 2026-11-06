@@ -1,4 +1,5 @@
 #include "local_proxy.h"
+#include "download_route.h"
 
 #include <memory>
 #include <QNetworkAccessManager>
@@ -649,6 +650,7 @@ void local_proxy::next_range(QTcpSocket *client, std::shared_ptr<chunked_fetch> 
 	QNetworkRequest req = request_for(st->e, st->url);
 	req.setRawHeader("Range", "bytes=" + QByteArray::number(st->pos) + '-' +
 	                          QByteArray::number(to));
+	download_route::shared().apply(m_net);
 	QNetworkReply *reply = m_net->get(req);
 	reply->setReadBufferSize(k_reply_buffer);
 	auto moved      = std::make_shared<qint64>(0);
@@ -809,6 +811,7 @@ void local_proxy::fetch_upstream(QTcpSocket *client, const entry &e,
 	if (!range.isEmpty())
 		req.setRawHeader("Range", range);
 
+	download_route::shared().apply(m_net);
 	QNetworkReply *reply = m_net->get(req);
 
 	// **Decided once, before anything is written.** A redirect has to be

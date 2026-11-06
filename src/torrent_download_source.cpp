@@ -1,4 +1,5 @@
 #include "torrent_download_source.h"
+#include "download_route.h"
 
 #include <QDir>
 #include <QElapsedTimer>
@@ -142,19 +143,19 @@ bool torrent_download_source::start_session() {
 	// hole (sec 11.4). On by default because inbound connectivity is most of what
 	// makes a swarm usable; the consent note says so while it is on, and it is a
 	// setting.
-	sp.set_bool(lt::settings_pack::enable_upnp, m_port_mapping);
-	sp.set_bool(lt::settings_pack::enable_natpmp, m_port_mapping);
+	sp.set_bool(lt::settings_pack::enable_upnp, maps_ports());
+	sp.set_bool(lt::settings_pack::enable_natpmp, maps_ports());
 
 	sp.set_str(lt::settings_pack::user_agent, "Hydra/0.1 libtorrent/2.0");
 
 	// What the settings already said, so the first socket is the right one:
 	// applied afterwards, the session would open on every interface and start
 	// the DHT from the default route before hearing about the VPN.
-	if (!m_listen_interfaces.isEmpty()) {
-		sp.set_str(lt::settings_pack::listen_interfaces,
-		            m_listen_interfaces.toStdString());
+	const QString listen = effective_listen();
+	if (!listen.isEmpty()) {
+		sp.set_str(lt::settings_pack::listen_interfaces, listen.toStdString());
 		sp.set_str(lt::settings_pack::outgoing_interfaces,
-		            outgoing_interfaces_for(m_listen_interfaces).toStdString());
+		            outgoing_interfaces_for(listen).toStdString());
 		m_d->listen_since.restart();
 		m_d->listen_checked = false;
 	}
@@ -200,13 +201,19 @@ source_capabilities torrent_download_source::capabilities() const {
 	// mean a swarm that is not connected, which is a swarm not downloading.
 	c.max_concurrent       = 8;
 	c.streamable           = true;   // sequential + deadlines make it playable
-	c.participation_note   =
-	  "A torrent is not a private download. Your IP address is announced to "
-	  "the tracker and to every peer in the swarm, and peers can see what you "
-	  "are fetching. " +
-	  QString(m_port_mapping ? "Hydra asks your router to open a port for it. " : "") +
-	  "Hydra does not tunnel this — if you want it hidden, set up a VPN or proxy "
-	  "at the system level.";
+	const QString route = download_route::shared().interface_name();
+	c.participation_note   = route.isEmpty()
+	  ? "A torrent is not a private download. Your IP address is announced to "
+	    "the tracker and to every peer in the swarm, and peers can see what you "
+	    "are fetching. " +
+	    QString(maps_ports() ? "Hydra asks your router to open a port for it. " : "") +
+	    "Hydra does not tunnel this — if you want it hidden, set up a VPN or proxy "
+	    "at the system level, and choose it under Settings ▸ Downloads."
+	  : QString("A torrent is not a private download. The address of %1, which "
+	            "downloads are set to use, is announced to the tracker and to "
+	            "every peer in the swarm, and peers can see what you are "
+	            "fetching. If %1 is a VPN that address is the VPN's, not "
+	            "yours.").arg(route);
 	return c;
 }
 
@@ -273,12 +280,17 @@ void torrent_download_source::set_listen_interfaces(const QString &interfaces) {
 	// it is still wrong. Without this, fixing the value and then breaking it
 	// the same way in one session would be silent the second time.
 	m_d->listen_failed.clear();
-	if (m_d->session && !interfaces.isEmpty()) {
+	const QString listen = effective_listen();
+	if (m_d->session && (!listen.isEmpty() || m_applied_route)) {
 		m_d->listen_since.restart();
 		m_d->listen_checked = false;
+		// Leaving a route with no setting of its own to fall back on is
+		// libtorrent's default again, which is not the same as saying nothing.
+		const QString wanted = listen.isEmpty()
+		  ? QStringLiteral("0.0.0.0:6881,[::]:6881") : listen;
+		m_applied_route = !download_route::shared().interface_name().isEmpty();
 		lt::settings_pack sp;
-		sp.set_str(lt::settings_pack::listen_interfaces,
-		            interfaces.toStdString());
+		sp.set_str(lt::settings_pack::listen_interfaces, wanted.toStdString());
 		// `listen_interfaces` covers incoming connections, outgoing uTP,
 		// trackers and the DHT. Outgoing TCP, which is how most peers are
 		// reached, is this setting, and left empty it takes the system's route:
@@ -286,10 +298,29 @@ void torrent_download_source::set_listen_interfaces(const QString &interfaces) {
 		// where the tunnel is not the default route peers were dialled from the
 		// real address. test_torrent reads the address a seeder sees.
 		sp.set_str(lt::settings_pack::outgoing_interfaces,
-		            outgoing_interfaces_for(interfaces).toStdString());
+		            outgoing_interfaces_for(wanted).toStdString());
+		sp.set_bool(lt::settings_pack::enable_upnp, maps_ports());
+		sp.set_bool(lt::settings_pack::enable_natpmp, maps_ports());
 		m_d->session->apply_settings(sp);
 	}
 #endif
+}
+
+void torrent_download_source::route_changed() {
+	set_listen_interfaces(m_listen_interfaces);
+}
+
+QString torrent_download_source::effective_listen() const {
+	const QString device = download_route::shared().interface_name();
+	return device.isEmpty() ? m_listen_interfaces
+	                        : download_route::listen_on(device, m_listen_interfaces);
+}
+
+// **Never through a route.** The router a port mapping asks is the one on the
+// ordinary connection, so it would open a hole for traffic that does not come
+// that way, and tell that router a torrent is running.
+bool torrent_download_source::maps_ports() const {
+	return m_port_mapping && !download_route::shared().bound();
 }
 
 QString torrent_download_source::outgoing_interfaces_for(const QString &listen) {
@@ -316,8 +347,8 @@ void torrent_download_source::set_port_mapping(bool on) {
 #ifdef HYDRA_HAVE_LIBTORRENT
 	if (m_d->session) {
 		lt::settings_pack sp;
-		sp.set_bool(lt::settings_pack::enable_upnp, on);
-		sp.set_bool(lt::settings_pack::enable_natpmp, on);
+		sp.set_bool(lt::settings_pack::enable_upnp, maps_ports());
+		sp.set_bool(lt::settings_pack::enable_natpmp, maps_ports());
 		m_d->session->apply_settings(sp);
 	}
 #endif
@@ -330,6 +361,24 @@ bool torrent_download_source::session_maps_ports() const {
 #else
 	return false;
 #endif
+}
+
+QString torrent_download_source::session_listen() const {
+#ifdef HYDRA_HAVE_LIBTORRENT
+	if (m_d->session)
+		return QString::fromStdString(m_d->session->get_settings().get_str(
+		                                lt::settings_pack::listen_interfaces));
+#endif
+	return {};
+}
+
+QString torrent_download_source::session_outgoing() const {
+#ifdef HYDRA_HAVE_LIBTORRENT
+	if (m_d->session)
+		return QString::fromStdString(m_d->session->get_settings().get_str(
+		                                lt::settings_pack::outgoing_interfaces));
+#endif
+	return {};
 }
 
 void torrent_download_source::set_seed_ratio(double ratio) { m_seed_ratio = ratio; }
@@ -365,6 +414,11 @@ bool torrent_download_source::start(const download_request &req, QString *error)
 		*error = "This build has no BitTorrent support.";
 	return false;
 #else
+	// libtorrent would only sit there with no peers, which reads as a dead
+	// swarm: nothing leaves, and nothing says why.
+	if (!download_route::shared().ready(error))
+		return false;
+
 	if (!start_session()) {
 		if (error)
 			*error = "The BitTorrent session failed to start.";
@@ -487,6 +541,7 @@ void torrent_download_source::fetch_torrent_file(const download_request &req) {
 	QNetworkRequest get(req.url);
 	for (auto it = req.headers.cbegin(); it != req.headers.cend(); ++it)
 		get.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
+	download_route::shared().apply(m_net);
 	QNetworkReply *reply = m_net->get(get);
 	const download_request copy = req;
 	connect(reply, &QNetworkReply::finished, this, [this, reply, copy] {
@@ -974,14 +1029,14 @@ void torrent_download_source::poll_alerts() {
 			// Nothing identifying in the alert: name the setting instead, which
 			// is the thing that would have to change.
 			if (where.isEmpty())
-				where = m_listen_interfaces;
+				where = effective_listen();
 			if (!m_d->listen_failed.contains(where)) {
 				m_d->listen_failed.insert(where);
 				// Keyed by the setting as well, so the one-shot check at the
 				// bottom of this function does not say the same thing a second
 				// time in different words when the two spellings differ --
 				// `127.0.0.1:22 on lo` against `127.0.0.1:22`.
-				m_d->listen_failed.insert(m_listen_interfaces);
+				m_d->listen_failed.insert(effective_listen());
 				// The operation, because the error alone does not say which
 				// step refused: "operation not supported" on Android came with
 				// no address, no port and no device to go on.
@@ -1025,17 +1080,18 @@ void torrent_download_source::poll_alerts() {
 	// binding is asynchronous: the answer does not exist at the moment
 	// `apply_settings` returns, and the first poll can arrive before it does.
 	// `is_listening()` is documented for precisely this question.
-	if (!m_d->listen_checked && !m_listen_interfaces.isEmpty() &&
+	const QString listen = effective_listen();
+	if (!m_d->listen_checked && !listen.isEmpty() &&
 	    m_d->listen_since.isValid() && m_d->listen_since.elapsed() > 2000) {
 		m_d->listen_checked = true;
 		if (!m_d->session->is_listening() &&
-		    !m_d->listen_failed.contains(m_listen_interfaces)) {
-			m_d->listen_failed.insert(m_listen_interfaces);
+		    !m_d->listen_failed.contains(listen)) {
+			m_d->listen_failed.insert(listen);
 			qWarning("torrent: nothing is listening after asking for %s; "
 			          "no peer can arrive or be reached, so this will neither "
 			          "seed nor download. A device name that does not exist is "
 			          "refused without an error.",
-			          qUtf8Printable(m_listen_interfaces));
+			          qUtf8Printable(listen));
 		}
 	}
 

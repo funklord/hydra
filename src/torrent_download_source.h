@@ -102,6 +102,10 @@ public:
 	// devices and addresses without their ports. Empty when the setting names
 	// a wildcard, which confines nothing, so nothing is bound.
 	static QString outgoing_interfaces_for(const QString &listen);
+	// What libtorrent is told: this setting's ports on the route's device
+	// while there is one, since a torrent is a download like any other.
+	QString effective_listen() const;
+	bool    maps_ports() const;
 
 	// Seeding is a policy question, not a default (sec 11.4). Ratio <= 0 means
 	// "stop as soon as the download completes".
@@ -114,7 +118,11 @@ public:
 	// Whether to ask the router to open a port, by UPnP and NAT-PMP. Sec 11.4
 	// calls that a security posture change which should not be silently on.
 	void set_port_mapping(bool on);
+	// `download_route` moved: the session follows it, whatever the fields say.
+	void route_changed();
 	bool session_maps_ports() const;   // what the running session was told
+	QString session_listen() const;    // and where it was told to listen
+	QString session_outgoing() const;  // and to dial from
 
 	// Where resume data and the session state live.
 	void set_state_directory(const QString &dir);
@@ -155,6 +163,8 @@ private:
 	double   m_seed_ratio     = 1.0;
 	bool     m_sequential     = false;
 	bool     m_port_mapping   = true;
+	// The session was last told a route, so an empty setting has to undo it.
+	bool     m_applied_route  = false;
 	int      m_global_limit   = 800;
 	int      m_torrent_limit  = 200;
 };

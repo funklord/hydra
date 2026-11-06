@@ -10,6 +10,7 @@
 #include "cosmetic_filters.h"
 #include "policy_engine.h"
 #include "download_manager.h"
+#include "download_route.h"
 #include "fake_download_source.h"
 #include "downloads_dialog.h"
 #include "zoom_store.h"
@@ -139,7 +140,9 @@ int main(int argc, char **argv) {
 		p.set_selected(player_launcher::custom_id());
 		p.set_terminal_command("xterm -e");
 		p.set_custom_in_terminal(true);
+		download_route::shared().set_interface_name("hydra-vpn0");
 		settings_store::save_from(&p, &m, tor, nullptr, nullptr);
+		download_route::shared().set_interface_name(QString());
 	}
 	{
 		download_manager m2;
@@ -155,6 +158,9 @@ int main(int argc, char **argv) {
 		check(qFuzzyCompare(tor2->seed_ratio(), 2.5), "seed ratio persists");
 		check(tor2->listen_interfaces() == "tun0:6881",
 		      "listen interfaces persists — the system-VPN binding");
+		check(download_route::shared().interface_name() == "hydra-vpn0",
+		      "the connection downloads leave by persists");
+		download_route::shared().set_interface_name(QString());
 		check(tor2->sequential(), "sequential default persists");
 		check(!tor2->port_mapping(), "and so does turning port mapping off");
 		check(p2.custom_command() == "/bin/echo --play %U", "custom command persists");

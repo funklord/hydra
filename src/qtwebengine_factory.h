@@ -27,6 +27,7 @@ public:
 	QString user_agent() const override;
 	void set_external_url_handler(external_url_handler fn) override;
 	void set_download_handler(download_note fn) override;
+	void set_download_divert(download_divert fn) override;
 	bool cancel_engine_download(quint64 id) override;
 	void clear_browsing_data(const browsing_data &what,
 	                          clear_note done) override;
@@ -82,6 +83,7 @@ private:
 	resource_scheme_handler *m_resource_handler = nullptr;
 	external_url_handler     m_external;
 	download_note            m_download_note;
+	download_divert m_download_divert;
 	// The engine's downloads, so a Cancel in the downloads window can reach
 	// one. `QPointer` because the request is the profile's and goes when the
 	// download does, and a stale raw pointer here would be a crash on the one

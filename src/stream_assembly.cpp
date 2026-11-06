@@ -1,4 +1,5 @@
 #include "stream_assembly.h"
+#include "download_route.h"
 
 #include "download_manager.h"
 #include "hls_assembler.h"
@@ -86,6 +87,12 @@ void stream_assembly::assemble(const media_item &item,
 	// connecting once up front is not available either.
 	m_assembler->disconnect(this);
 	m_live_note.clear();
+
+	QString route_fault;
+	if (!download_route::shared().ready(&route_fault)) {
+		emit status(route_fault);
+		return;
+	}
 
 	if (play_it && !m_scratch.isValid()) {
 		// Nowhere to write means no assembly, said once rather than as a

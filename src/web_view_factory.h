@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QMap>
 #include <QString>
 #include <QStringList>
 #include <QUrl>
@@ -129,6 +130,22 @@ public:
 	};
 	using download_note = std::function<void(const engine_download &d)>;
 	virtual void set_download_handler(download_note fn) = 0;
+
+	// **A page download that must not run in the engine.** Chromium's network
+	// is the page's: nothing can send one of its transfers another way, so
+	// while downloads have a route of their own the engine's copy is dropped
+	// and this is handed what is needed to fetch it again. Answering false
+	// leaves the transfer with the engine. `headers` is what the page's
+	// session would have sent; `posted` says it came from a form, which a
+	// second fetch cannot repeat.
+	struct diverted_download {
+		QUrl                   url;
+		QString                file_name;
+		QMap<QString, QString> headers;
+		bool                   posted = false;
+	};
+	using download_divert = std::function<bool(const diverted_download &d)>;
+	virtual void set_download_divert(download_divert) {}
 
 	// **Stop a download the engine is running.** The shell cannot: the
 	// transfer belongs to the engine for the reasons the factory records --

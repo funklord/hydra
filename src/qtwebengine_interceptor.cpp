@@ -9,10 +9,21 @@ qtwebengine_interceptor::qtwebengine_interceptor(request_filter *filter, QObject
 }
 
 void qtwebengine_interceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
+	using RT = QWebEngineUrlRequestInfo;
+	if (info.resourceType() == RT::ResourceTypeMainFrame ||
+	    info.resourceType() == RT::ResourceTypeSubFrame) {
+		if (info.requestMethod() == QByteArrayLiteral("GET")) {
+			m_posted.remove(info.requestUrl());
+		} else {
+			if (m_posted.size() >= 32)
+				m_posted.clear();
+			m_posted.insert(info.requestUrl());
+		}
+	}
+
 	if (!m_filter)
 		return;
 
-	using RT = QWebEngineUrlRequestInfo;
 	request_context ctx;
 	ctx.request_host = info.requestUrl().host();
 	ctx.site_host    = info.firstPartyUrl().host();   // the page's site

@@ -181,6 +181,9 @@ private:
 	void build_download_page(QWidget *page);
 	void build_ai_page(QWidget *page);
 	void update_ai_state();
+	// The connections on offer now, with `current` chosen. A name that is not
+	// up stays listed: a VPN that is down is still what downloads are set to.
+	void fill_route_choices(const QString &current);
 	// Probing in a settings window is an explicit act, never something that
 	// happens because the window opened. Both of these are wired to a button.
 	void check_local_model();
@@ -286,6 +289,7 @@ private:
 	QLabel         *m_search_note   = nullptr;
 
 	QLineEdit      *m_dir          = nullptr;
+	QComboBox      *m_route        = nullptr;
 	QSpinBox       *m_conn_global  = nullptr;
 	QSpinBox       *m_conn_torrent = nullptr;
 	QDoubleSpinBox *m_seed_ratio   = nullptr;

@@ -1,4 +1,5 @@
 #include "downloads_dialog.h"
+#include "download_route.h"
 
 #include "download_manager.h"
 #include "empty_state.h"
@@ -488,11 +489,16 @@ void downloads_dialog::refresh() {
 		m_list->setCurrentItem(m_list->topLevelItem(0));
 
 	m_note->setVisible(any_public);
+	const QString route = download_route::shared().interface_name();
 	if (any_public)
-		m_note->setText(
-		  "<b>⇅ public</b> — those transfers announce your IP address to "
-		  "other people and are not private. Hydra does not tunnel them; use "
-		  "a system-level VPN or proxy if you need that.");
+		m_note->setText(route.isEmpty()
+		  ? QStringLiteral(
+		      "<b>⇅ public</b> — those transfers announce your IP address to "
+		      "other people and are not private. Hydra does not tunnel them; use "
+		      "a system-level VPN or proxy if you need that, and choose it under "
+		      "Settings ▸ Downloads.")
+		  : QString("<b>⇅ public</b> — those transfers announce the address of "
+		            "%1 to other people, and are not private.").arg(route));
 
 	update_buttons();
 }

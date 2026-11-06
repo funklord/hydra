@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QSet>
+#include <QUrl>
 #include <QWebEngineUrlRequestInterceptor>
 
 class request_filter;
@@ -15,6 +17,12 @@ public:
 
 	void interceptRequest(QWebEngineUrlRequestInfo &info) override;
 
+	// Whether a frame's last request for `url` was anything but a GET: a
+	// download request does not say how it was fetched, and this does.
+	bool was_posted(const QUrl &url) const { return m_posted.contains(url); }
+
 private:
 	request_filter *m_filter;
+	// Bounded by forgetting: only the moment after a form is sent matters.
+	QSet<QUrl>      m_posted;
 };

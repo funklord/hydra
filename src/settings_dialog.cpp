@@ -3,6 +3,7 @@
 #include "settings_dialog.h"
 #include "claude_provider.h"
 #include "download_manager.h"
+#include "download_route.h"
 #include "flow_layout.h"
 #include "autofill_controller.h"
 #include "main_window.h"
@@ -386,6 +387,10 @@ void load_into(player_launcher *players, download_manager *downloads,
 		players->refresh();
 	}
 
+	// Before the torrent source below, whose session follows it.
+	download_route::shared().set_interface_name(
+	  s.value("downloads/interface").toString());
+
 	if (downloads) {
 		const QString dir = s.value("downloads/directory").toString();
 		if (!dir.isEmpty())
@@ -434,6 +439,7 @@ void save_from(player_launcher *players, download_manager *downloads,
 	}
 	if (downloads)
 		s.setValue("downloads/directory", downloads->directory());
+	s.setValue("downloads/interface", download_route::shared().interface_name());
 	if (torrents) {
 		s.setValue("torrent/connections_global",
 		            torrents->connection_limit_global());
@@ -857,6 +863,21 @@ settings_dialog::settings_dialog(player_launcher *players,
 
 	load();
 	load_kiosk();
+}
+
+void settings_dialog::fill_route_choices(const QString &current) {
+	m_route->clear();
+	m_route->addItem(QStringLiteral("Any connection, like browsing"), QString());
+	bool found = current.isEmpty();
+	const auto choices = download_route::choices();
+	for (const download_route::choice &c : choices) {
+		m_route->addItem(c.tunnel ? c.name + QStringLiteral(" (looks like a VPN)")
+		                          : c.name, c.name);
+		found = found || c.name == current;
+	}
+	if (!found)
+		m_route->addItem(current + QStringLiteral(" (not connected)"), current);
+	m_route->setCurrentIndex(m_route->findData(current));
 }
 
 void settings_dialog::index_pages(QWidget *page, int page_index) {
@@ -1690,6 +1711,7 @@ void settings_dialog::restore_page_defaults(int page) {
 	} else if (name.startsWith("Downloads")) {
 		download_manager fresh;
 		put_value(m_dir, fresh.directory());
+		fill_route_choices(QString());
 		if (m_torrents) {
 			// The torrent knobs read their defaults from a fresh source, which
 			// is only constructible when the build has libtorrent -- and when it
@@ -2757,6 +2779,24 @@ void settings_dialog::build_download_page(QWidget *page) {
 	                           "Where a download lands unless something says "
 	                           "otherwise.", where, page, /*wide=*/true));
 
+	// sec 11.4: Hydra ships no VPN. This points downloads at one the system
+	// already has, and the row says what that does and does not cover.
+	m_route = new QComboBox(page);
+	m_route->setObjectName("download_route");
+	v->addWidget(settings_row(
+	  "Send downloads through",
+	  download_route::supported()
+	    ? "Choose a VPN your system has already connected, and files, saved "
+	      "streams and torrents leave by it alone while browsing stays on your "
+	      "ordinary connection. If it drops, downloads stop rather than going "
+	      "out another way. A download a page starts is fetched again this way, "
+	      "except one from a form, which is not saved. Hydra does not set up a "
+	      "VPN."
+	    : "On this system a VPN is limited to certain apps in the system's own "
+	      "settings, so Hydra has nothing to choose here.",
+	  m_route, page));
+	m_route->setEnabled(download_route::supported());
+
 	// The whole BitTorrent section can be unavailable, so it is built into a
 	// holder that can be disabled in one move -- a heading and six rows greyed
 	// individually would look like six separate accidents.
@@ -2832,9 +2872,9 @@ void settings_dialog::build_download_page(QWidget *page) {
 	// competing with it.
 	bv->addWidget(settings_row(
 	  "Listen on",
-	  "Hydra does not tunnel torrent traffic. If you run a VPN at the system "
-	  "level, naming its interface here — tun0:6881, say — keeps torrent "
-	  "traffic on it, and announces stop if that interface goes away.",
+	  "Hydra does not tunnel torrent traffic. Which addresses and ports a "
+	  "torrent listens on — 0.0.0.0:6881, say. While downloads are sent "
+	  "through a connection above, only the ports here count.",
 	  m_interfaces, bt, /*wide=*/true));
 
 	if (!have_torrents) {
@@ -3177,6 +3217,7 @@ void settings_dialog::load() {
 
 	if (m_downloads)
 		put_value(m_dir, m_downloads->directory());
+	fill_route_choices(download_route::shared().interface_name());
 
 	if (m_torrents) {
 		m_conn_global->setValue(m_torrents->connection_limit_global());
@@ -3406,6 +3447,10 @@ void settings_dialog::apply() {
 		}
 	}
 
+	const QString route = m_route->currentData().toString();
+	const bool route_moved = route != download_route::shared().interface_name();
+	download_route::shared().set_interface_name(route);
+
 	if (m_torrents) {
 		m_torrents->set_connection_limits(m_conn_global->value(),
 		                                   m_conn_torrent->value());
@@ -3413,6 +3458,8 @@ void settings_dialog::apply() {
 		m_torrents->set_listen_interfaces(m_interfaces->text().trimmed());
 		m_torrents->set_sequential(m_sequential->isChecked());
 		m_torrents->set_port_mapping(m_port_mapping->isChecked());
+		if (route_moved)
+			m_torrents->route_changed();
 	}
 
 	if (m_local_ai) {

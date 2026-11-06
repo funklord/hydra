@@ -210,6 +210,11 @@ at all unless that variable names something other than the real item.
 ### Need libtorrent, and are held back for their runtime
 
 `test_torrent` and `test_watch` build only when `libtorrent-rasterbar` is found.
+
+`test_route` runs itself a second time through `route_tunnel.sh`, in a private
+namespace with a real WireGuard device, so where downloads leave is read from a
+server's log. It needs `unshare`, `wg`, `ip` and `nsenter` and no root, and prints
+`HYDRA-SKIP:` where the kernel will not make the device.
 They stand up a real seeder in-process and move a torrent over loopback — no
 tracker, no DHT, the seeder connects directly, and **nothing has to be started
 by hand**.

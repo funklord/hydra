@@ -1,4 +1,5 @@
 #include "ytdlp_resolver.h"
+#include "download_route.h"
 #include "ytdlp_updater.h"
 
 #include <QCoreApplication>
@@ -270,6 +271,20 @@ void ytdlp_resolver::resolve(const QUrl &page_url) {
 	args << page_url.toString();
 	proc->setProgram(m_program);
 	proc->setArguments(args);
+
+	// **The same way out as the bytes that follow.** A site can tie the address
+	// it hands back to the address that asked -- YouTube's name the client's IP
+	// in the url -- so a lookup on the ordinary route gives a stream the tunnel
+	// is refused. In the environment rather than `--proxy`, because the value
+	// holds the route's password and a process's arguments are anybody's to
+	// read; yt-dlp takes ALL_PROXY through Python's getproxies().
+	const QString route = download_route::shared().proxy_url();
+	if (!route.isEmpty()) {
+		QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+		env.insert(QStringLiteral("ALL_PROXY"), route);
+		env.insert(QStringLiteral("all_proxy"), route);
+		proc->setProcessEnvironment(env);
+	}
 
 	connect(proc, &QProcess::finished, this,
 	         [this, proc](int code, QProcess::ExitStatus) {

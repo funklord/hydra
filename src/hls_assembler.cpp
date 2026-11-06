@@ -1,4 +1,5 @@
 #include "hls_assembler.h"
+#include "download_route.h"
 
 #include "dash_manifest.h"
 
@@ -55,6 +56,7 @@ QNetworkReply *hls_assembler::get(const QUrl &url, const QByteArray &range) {
 		req.setRawHeader("Cookie", jar.toUtf8());
 	if (!range.isEmpty())
 		req.setRawHeader("Range", range);
+	download_route::shared().apply(m_net);
 	return m_net->get(req);
 }
 

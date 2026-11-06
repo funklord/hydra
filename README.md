@@ -182,6 +182,11 @@ not do them, or does something adjacent that is not the same thing.
   incomplete file to your player.
 - **In-page magnet links work**, rather than dead-ending on a scheme the browser
   does not own.
+- **Downloads can use a VPN your browsing does not.** Hydra sets up no VPN. Choose
+  one your system already has, and files, saved streams and torrents leave by it
+  alone while pages stay on your ordinary connection; if it drops, downloads stop
+  rather than going out another way. Other browsers offer one route for everything,
+  and torrent clients only bind their own traffic.
 
 ### An AI that is not a chat box
 

@@ -2828,6 +2828,91 @@ iterating `m_transfers`, and `abort()` delivers `finished()` synchronously,
 which re-entered `teardown()` and mutated the map mid-iteration. The map is
 now emptied first.
 
+## Downloads through a VPN the system already has (§11.4)
+
+**The whole of Hydra's VPN support, in the holder's words of 2026-11-06:** "allow
+downloads to go via a VPN already set up on the OS, separating it from other
+browser traffic." The mechanism was left to us. Hydra still sets up no tunnel.
+
+**The mechanism is binding to the interface**, which is what a download program
+on Linux normally offers: qBittorrent's Advanced page has a "Network interface"
+list for exactly this, and its users rely on traffic stopping when the tunnel
+drops. A person chooses `tun0` or `wg0` once, under Settings ▸ Downloads
+(`downloads/interface`), and the default stays "any connection".
+
+Rejected, so nobody has the obvious idea again:
+
+- **A source address** (yt-dlp's `--source-address`, the one thing it offers).
+  Where the tunnel is not the default route the packet leaves by the default
+  route anyway, carrying the tunnel's address. Only the device steers.
+- **A network namespace, or cgroup marks with policy routing.** The usual answers
+  for putting one *program* on a VPN, and both need root or a setup step of the
+  person's own. Hydra is one process with browsing in it.
+- **A proxy for the whole engine.** Qt WebEngine takes one for every page, which
+  is the opposite of separating them.
+
+**`QNetworkAccessManager` cannot name an interface**, so `download_route` runs a
+SOCKS5 server on loopback, on its own thread, and is the one place that dials.
+Each socket gets `SO_BINDTODEVICE` before `connect()`, which an ordinary user may
+do on this kernel, measured with uid 1000. Everything fetching for a download only
+has to be pointed at it: the HTTP source, the stream assembler, the local proxy
+behind Watch, a `.torrent` fetched from an address, and yt-dlp. libtorrent binds
+its own sockets, so the session takes the same device with the "Listen on" field's
+ports. A password keeps other local programs out of the tunnel; yt-dlp gets it
+through `ALL_PROXY`, not `--proxy`, since anyone may read a process's arguments.
+
+**Three things had to go with the bytes, and each is a way this looks finished
+without being:**
+
+- **yt-dlp and Watch.** YouTube's addresses carry the client's IP, so a lookup on
+  the ordinary route gives a stream the tunnel is refused. Lookup, Watch and
+  Save therefore share the route, though Watch is not strictly a download.
+- **A dead tunnel does not end a TCP connection.** It retransmits into nothing with
+  the job saying it is running, so the server looks at the device every two seconds
+  and closes its tunnels when it goes. Without that the job was still running when
+  the test gave up at 15 seconds; with it, the run measured failed within 36 ms,
+  which is the timer's luck, so expect up to two seconds.
+- **Port mapping** is off while bound: the router asked is the one on the ordinary
+  connection, which the traffic does not use.
+
+**A page's own download cannot be bound.** Chromium's network is the page's, and
+the request has been answered before Qt says it is a download. So while a route
+is set the engine's copy is cancelled and the file fetched again by the route with
+the session's cookies, Referer and agent (`set_download_divert`). The server has
+then seen one request on the ordinary route, and the file itself did not come that
+way; nothing can do better from outside the engine. `blob:` and `data:` have no
+network and stay. One from a form cannot be repeated, so it is not saved, and the
+status bar says so: leaving it to the engine would be the silent leak. The
+interceptor keeps the method, because a download request does not say. A `.torrent`
+a page hands over is saved as a file here rather than started.
+
+**How it was checked.** `test_route` runs itself again in a user namespace with a
+real WireGuard device that has no route, beside a server logging who asked, so the
+tunnel and the ordinary route are two addresses in a file: 10.9.0.2 and 10.0.0.2.
+File, stream, Watch, a fetched `.torrent` and yt-dlp each arrive from the tunnel; a
+request that is not a download does not; with the device deleted mid-transfer
+the job fails and nothing further arrives from either address. Eight sabotages each
+failed the suite: the device option, the watch, the password, and the proxy or
+environment at each of the five call sites. `try_route` reads the page-download
+half off a server through the real shell. **Not measured:** torrent peers across the
+tunnel, where the namespace test reads back what the session was told and the
+measurement in *The VPN sentence is true now* used a stand-in address; and a
+commercial VPN client.
+
+**What it does not do:**
+
+- **Host names are looked up by the system's resolver.** In a split tunnel the
+  ordinary connection's DNS sees the names of the hosts downloaded from, though
+  not the transfer.
+- **Strict reverse-path filtering loses a split tunnel's replies.** With
+  `rp_filter=1` and no route back by the tunnel, measured in a namespace, a bound
+  connection times out. It fails closed, with nothing sent another way. `0` is
+  measured fine; a tunnel holding the default route has a route back.
+- **A player handed a raw address** when the local proxy could not start fetches
+  for itself.
+- **Android has no such choice**, and the row says so: limiting a VPN to certain
+  apps is in the system's own settings.
+
 ## The settings window, and what other browsers do with theirs
 
 The layout was settled by looking rather than by taste. Firefox and Chromium are
@@ -2997,8 +3082,8 @@ ceiling can be raised, and that claim is only true if someone can raise it.
 - **Downloads** — download folder, and BitTorrent connection caps, seed ratio,
   sequential-by-default and `listen_interfaces`. The caps carry the §11.4
   reasoning inline, where the person changing the number can read it. The
-  interface field says plainly that Hydra does not tunnel and that this only
-  makes a *system-level* VPN reliable — it is not a VPN feature.
+  interface field says plainly that Hydra does not tunnel. The VPN itself is
+  chosen on its own row; see *Downloads through a VPN the system already has*.
 
 **AI backend is a global setting** (§9.1), on its own page, and both consumers
 — the tree reorganizer and the filter-evolution loop — resolve it through a
@@ -3330,8 +3415,9 @@ The decisions behind it:
   version would be a leakier reimplementation of something configured once for
   every app. What replaces it: torrent rows are visibly distinct in the download
   list, a plain-language explanation on the first magnet link, never starting a
-  torrent on a page's initiative, and a `listen_interfaces` setting so a
-  system-level VPN can actually be bound to (a settings field, not a VPN).
+  torrent on a page's initiative, and a way to bind to a system-level VPN (a
+  settings field, not a VPN; since 2026-11-06 it covers every download, see
+  *Downloads through a VPN the system already has*).
 
 Seeding policy, ports/UPnP, multi-file jobs, the Android shape, and a suggested
 implementation order are in arch §11.4.
@@ -28772,9 +28858,10 @@ weaken the sentence. Re-judged 2026-11-06 and decided by the design rather than
 waiting: arch §11.4 says this field exists so a user can "bind the torrent session
 to" their VPN, so the sentence was the intent and the code the gap. `outgoing_interfaces_for` strips
 the ports, and a wildcard anywhere binds nothing, since it confines nothing. An
-empty field changes nothing for anybody who never set it. **The holder can still
-overrule this**; the cost is the one libtorrent documents, that incoming packets to
-a local address not in the list are refused.
+empty field changes nothing for anybody who never set it. The holder has since
+confirmed the intent and widened it to every download (2026-11-06, *Downloads
+through a VPN the system already has*); the cost is the one libtorrent documents,
+that incoming packets to a local address not in the list are refused.
 
 **How far the fault reached is narrower than this entry used to say, and it took
 two wrong tests to learn it.** It claimed outgoing TCP is how most peers are

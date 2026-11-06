@@ -1,4 +1,5 @@
 #include "http_download_source.h"
+#include "download_route.h"
 #include "media_detector.h"
 
 #include <QDir>
@@ -96,6 +97,9 @@ bool http_download_source::start(const download_request &req, QString *error) {
 		return false;
 	}
 
+	if (!download_route::shared().ready(error))
+		return false;
+
 	QDir().mkpath(req.directory);
 
 	// The caller's name when it has one -- yt-dlp's metadata says far more
@@ -184,6 +188,7 @@ void http_download_source::issue(transfer *t) {
 
 	t->range_checked = false;
 	t->code          = 0;
+	download_route::shared().apply(m_net);
 	t->reply         = m_net->get(net_req);
 	wire(t);
 }
@@ -281,7 +286,11 @@ void http_download_source::wire(transfer *t) {
 		if (t->cancelled) {
 			teardown(t, false, "Cancelled.");
 		} else if (reply->error() != QNetworkReply::NoError) {
-			teardown(t, false, reply->errorString());
+			// The route's sentence where it is the reason: Qt's says only
+			// that a proxy failed, about a proxy nobody here has heard of.
+			QString why;
+			teardown(t, false, download_route::shared().ready(&why)
+			                     ? reply->errorString() : why);
 		} else if (t->chunk > 0 && t->code == 206 && t->whole > 0 && t->file &&
 		           t->file->flush() && t->file->size() < t->whole) {
 			// **The next range**, unless this one brought nothing: a server
