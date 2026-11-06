@@ -26,6 +26,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QProcess>
+#include <QRandomGenerator>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
@@ -209,6 +210,41 @@ static void door() {
 	const QUrl named(QString("http://localhost:%1/b.mp4").arg(web.serverPort()));
 	got = fetch(source, named, dir.path(), "b.mp4", 2, 20000);
 	check(got.ok, QString("a host name is looked up at this end (%1)").arg(got.detail));
+
+	// **Anything local can reach this port**, so what it sends is hostile input:
+	// mutated sessions, then a good one to show the server came through them.
+	{
+		QRandomGenerator rng(0x726f7574);
+		const QByteArray auth = password_message(proxy.user(), proxy.password());
+		for (int i = 0; i < 400; ++i) {
+			QByteArray said = QByteArray("\x05\x01\x02", 3) + auth + connect_to;
+			for (int n = 1 + int(rng.bounded(4)); n > 0; --n) {
+				const int at = int(rng.bounded(said.size()));
+				switch (rng.bounded(4)) {
+					case 0: said[at] = char(rng.bounded(256)); break;
+					case 1: said.truncate(at); break;
+					case 2: said.insert(at, QByteArray(int(rng.bounded(300)), char(rng.bounded(256)))); break;
+					default: said.remove(at, 1 + int(rng.bounded(8))); break;
+				}
+				if (said.isEmpty())
+					said = "x";
+			}
+			QTcpSocket s;
+			s.connectToHost("127.0.0.1", proxy.port());
+			s.waitForConnected(2000);
+			s.write(said);
+			s.waitForBytesWritten(200);
+			s.abort();
+		}
+		QTcpSocket s;
+		s.connectToHost("127.0.0.1", proxy.port());
+		s.waitForConnected(2000);
+		socks_say(s, QByteArray("\x05\x01\x02", 3), 2);
+		socks_say(s, auth, 2);
+		const QByteArray answer = socks_say(s, connect_to, 10);
+		check(answer.size() == 10 && answer[1] == 0,
+		      "four hundred mangled sessions later it still answers");
+	}
 
 	route.set_interface_name("hydra-none0");
 	QString why;

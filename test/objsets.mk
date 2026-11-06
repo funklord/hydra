@@ -203,13 +203,13 @@ OBJS_test_assembly = \
 	$(BUILD_DIR)/app/stream_assembly.o \
 	$(BUILD_DIR)/app/download_manager.o \
 	$(BUILD_DIR)/app/mse_tap.o \
+	$(BUILD_DIR)/app/media_sheet.o \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/tmoc/moc_fake_sources.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_sheet.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/app/empty_state.o \
@@ -318,6 +318,8 @@ OBJS_test_fuzz = \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/agent_fetch.o \
 	$(BUILD_DIR)/app/filter_list.o \
+	$(BUILD_DIR)/app/media_sheet.o \
+	$(BUILD_DIR)/app/media_evidence.o \
 	$(BUILD_DIR)/app/reader_extract.o \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/app/tree_serializer.o \

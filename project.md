@@ -40591,7 +40591,7 @@ zone." Three steps, of which the first two and the signal are built:
    Wired into the yt-dlp flow: streams are listed once the reading is in,
    named from it, and the status line says what was read, by which model,
    what fell back and why.
-3. *Corrections remembered per channel* -- not built yet.
+3. Corrections remembered per channel -- built, see *Corrections teach the channel a rule*.
 
 **The signal.** `model_tally` counts, per model and per task, answers kept
 and rejected by the checks; a task with five or more answers of which 30%
@@ -40626,8 +40626,8 @@ disagree with rather than two.
 `.style-gate.toml`'s excludes, and named in `code-style.md` -- because they
 are third parties' data in the scripts their names are written in.
 
-**Not built**: corrections per channel. The tracklist in the file and beside it,
-and asking video, audio or both, are in the sections below.
+All three have since been built: corrections per channel, the tracklist in the file
+and beside it, and asking video, audio or both are in the sections below.
 
 ### Three models scored
 
@@ -40766,8 +40766,8 @@ for. Tools > Media > **Recent Readings** lists them, newest first, with the
 detail in each row's tooltip.
 
 It is written before the streams window opens, so a person who closes that
-window has still kept the reading. The corrections per channel still to be
-built read `for_channel` from this log.
+window has still kept the reading. Corrections per channel read `for_channel` from
+this log.
 
 **`test/live/try_media_reading`** triggers the real menu action against a
 real video with the local model, and checks a reading lands in the file,

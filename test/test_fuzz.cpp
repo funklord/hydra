@@ -22,6 +22,8 @@
 #include "filter_list.h"
 #include "filter_subscription.h"
 #include "hls_playlist.h"
+#include "media_evidence.h"
+#include "media_sheet.h"
 #include "network_rules.h"
 #include "node.h"
 #include "procedural_cosmetic.h"
@@ -158,6 +160,38 @@ int main(int argc, char **argv) {
 	  "{\"url\":\"https://a.test/2\",\"title\":\"Two\"}]},"
 	  "{\"index\":1,\"entries\":[{\"url\":\"about:blank\"}]}]}]}";
 	QList<target> targets = {
+		// What a site says about a video reaches these unchecked: its description
+		// and comments are anybody's text, and a mix's files are written from it.
+		{ "media_evidence: lines of a description",
+			{ "0:00 One - First\n1:02:03.250 Two - Second\n[12:30.5] Three\n",
+				"1. One - First\n2. Two - Second\n3. Three - Third\n" },
+			{ ":", ".", "[", "]", "(", ")", " - ", " \xe2\x80\x93 ", "://", "www.", "\n", "59",
+				"1:", "00:00:00.000" },
+			[](const QByteArray &b) {
+				const QString text = QString::fromUtf8(b);
+				media_evidence::timestamped_runs(text);
+				media_evidence::untimed_runs(text);
+			},
+			false },
+		{ "media_sheet: from yt-dlp's answer to the files",
+			{ "{\"id\":\"a\",\"title\":\"T\",\"duration\":300,\"description\":"
+				"\"0:00 One - First\\n1:00 Two\\n2:00.5 Three\\n\","
+				"\"chapters\":[{\"start_time\":0,\"title\":\"x\"}],"
+				"\"comments\":[{\"text\":\"A - B\\nC - D\\nE - F\",\"parent\":\"root\"}]}" },
+			{ "\"", "\\n", "null", "1e308", "-1", "[", "{", "chapters", "duration", "start_time" },
+			[](const QByteArray &b) {
+				const media_evidence ev = media_evidence::from_json(b);
+				const QString source = ev.tracklists.isEmpty() ? QString()
+				                                               : ev.tracklists.first().source;
+				const media_sheet s = media_sheet::from_evidence(ev, source, "a", "t",
+				                                                 QUrl(), ev.description);
+				s.text();
+				s.m3u("f.webm");
+				s.cue("f.webm");
+				media_sheet::from_json(s.to_json()).summary();
+				media_sheet::from_json(QString::fromUtf8(b)).text();
+			},
+			false },
 		{ "filter_subscription::read",
 			{ "! Title: x\n||ads.example^\nexample.com##.ad\n@@||good.example^$document\n"
 				"example.com##+js(set-constant, a.b, false)\n"
