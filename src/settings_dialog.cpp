@@ -1667,8 +1667,12 @@ void settings_dialog::restore_page_defaults(int page) {
 			QComboBox *c = m_feature_combos[i];
 			if (!c)
 				continue;
-			const policy::setting want =
-			  fresh.global_default(static_cast<policy::feature>(i));
+			// This machine's value rather than a fresh engine's, which knows
+			// nothing of what was found at startup: Restore would otherwise
+			// save the floor as somebody's choice.
+			const auto f = static_cast<policy::feature>(i);
+			const policy::setting want = m_policy ? m_policy->built_in_default(f)
+			                                      : fresh.global_default(f);
 			const int at = c->findData(int(want));
 			c->setCurrentIndex(at >= 0 ? at : 0);
 		}

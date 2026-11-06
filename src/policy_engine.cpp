@@ -138,6 +138,8 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	// designed and unbuilt, and a default for a capability that does not exist
 	// is a setting nothing can honour.
 	set_global_default(feature::extractor_fetch,     setting::block);
+
+	m_built_in_defaults = m_global_defaults;
 }
 
 QString policy_engine::etld_plus_one(const QString &host) {
@@ -281,6 +283,23 @@ void policy_engine::set_global_default_unlocked(feature f, setting s) {
 	m_global_defaults = policy::with_setting(m_global_defaults, f, s);
 }
 
+setting policy_engine::built_in_default(feature f) const {
+	QReadLocker locker(&m_lock);
+	const setting s = policy::get_setting(m_built_in_defaults, f);
+	return s == setting::unset ? setting::block : s;
+}
+
+void policy_engine::set_built_in_default(feature f, setting s) {
+	{
+		QWriteLocker locker(&m_lock);
+		if (policy::get_setting(m_global_defaults, f) ==
+		    policy::get_setting(m_built_in_defaults, f))
+			set_global_default_unlocked(f, s);
+		m_built_in_defaults = policy::with_setting(m_built_in_defaults, f, s);
+	}
+	emit changed();
+}
+
 setting policy_engine::setting_for(const QString &pattern, feature f) const {
 	QReadLocker locker(&m_lock);
 	const rule *r = find_rule(pattern);
@@ -410,6 +429,8 @@ bool policy_engine::load_unlocked(const QString &path) {
 				return false;
 			}
 			m_rules.clear();
+			// What the file does not name follows the build.
+			m_global_defaults = m_built_in_defaults;
 			f.beginGroup("defaults");
 			for (const QString &key : f.allKeys()) {
 				const feature fe = policy::feature_from_name(key);
@@ -474,6 +495,13 @@ bool policy_engine::save(const QString &path) const {
 	f.beginGroup("defaults");
 	for (int i = 0; i < policy::feature_count(); ++i) {
 		const auto fe = static_cast<feature>(i);
+		// **Only what differs from the built-in value.** Writing all of them
+		// pinned every default of the build that first ran here, so no later
+		// one reached anybody, and a floor chosen by nobody came back over a
+		// capability the machine had since gained.
+		if (policy::get_setting(m_global_defaults, fe) ==
+		    policy::get_setting(m_built_in_defaults, fe))
+			continue;
 		f.setValue(policy::feature_name(fe),
 		            policy::setting_word(global_default_unlocked(fe)));
 	}

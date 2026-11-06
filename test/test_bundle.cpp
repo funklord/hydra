@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
 	{
 		policy_engine p;
 		p.set_global_default(policy::feature::javascript, policy::setting::allow);
-		p.set_global_default(policy::feature::popups, policy::setting::block);
+		p.set_global_default(policy::feature::popups, policy::setting::allow);
 		p.set_setting("news.example", policy::feature::javascript,
 		               policy::setting::block);
 		p.set_setting("news.example", policy::feature::cookies,
@@ -338,8 +338,8 @@ int main(int argc, char **argv) {
 
 		const QString text = slurp(ini);
 		check(text.contains("kind=policy"), "the file says what it is");
-		check(text.contains("[defaults]") && text.contains("popups=block"),
-		      "defaults are readable lines");
+		check(text.contains("[defaults]") && text.contains("popups=allow"),
+		      "a default somebody changed is a readable line");
 		check(text.contains("news.example"), "and so are the site rules");
 
 		policy_engine back;

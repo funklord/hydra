@@ -497,10 +497,11 @@ int main(int argc, char *argv[]) {
 	// **Before the policy file is read**, which is the whole reason it is here
 	// and not later. `main_window`'s constructor loads `policy.ini` immediately
 	// below, so anything saved -- including a deliberate block -- overwrites
-	// this. It raises a default, it does not overrule a decision.
+	// this. It raises a default, it does not overrule a decision, and being a
+	// built-in value it is not itself saved.
 	if (qtwebengine_notifications::install(factory.profile()))
-		policy.set_global_default(policy::feature::notifications,
-		                           policy::setting::ask);
+		policy.set_built_in_default(policy::feature::notifications,
+		                            policy::setting::ask);
 #endif
 
 	main_window w(&factory, &policy, &filter);

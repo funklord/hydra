@@ -49,6 +49,15 @@ public:
 	policy::setting global_default(policy::feature f) const;
 	void            set_global_default(policy::feature f, policy::setting s);
 
+	// **What a feature does when nobody has said otherwise**: the constructor's
+	// value, or what this machine was found able to do. Only a default that
+	// differs from this is saved, so a better one in a later build reaches
+	// everybody who did not choose. Holder, 2026-11-06.
+	policy::setting built_in_default(policy::feature f) const;
+	// For a capability found at startup, not for a decision: a value nobody
+	// chose must not reach the file. One already chosen stays as it is.
+	void            set_built_in_default(policy::feature f, policy::setting s);
+
 	// Per-pattern rule editing.
 	policy::setting setting_for(const QString &pattern, policy::feature f) const;
 	void            set_setting(const QString &pattern, policy::feature f, policy::setting s);
@@ -92,6 +101,7 @@ private:
 
 	QVector<rule> m_rules;
 	quint64       m_global_defaults = 0;
+	quint64       m_built_in_defaults = 0;
 	// Guards m_rules and m_global_defaults across the one thread boundary this
 	// class has. Mutable so the const read path can take it.
 	mutable QReadWriteLock m_lock;

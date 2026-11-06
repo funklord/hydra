@@ -21200,12 +21200,25 @@ fail.
 
 ## The saved policy overrules a capability, and one comment already says it must not
 
-Item 1 of *What is next* records an upgrade problem the copyright holder
-owns: a saved `policy.ini` pins every default that was current when it was
-written, so no later default change reaches anybody who has run a previous
-build. That is a policy question. **What is new here is that the mechanism
-already breaks a contract stated in this tree**, which changes how urgent
-the question is rather than answering it.
+**Settled by the holder 2026-11-06: only what somebody chose is saved.**
+`policy_engine::save` writes a default only where it differs from
+`built_in_default`, the constructor's value or what `main()` found the machine
+able to do through `set_built_in_default`. Everything else follows the build. A
+setting nobody touched can therefore change on an update, loosening included, and
+that was accepted. **The cost of comparing rather than tracking a choice:** a value
+somebody picked that equals today's default is not saved, so it follows a later
+change. Choosing the third tier below would have needed a marker per feature for
+a case the dialogs cannot produce, since a combo only changes away from what it
+shows. Restore Defaults reads the machine's value, not a fresh engine's, or it
+would save the floor as a choice. Files written before this keep any value that
+differs from the built-in one; the holder's own had its `[defaults]` group removed
+by hand, on their word, keeping `[sites]`.
+
+What follows is the record that led to it. Item 1 of *What is next* recorded an
+upgrade problem the copyright holder owned: a saved `policy.ini` pinned every
+default that was current when it was written, so no later default change reached
+anybody who had run a previous build. **The mechanism also broke a contract stated
+in this tree.**
 
 `main.cpp` raises the notifications default to `ask` when a notification
 presenter installs, deliberately before the policy file is read, and says
@@ -21241,9 +21254,9 @@ says a discrepancy between a document and the code is held open rather than
 resolved in either direction, because the right answer is often neither of
 the two on offer.
 
-What is not deferred is the evidence. `test_settings` pins the present
-behaviour with the reproduction attached, and says in as many words that it
-asserts what happens rather than what should -- so whoever settles the
+What was not deferred was the evidence. `test_settings` pinned the behaviour with
+the reproduction attached, saying it asserted what happened rather than what
+should; it asserts the settled behaviour now -- so whoever settles the
 question inherits a failing case rather than a paragraph, and nobody
 "fixes" the test by mistake.
 
@@ -27873,19 +27886,9 @@ carried along as amendments to a list item.
 
    The handset half is **done** — see *The prompt, seen on the handset*. A prompt
    raised over a live page appears, is answerable, and its answer reaches the
-   engine; a real camera opened and stopped. What that run exposed instead is an
-   upgrade problem in the policy file, recorded in that section and left as the
-   copyright holder's: a saved `policy.ini` pins every default that was current
-   when it was written, so no future default change reaches anybody who has run
-   a previous build.
-
-   **And it is already breaking a contract this tree states**, which is worth
-   knowing before deciding it — see *The saved policy overrules a capability*
-   above. `main.cpp` raises the notifications default when a presenter
-   installs and says the file "raises a default, it does not overrule a
-   decision"; measured, a file written on a machine with no presenter puts the
-   `block` floor back over that raise for ever, and nobody chose the floor.
-   The reproduction is pinned in `test_settings`.
+   engine; a real camera opened and stopped. What that run exposed instead was an
+   upgrade problem in the policy file, settled by the holder 2026-11-06: see *The
+   saved policy overrules a capability*.
 
    **`getDisplayMedia` delivers a stream**, measured through the real shell by
    `try_share` on 2026-11-06 under Xvfb. What this item used to call a Qt defect
@@ -38430,9 +38433,9 @@ file has never existed on their machine, so its appearing is the signal.
 
 - Every item of *What is next* is gated on the holder, a device, a network
   or another account -- audited this session, recorded there.
-- Two are recorded as deliberately unfixed: the saved-policy upgrade
-  question and the url-with-two-meanings tree-format change. Both are
-  design decisions and `working-practice` says hold them open.
+- One is recorded as deliberately unfixed: the url-with-two-meanings
+  tree-format change, a design decision held open. The saved-policy question
+  beside it was settled 2026-11-06.
 - A download begun by a **background** tab is filed under the front one.
   Known, in the code, and the seam cannot do better without a Qt type
   crossing it.

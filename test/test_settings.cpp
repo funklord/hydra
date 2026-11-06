@@ -784,20 +784,10 @@ int main(int argc, char **argv) {
 	// states the contract: "anything saved -- including a deliberate block --
 	// overwrites this. It raises a default, it does not overrule a decision."
 	//
-	// The saved file cannot honour that, because `policy_engine::save` writes
-	// *every* global default as a concrete word, whether or not anybody chose
-	// it. So a run on a machine with no presenter writes `notifications=block`
-	// -- the built-in floor, chosen by nobody -- and a later run where the
-	// presenter does install has that floor put back over the raise. The file
-	// overrules a capability detection with a non-decision, which is precisely
-	// what the comment says must not happen.
-	//
-	// **This test asserts what happens today, not what should.** Whether a
-	// saved default should follow the build is on the copyright holder's list
-	// as an upgrade question; what is recorded here is that one consumer's
-	// stated contract is already broken by it, with the reproduction ready for
-	// whoever settles it. When it is settled, the second half below becomes
-	// `ask` and this comment goes.
+	// So `policy_engine::save` writes only a default that differs from the
+	// built-in value. It used to write every one, and a run with no presenter
+	// saved `notifications=block`, a floor chosen by nobody, which then came
+	// back over the raise on every later run.
 	section("two spellings of one host were two hosts to the matcher");
 	{
 		// **The dangerous direction is a rule that silently matches nothing.**
@@ -1190,23 +1180,82 @@ int main(int argc, char **argv) {
 			      "with no presenter the built-in floor is block");
 			e.set_setting("example.com", policy::feature::javascript,
 			               policy::setting::block);
-			check(e.save(path), "and a save writes the whole set of defaults");
+			check(e.save(path), "and a save writes what was chosen");
+			QSettings written(path, QSettings::IniFormat);
+			written.beginGroup("defaults");
+			check(written.allKeys().isEmpty(),
+			      QString("no default nobody changed is in the file (%1)")
+			        .arg(written.allKeys().join(' ')));
 		}
 
 		// Run two: the presenter installs, `main()` raises the default before
 		// the window loads the file, and then the window loads the file.
 		{
 			policy_engine e;
-			e.set_global_default(policy::feature::notifications,
-			                      policy::setting::ask);
+			e.set_built_in_default(policy::feature::notifications,
+			                       policy::setting::ask);
 			check(e.global_default(policy::feature::notifications) ==
 			        policy::setting::ask,
 			      "a presenter raises it to ask, as main() does");
 			check(e.load(path), "the saved policy loads");
 			check(e.global_default(policy::feature::notifications) ==
+			        policy::setting::ask,
+			      "and leaves the raise alone: nobody chose the floor");
+			check(e.setting_for("example.com", policy::feature::javascript) ==
 			        policy::setting::block,
-			      "and puts the floor back over it -- a value nobody chose "
-			      "overruling a capability the machine now has");
+			      "while the site rule comes back");
+
+			// The raise is the machine's, so it is not saved either.
+			check(e.save(path), "saved again");
+			QSettings written(path, QSettings::IniFormat);
+			check(!written.contains("defaults/notifications"),
+			      "a capability found at startup is not written down");
+		}
+
+		// A decision is the opposite case, in both directions.
+		{
+			policy_engine e;
+			e.set_built_in_default(policy::feature::notifications,
+			                       policy::setting::ask);
+			e.set_global_default(policy::feature::notifications, policy::setting::block);
+			e.set_global_default(policy::feature::images, policy::setting::block);
+			check(e.save(path), "a person's choices are saved");
+		}
+		{
+			policy_engine e;
+			e.set_built_in_default(policy::feature::notifications,
+			                       policy::setting::ask);
+			check(e.load(path), "and read back");
+			check(e.global_default(policy::feature::notifications) ==
+			        policy::setting::block,
+			      "a deliberate block stays over the raise, as main() promises");
+			check(e.global_default(policy::feature::images) == policy::setting::block,
+			      "and so does any other choice");
+			check(e.built_in_default(policy::feature::images) == policy::setting::allow,
+			      "with the built-in value still known");
+			e.set_global_default(policy::feature::images, policy::setting::allow);
+			check(e.save(path), "put back to the built-in value");
+			QSettings written(path, QSettings::IniFormat);
+			check(!written.contains("defaults/images"),
+			      "it follows the build again, and leaves the file");
+		}
+
+		// **A later build's default reaches a file written by an earlier one**,
+		// which is the point of it. The old file below names one choice; the
+		// feature it does not name takes whatever this build says.
+		{
+			QFile old(path);
+			old.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			old.write("[hydra]\nkind=policy\nformat=1\n\n"
+			          "[defaults]\ngeolocation=block\n\n[sites]\n");
+			old.close();
+			policy_engine e;
+			e.set_global_default(policy::feature::images, policy::setting::block);
+			check(e.load(path), "a short file loads");
+			check(e.global_default(policy::feature::geolocation) == policy::setting::block,
+			      "what it names is kept");
+			check(e.global_default(policy::feature::images) == policy::setting::allow,
+			      "and what it does not name is the built-in value");
 		}
 
 		QDir(dir).removeRecursively();
