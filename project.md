@@ -27842,6 +27842,16 @@ carried along as amendments to a list item.
    name, and with a manifest confirmed an `hls` or `dash` pick that does not end
    as one is refused. `HYDRA_NO_SEND=1 test_live_model` prints what is offered.
 
+   **Real pages found what the suites could not.** The captures died with 139
+   on exit three times in six: `qtwebengine_factory` deleted its cookie jar before
+   the profile, and a cookie the engine dropped in between reached the handler
+   through null (`HYDRA_TEST_BACKTRACE=1` caught it). Fixed in `833d49f`, six of six
+   clean since. Then eight public sites through `try_extract` under ASan and UBSan,
+   2026-11-06, reported nothing of this tree's. That run needs
+   `new_delete_type_mismatch=0:alloc_dealloc_mismatch=0` in `ASAN_OPTIONS`, or
+   Chromium's own mismatch stops every run before a page loads. `make deb` removes
+   `test/build-san`, so a sweep after one starts nothing and reads as eight empty runs.
+
    What follows is the record from before that.
 
    **The loop works on a disguised manifest; make it work on a noisy capture.**
