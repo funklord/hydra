@@ -1233,11 +1233,39 @@ int main(int argc, char **argv) {
 			      "and so does any other choice");
 			check(e.built_in_default(policy::feature::images) == policy::setting::allow,
 			      "with the built-in value still known");
+
+			// **A choice that equals the default is still a choice.** Comparing
+			// against the default, as this store first did, loses exactly this.
 			e.set_global_default(policy::feature::images, policy::setting::allow);
-			check(e.save(path), "put back to the built-in value");
+			e.set_global_default(policy::feature::autoplay, policy::setting::unset);
+			check(e.chosen_default(policy::feature::images) == policy::setting::allow,
+			      "allow chosen while allow is the default is held as a choice");
+			check(e.save(path), "and saved");
+		}
+		{
 			QSettings written(path, QSettings::IniFormat);
-			check(!written.contains("defaults/images"),
-			      "it follows the build again, and leaves the file");
+			check(written.value("defaults/images").toString() == "allow",
+			      "the file says so");
+			check(!written.contains("defaults/autoplay"), "and names nothing that follows");
+		}
+
+		// The two things a default moving must do, read off one file.
+		{
+			policy_engine e;
+			e.set_built_in_default(policy::feature::images, policy::setting::block);
+			e.set_built_in_default(policy::feature::autoplay, policy::setting::allow);
+			check(e.load(path), "a later build with other defaults reads it");
+			check(e.global_default(policy::feature::images) == policy::setting::allow,
+			      "and the pin holds, though the default moved away from it");
+			check(e.global_default(policy::feature::autoplay) == policy::setting::allow,
+			      "and what followed takes the new default");
+
+			e.set_global_default(policy::feature::images, policy::setting::unset);
+			check(e.global_default(policy::feature::images) == policy::setting::block,
+			      "choosing Default takes the pin away");
+			check(e.save(path), "saved");
+			QSettings written(path, QSettings::IniFormat);
+			check(!written.contains("defaults/images"), "and it leaves the file");
 		}
 
 		// **A later build's default reaches a file written by an earlier one**,
@@ -1259,6 +1287,31 @@ int main(int argc, char **argv) {
 		}
 
 		QDir(dir).removeRecursively();
+	}
+
+	// The rule for this file, stated by what it writes. A round trip would pass
+	// with the store doing nothing, so each case reads the file itself.
+	section("hydra.ini holds what somebody changed, and nothing else");
+	{
+		QTemporaryDir dir;
+		QSettings s(dir.filePath("hydra.ini"), QSettings::IniFormat);
+		const auto store = [&s](const QVariant &value, const QVariant &fallback) {
+			settings_store::store_choice(s, "group/key", value, fallback);
+		};
+		store(800, 800);
+		check(!s.contains("group/key"), "an untouched value writes nothing");
+		store(900, 800);
+		check(s.value("group/key").toInt() == 900, "a change is written");
+		store(900, 950);
+		check(s.value("group/key").toInt() == 900, "and holds when the default moves");
+		store(950, 950);
+		check(!s.contains("group/key"), "put back to the default, it follows again");
+		s.setValue("group/key", "800");
+		store(800, 800);
+		check(s.contains("group/key"), "and a key already there is not touched by an "
+		                               "unchanged value, whatever it equals");
+		store(false, true);
+		check(s.value("group/key").toString() == "false", "a bool is compared as the file holds it");
 	}
 
 	section("a policy file damaged in the middle is not read as a short one");

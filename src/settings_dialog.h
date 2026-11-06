@@ -1,5 +1,8 @@
 #pragma once
 
+#include <QSettings>
+#include <QVariant>
+
 #include "ai_provider.h"
 
 #include "kiosk_controller.h"
@@ -327,6 +330,10 @@ private:
 // any UI -- otherwise "settings persist" would quietly mean "settings persist if
 // you open the dialog", which is the usual way this goes wrong.
 namespace settings_store {
+
+// See the definition: every setting in the file goes through this.
+void store_choice(QSettings &s, const QString &key, const QVariant &value,
+                  const QVariant &fallback);
 
 void load_into(player_launcher *players, download_manager *downloads,
                 torrent_download_source *torrents, ollama_provider *local_ai,

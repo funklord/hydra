@@ -15,6 +15,7 @@
 #include "filter_list.h"
 #include "download_manager.h"
 #include "download_route.h"
+#include "policy_engine.h"
 #include "player_launcher.h"
 #include "torrent_download_source.h"
 #include "ollama_provider.h"
@@ -257,6 +258,32 @@ int main(int argc, char **argv) {
 		check(dm.directory() == fresh,
 		       QString("and is adopted (%1)").arg(dm.directory()));
 		check(QFileInfo(fresh).isDir(), "and created");
+	}
+
+	// **OK on a window nobody touched writes nothing.** The file is the test's
+	// own, and every setting in it would be a value somebody did not choose.
+	section("OK on an untouched window stores no setting");
+	{
+		const QString ini = tmp + "/hydra/hydra.ini";
+		QFile::remove(ini);
+		download_manager dm;
+		policy_engine untouched;
+		const QString policy_path = QDir(tmp).filePath("policy.ini");
+		{
+			ollama_provider fresh_local;
+			claude_provider fresh_external;
+			settings_dialog d(&players, &dm, nullptr, &fresh_local, &fresh_external, &untouched);
+			d.accept();
+		}
+		QSettings written(ini, QSettings::IniFormat);
+		QStringList stored = written.allKeys();
+		stored.removeIf([](const QString &k) { return k.startsWith("ai/tally"); });
+		check(stored.isEmpty(), QString("nothing in hydra.ini (%1)").arg(stored.join(' ')));
+		untouched.save(policy_path);
+		QSettings saved(policy_path, QSettings::IniFormat);
+		saved.beginGroup("defaults");
+		check(saved.allKeys().isEmpty(),
+		      QString("and no default in the policy (%1)").arg(saved.allKeys().join(' ')));
 	}
 
 	section("the connection downloads leave by");

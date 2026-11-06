@@ -72,8 +72,12 @@ summary write(const QString &path, const policy_engine *policy_in,
 		f.beginGroup(k_group_defaults);
 		for (int i = 0; i < policy::feature_count(); ++i) {
 			const auto feat = static_cast<policy::feature>(i);
-			f.setValue(policy::feature_name(feat),
-			            policy::setting_word(policy_in->global_default(feat)));
+			// What was chosen, as `policy_engine::save` writes: exporting every
+			// value would pin the receiver to this build's defaults.
+			const policy::setting chosen = policy_in->chosen_default(feat);
+			if (chosen == policy::setting::unset)
+				continue;
+			f.setValue(policy::feature_name(feat), policy::setting_word(chosen));
 			++out.defaults;
 		}
 		f.endGroup();

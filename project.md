@@ -21200,19 +21200,36 @@ fail.
 
 ## The saved policy overrules a capability, and one comment already says it must not
 
-**Settled by the holder 2026-11-06: only what somebody chose is saved.**
-`policy_engine::save` writes a default only where it differs from
-`built_in_default`, the constructor's value or what `main()` found the machine
-able to do through `set_built_in_default`. Everything else follows the build. A
-setting nobody touched can therefore change on an update, loosening included, and
-that was accepted. **The cost of comparing rather than tracking a choice:** a value
-somebody picked that equals today's default is not saved, so it follows a later
-change. Choosing the third tier below would have needed a marker per feature for
-a case the dialogs cannot produce, since a combo only changes away from what it
-shows. Restore Defaults reads the machine's value, not a fresh engine's, or it
-would save the floor as a choice. Files written before this keep any value that
-differs from the built-in one; the holder's own had its `[defaults]` group removed
-by hand, on their word, keeping `[sites]`.
+**Settled by the holder 2026-11-06: a config file records choices, not values.**
+`policy_engine` keeps two things: `built_in_default`, the constructor's value or
+what `main()` found the machine able to do, never saved; and `chosen_default`, which
+is `unset` for a feature following the build. `save` writes every choice and nothing
+else, so a choice that equals today's default still holds when the default moves.
+
+The first fix, `5af9979`, compared against the default and lost exactly that case;
+the holder's rule says why intent cannot be read from a value. Settings and the
+shield's global scope offer `Default (Block)` first, which is how a person chooses
+to follow, and Restore Defaults goes back to it. **Followed:** Windows Group Policy's
+"Not Configured", the oldest form of this, and Chrome's "Block (default)" for the
+wording that says what following means today. Bundles export choices only.
+
+**`hydra.ini` differs per setting, by the rule's question: when the default changes,
+should this person get the new one?** Everything goes through
+`settings_store::store_choice`: a key is a choice, an unchanged value writes nothing,
+a key already there stays, and a value put back to the default removes the key.
+These stay plain controls, as a third state on every field costs more than it
+returns: their defaults rarely move, and they are mostly paths, commands and
+limits. **Followed:** Firefox's preferences, where a user value set back to the
+default is cleared. The cost is the same case on a smaller scale: a value picked
+equal to the default follows it. The player and the download folder are measured
+from the machine, so their defaults are re-derived. `view.ini` is session state, and
+`ai/tally` a record; neither is a setting.
+
+The holder's own `policy.ini` was deleted 2026-11-06 on their word, per-site rules
+included, since no file written before this can say which values were chosen. A
+`hydra.ini` written before this has the same trouble and is theirs to delete.
+**A file deleted brings the leftover `Hydra.conf`'s kiosk group back:** the kiosk
+migration runs whenever `hydra.ini` has no kiosk group.
 
 What follows is the record that led to it. Item 1 of *What is next* recorded an
 upgrade problem the copyright holder owned: a saved `policy.ini` pinned every

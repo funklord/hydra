@@ -102,8 +102,11 @@ QSettings open_settings() {
 // where it is: it is not ours to delete, it is harmless once nothing reads it,
 // and leaving it means an operator who wants to check the values still can.
 void migrate_kiosk_group(QSettings &to) {
-	if (to.contains("kiosk/home"))
-		return;                    // already here; `set_kiosk` always writes it
+	to.beginGroup("kiosk");
+	const bool here = !to.childKeys().isEmpty();
+	to.endGroup();
+	if (here)
+		return;
 
 	QSettings from;                // the wrong location, spelled the wrong way
 	from.beginGroup("kiosk");
@@ -121,6 +124,25 @@ void migrate_kiosk_group(QSettings &to) {
 // --------------------------------------------------------------- the store --
 
 namespace settings_store {
+
+// **A key in this file is a choice, and its absence is the choice to follow.**
+// Everything here is stored through this. A value that did not change writes
+// nothing, so a dialog's OK cannot pin the defaults of the build it ran on, and
+// a key already there stays there, so a choice holds when the default moves.
+// Put back to the default it goes, and follows again: Firefox's preferences have
+// worked this way for twenty years, and these controls are plain ones like
+// theirs. The security defaults, whose default has moved and will, have a
+// "Default" entry instead (`policy_engine`).
+void store_choice(QSettings &s, const QString &key, const QVariant &value,
+                  const QVariant &fallback) {
+	// As strings: the file gives back text, and 800 is not "800" to QVariant.
+	if (value.toString() == s.value(key, fallback).toString())
+		return;
+	if (value.toString() == fallback.toString())
+		s.remove(key);
+	else
+		s.setValue(key, value);
+}
 
 kiosk_config kiosk() {
 	QSettings st = open_settings();
@@ -173,20 +195,26 @@ kiosk_config kiosk() {
 void set_kiosk(const kiosk_config &c) {
 	QSettings st = open_settings();
 	st.beginGroup("kiosk");
-	st.setValue("home", c.home.toString());
-	st.setValue("designWidth", c.design_size.isValid() ? c.design_size.width() : 0);
-	st.setValue("designHeight", c.design_size.isValid() ? c.design_size.height() : 0);
-	st.setValue("scale", int(c.scale));
-	st.setValue("fit", int(c.fit));
-	st.setValue("hideCursor", c.hide_cursor);
-	st.setValue("idleReset", c.idle_reset_seconds);
-	st.setValue("watchdog", c.watchdog);
-	st.setValue("allowEscape", c.allow_escape);
-	st.setValue("clearBetweenSessions", c.clear_between_sessions);
-	st.setValue("alignH", c.alignment.testFlag(Qt::AlignLeft)  ? 0
-	                     : c.alignment.testFlag(Qt::AlignRight) ? 2 : 1);
-	st.setValue("alignV", c.alignment.testFlag(Qt::AlignTop)    ? 0
-	                     : c.alignment.testFlag(Qt::AlignBottom) ? 2 : 1);
+	const kiosk_config d;
+	const auto axis_h = [](Qt::Alignment a) {
+		return a.testFlag(Qt::AlignLeft) ? 0 : a.testFlag(Qt::AlignRight) ? 2 : 1;
+	};
+	const auto axis_v = [](Qt::Alignment a) {
+		return a.testFlag(Qt::AlignTop) ? 0 : a.testFlag(Qt::AlignBottom) ? 2 : 1;
+	};
+	store_choice(st, "home", c.home.toString(), d.home.toString());
+	store_choice(st, "designWidth", c.design_size.isValid() ? c.design_size.width() : 0, 0);
+	store_choice(st, "designHeight", c.design_size.isValid() ? c.design_size.height() : 0, 0);
+	store_choice(st, "scale", int(c.scale), int(d.scale));
+	store_choice(st, "fit", int(c.fit), int(d.fit));
+	store_choice(st, "hideCursor", c.hide_cursor, d.hide_cursor);
+	store_choice(st, "idleReset", c.idle_reset_seconds, d.idle_reset_seconds);
+	store_choice(st, "watchdog", c.watchdog, d.watchdog);
+	store_choice(st, "allowEscape", c.allow_escape, d.allow_escape);
+	store_choice(st, "clearBetweenSessions", c.clear_between_sessions,
+	             d.clear_between_sessions);
+	store_choice(st, "alignH", axis_h(c.alignment), axis_h(d.alignment));
+	store_choice(st, "alignV", axis_v(c.alignment), axis_v(d.alignment));
 	st.endGroup();
 	// Written through, like every other setter here. The default-constructed
 	// QSettings this used to use was destroyed at the end of the call and
@@ -204,7 +232,7 @@ theme::choice appearance() {
 
 void set_appearance(theme::choice c) {
 	QSettings s = open_settings();
-	s.setValue("ui/appearance", theme::name_of(c));
+	store_choice(s, "ui/appearance", theme::name_of(c), QStringLiteral("system"));
 	s.sync();
 }
 
@@ -236,7 +264,7 @@ int live_view_cap() {
 
 void set_live_view_cap(int n) {
 	QSettings s = open_settings();
-	s.setValue("tabs/liveViews", qBound(1, n, 64));
+	store_choice(s, "tabs/liveViews", qBound(1, n, 64), main_window::k_default_live_views);
 	s.sync();
 }
 
@@ -246,7 +274,7 @@ bool ytdlp_auto_update() {
 
 void set_ytdlp_auto_update(bool on) {
 	QSettings s = open_settings();
-	s.setValue("ytdlp/auto_update", on);
+	store_choice(s, "ytdlp/auto_update", on, true);
 	s.sync();
 }
 
@@ -261,7 +289,7 @@ bool preload_background_tabs() {
 
 void set_preload_background_tabs(bool on) {
 	QSettings s = open_settings();
-	s.setValue("tabs/preloadBackground", on);
+	store_choice(s, "tabs/preloadBackground", on, true);
 	s.sync();
 }
 
@@ -275,7 +303,7 @@ bool ask_before_delete() {
 
 void set_ask_before_delete(bool on) {
 	QSettings s = open_settings();
-	s.setValue("tabs/askBeforeDelete", on);
+	store_choice(s, "tabs/askBeforeDelete", on, false);
 	s.sync();
 }
 
@@ -287,13 +315,13 @@ bool autofill_https_only() {
 
 void set_autofill_https_only(bool on) {
 	QSettings s = open_settings();
-	s.setValue("autofill/httpsOnly", on);
+	store_choice(s, "autofill/httpsOnly", on, autofill_controller::k_https_only_default);
 	s.sync();
 }
 
 void set_search_engine(const QString &tmpl) {
 	QSettings s = open_settings();
-	s.setValue("ui/searchEngine", tmpl);
+	store_choice(s, "ui/searchEngine", tmpl, default_search_engine());
 	s.sync();
 }
 
@@ -308,9 +336,10 @@ ai_choice ai_mode() {
 
 void set_ai_mode(ai_choice mode) {
 	QSettings s = open_settings();
-	s.setValue("ai/mode", mode == ai_choice::local_only ? "local_only"
-	                     : mode == ai_choice::external  ? "external"
-	                                                    : "automatic");
+	store_choice(s, "ai/mode",
+	             QString(mode == ai_choice::local_only ? "local_only"
+	                     : mode == ai_choice::external ? "external" : "automatic"),
+	             QStringLiteral("automatic"));
 	s.sync();
 }
 
@@ -330,9 +359,10 @@ ai_choice routine_ai_mode() {
 
 void set_routine_ai_mode(ai_choice mode) {
 	QSettings s = open_settings();
-	s.setValue("ai/routine_mode", mode == ai_choice::local_only ? "local_only"
-	                             : mode == ai_choice::external  ? "external"
-	                                                            : "automatic");
+	store_choice(s, "ai/routine_mode",
+	             QString(mode == ai_choice::local_only ? "local_only"
+	                     : mode == ai_choice::external ? "external" : "automatic"),
+	             QStringLiteral("local_only"));
 	s.sync();
 }
 
@@ -342,7 +372,7 @@ QString routine_ollama_model() {
 
 void set_routine_ollama_model(const QString &model) {
 	QSettings s = open_settings();
-	s.setValue("ai/routine_ollama_model", model.trimmed());
+	store_choice(s, "ai/routine_ollama_model", model.trimmed(), QString());
 	s.sync();
 }
 
@@ -352,7 +382,7 @@ int ai_load() {
 
 void set_ai_load(int percent) {
 	QSettings s = open_settings();
-	s.setValue("ai/load", qBound(10, percent, 100));
+	store_choice(s, "ai/load", qBound(10, percent, 100), 100);
 	s.sync();
 }
 
@@ -432,31 +462,41 @@ void save_from(player_launcher *players, download_manager *downloads,
 	QSettings s = open_settings();
 
 	if (players) {
-		s.setValue("player/selected", players->selected());
-		s.setValue("player/custom_command", players->custom_command());
-		s.setValue("player/terminal", players->terminal_command());
-		s.setValue("player/custom_in_terminal", players->custom_in_terminal());
+		// What this machine would pick: measured, so re-derived rather than kept.
+		player_launcher fresh;
+		fresh.refresh();
+		store_choice(s, "player/selected", players->selected(), fresh.selected());
+		store_choice(s, "player/custom_command", players->custom_command(), QString());
+		store_choice(s, "player/terminal", players->terminal_command(), QString());
+		store_choice(s, "player/custom_in_terminal", players->custom_in_terminal(), false);
 	}
-	if (downloads)
-		s.setValue("downloads/directory", downloads->directory());
-	s.setValue("downloads/interface", download_route::shared().interface_name());
+	if (downloads) {
+		download_manager fresh;
+		store_choice(s, "downloads/directory", downloads->directory(), fresh.directory());
+	}
+	store_choice(s, "downloads/interface", download_route::shared().interface_name(),
+	             QString());
 	if (torrents) {
-		s.setValue("torrent/connections_global",
-		            torrents->connection_limit_global());
-		s.setValue("torrent/connections_per_torrent",
-		            torrents->connection_limit_per_torrent());
-		s.setValue("torrent/seed_ratio", torrents->seed_ratio());
-		s.setValue("torrent/listen_interfaces", torrents->listen_interfaces());
-		s.setValue("torrent/sequential", torrents->sequential());
-		s.setValue("torrent/port_mapping", torrents->port_mapping());
+		torrent_download_source fresh;
+		store_choice(s, "torrent/connections_global", torrents->connection_limit_global(), 800);
+		store_choice(s, "torrent/connections_per_torrent",
+		             torrents->connection_limit_per_torrent(), 200);
+		store_choice(s, "torrent/seed_ratio", torrents->seed_ratio(), 1.0);
+		store_choice(s, "torrent/listen_interfaces", torrents->listen_interfaces(),
+		             fresh.listen_interfaces());
+		store_choice(s, "torrent/sequential", torrents->sequential(), false);
+		store_choice(s, "torrent/port_mapping", torrents->port_mapping(), true);
 	}
 	if (local_ai) {
-		s.setValue("ai/ollama_endpoint", local_ai->endpoint().toString());
-		s.setValue("ai/ollama_model", local_ai->model());
-		s.setValue("ai/probe_timeout_ms", local_ai->probe_timeout());
+		store_choice(s, "ai/ollama_endpoint", local_ai->endpoint().toString(),
+		             QStringLiteral("http://localhost:11434"));
+		store_choice(s, "ai/ollama_model", local_ai->model(), QStringLiteral("llama3"));
+		store_choice(s, "ai/probe_timeout_ms", local_ai->probe_timeout(), 2500);
 	}
-	if (external_ai)
-		s.setValue("ai/claude_model", external_ai->model());
+	if (external_ai) {
+		claude_provider fresh;
+		store_choice(s, "ai/claude_model", external_ai->model(), fresh.model());
+	}
 	s.sync();
 }
 
@@ -1397,6 +1437,16 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 			// Global defaults are always allow or block. "Default" is what a
 			// *site* says when it has no opinion and falls through to here, so
 			// offering it at this level would be a setting that points at itself.
+			// **"Default" is a choice too: the choice not to have one.** First,
+			// saying what it means today, as Group Policy's "Not Configured" and
+			// Chrome's "Block (default)" do. It follows the build, and only the
+			// entries below it are written down, whatever they equal.
+			const policy::setting built_in = m_policy->built_in_default(f);
+			combo->addItem(QString("Default (%1)")
+			                 .arg(built_in == policy::setting::allow ? "Allow"
+			                      : built_in == policy::setting::ask ? "Ask each time"
+			                                                         : "Block"),
+			               int(policy::setting::unset));
 			combo->addItem("Allow", int(policy::setting::allow));
 			combo->addItem("Block", int(policy::setting::block));
 			// **A third answer, on the features that can carry one.** Offered
@@ -1411,7 +1461,7 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 			// two entries and a row with three both read back correctly.
 			if (policy::can_ask(f))
 				combo->addItem("Ask each time", int(policy::setting::ask));
-			const policy::setting cur = m_policy->global_default(f);
+			const policy::setting cur = m_policy->chosen_default(f);
 			// By data, not by position. It was `block ? 1 : 0`, which read an
 			// `ask` default as Allow and then wrote that back on save -- the
 			// setting would have been quietly widened by opening the page and
@@ -1662,18 +1712,12 @@ void settings_dialog::restore_page_defaults(int page) {
 	// started. Reading them from a new instance rather than from a second table
 	// of constants is what keeps the two from drifting apart.
 	if (name.startsWith("Privacy")) {
-		policy_engine fresh;
 		for (int i = 0; i < m_feature_combos.size(); ++i) {
 			QComboBox *c = m_feature_combos[i];
 			if (!c)
 				continue;
-			// This machine's value rather than a fresh engine's, which knows
-			// nothing of what was found at startup: Restore would otherwise
-			// save the floor as somebody's choice.
-			const auto f = static_cast<policy::feature>(i);
-			const policy::setting want = m_policy ? m_policy->built_in_default(f)
-			                                      : fresh.global_default(f);
-			const int at = c->findData(int(want));
+			// Back to following, not to today's values.
+			const int at = c->findData(int(policy::setting::unset));
 			c->setCurrentIndex(at >= 0 ? at : 0);
 		}
 		// **The search engine is on this page and was not being reset.**
@@ -3409,7 +3453,7 @@ void settings_dialog::apply() {
 			const auto want =
 			  static_cast<policy::setting>(c->currentData().toInt());
 			const auto f = static_cast<policy::feature>(i);
-			if (m_policy->global_default(f) != want)
+			if (m_policy->chosen_default(f) != want)
 				m_policy->set_global_default(f, want);
 		}
 	}

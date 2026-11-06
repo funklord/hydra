@@ -249,16 +249,16 @@ int main(int argc, char **argv) {
 		      "including the cookie-banner blocker, which until now could only "
 		      "be reached from the shield");
 
-		// Global defaults are allow or block. "Default" is what a site says when
-		// it has no opinion and falls through to here, so offering it at this
-		// level would be a setting that points at itself.
+		// "Default" here is the build's value, and choosing it is the choice to
+		// follow. An untouched control says which that is.
 		auto *js = dlg.findChild<QComboBox *>("feature_javascript");
-		check(js && js->count() == 2,
-		      "a global default is allow or block, never \"default\"");
-		check(js && js->currentText() == "Allow",
-		      "and it shows what the engine actually holds");
+		check(js && js->count() == 3,
+		      "a default can be followed, allowed or blocked");
+		check(js && js->currentText() == "Default (Allow)",
+		      QString("and an untouched one follows, saying to what (%1)")
+		        .arg(js ? js->currentText() : QString()));
 		auto *ads = dlg.findChild<QComboBox *>("feature_ads");
-		check(ads && ads->currentText() == "Block",
+		check(ads && ads->currentText() == "Default (Block)",
 		      "for each feature separately, not one guessed value");
 	}
 
@@ -267,7 +267,7 @@ int main(int argc, char **argv) {
 		auto *ads = dlg.findChild<QComboBox *>("feature_ads");
 		check(policy.global_default(policy::feature::ads) == policy::setting::block,
 		      "ads start blocked");
-		ads->setCurrentIndex(0);            // Allow
+		ads->setCurrentIndex(ads->findData(int(policy::setting::allow)));
 		dlg.accept();                        // OK applies
 		check(policy.global_default(policy::feature::ads) == policy::setting::allow,
 		      "accepting writes the change into the engine");
@@ -330,7 +330,7 @@ int main(int argc, char **argv) {
 		settings_dialog d2(&players, &downloads, nullptr, nullptr, nullptr, &policy);
 		d2.show();
 		auto *js = d2.findChild<QComboBox *>("feature_javascript");
-		js->setCurrentIndex(1);             // Block
+		js->setCurrentIndex(js->findData(int(policy::setting::block)));
 		d2.reject();
 		check(policy.global_default(policy::feature::javascript) ==
 		          policy::setting::allow,
@@ -829,13 +829,14 @@ int main(int argc, char **argv) {
 		// Change a control without pressing OK, then export.
 		auto *js = d.findChild<QComboBox *>("feature_javascript");
 		const policy::setting stored = p.global_default(policy::feature::javascript);
-		js->setCurrentIndex(stored == policy::setting::block ? 0 : 1);
+		js->setCurrentIndex(js->findData(int(stored == policy::setting::block
+		                                     ? policy::setting::allow
+		                                     : policy::setting::block)));
 		settings_bundle::write(file, &p, nullptr);   // before apply: the old value
 		{
 			QSettings f(file, QSettings::IniFormat);
-			check(f.value("defaults/javascript").toString() ==
-			          (stored == policy::setting::block ? "block" : "allow"),
-			      "a file written before applying holds the stored value");
+			check(!f.contains("defaults/javascript"),
+			      "a file written before applying has no choice for it");
 		}
 
 		d.accept();   // apply() runs, so the engine now has the changed value
