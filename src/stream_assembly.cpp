@@ -8,6 +8,7 @@
 
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 
 namespace {
@@ -227,8 +228,14 @@ void stream_assembly::assemble(const media_item &item,
 			remux->start_mux(out, audio);
 	});
 
+	// **The file is opened before anything is fetched**, so a stream refused
+	// at its manifest left an empty one in the downloads folder, under a name
+	// that reads as a saved video. What did arrive is kept: a partial stream
+	// plays.
 	connect(m_assembler, &hls_assembler::failed, this,
-	         [this](const QString &e) {
+	         [this, out](const QString &e) {
+		if (QFileInfo(out).size() == 0)
+			QFile::remove(out);
 		emit status("Assembly failed: " + e);
 	});
 

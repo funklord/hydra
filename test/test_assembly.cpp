@@ -2373,6 +2373,33 @@ int main(int argc, char **argv) {
 		rpx.unpublish_all();
 	}
 
+	// The file is opened before the manifest is fetched, so one that fails there
+	// left a 0-byte `.ts` in the downloads folder (holder, 2026-11-06).
+	section("a stream that fails at its manifest leaves no file");
+	{
+		stream_assembly fresh(&players, &downloads, &proxy, nullptr);
+		QSignalSpy told(&fresh, &stream_assembly::status);
+		media_item gone;
+		gone.kind      = media_kind::hls;
+		gone.label     = "gone.m3u8";
+		gone.url       = QUrl(base + "/gone.m3u8");
+		gone.file_name = "gone.ts";
+		fresh.save(gone, stream_context{});
+		QElapsedTimer t;
+		t.start();
+		const auto failed = [&told] {
+			for (const QList<QVariant> &said : told)
+				if (said.first().toString().startsWith("Assembly failed"))
+					return true;
+			return false;
+		};
+		while (!failed() && t.elapsed() < 8000)
+			QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+		check(failed(), "the failure is said");
+		check(!QFile::exists(QDir(downloads.directory()).filePath("gone.ts")),
+		      "and nothing is left behind");
+	}
+
 	// **A player that reads manifests fetches the segments itself**, since the
 	// proxy passes a playlist on verbatim, and that is outside any route. So
 	// while downloads have one the stream is assembled here. Unbound is the
