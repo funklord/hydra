@@ -27852,6 +27852,13 @@ carried along as amendments to a list item.
    Chromium's own mismatch stops every run before a page loads. `make deb` removes
    `test/build-san`, so a sweep after one starts nothing and reads as eight empty runs.
 
+   **dramafren is `dramafren.org` now**; `.com` does not answer and `.net` redirects
+   to a survey scam. Measured on one episode, 2026-11-06, its mirrors are Abyss and
+   StreamMain, not the disguised `cf-master` player. StreamMain serves a plain `.mp4`
+   and Abyss shows nothing directly and bounces to its homepage; from the watch page
+   the first click opens a popunder tab, which takes the driver's remaining clicks.
+   So the disguised path is proved only in `test_extractor`, not on a live capture.
+
    What follows is the record from before that.
 
    **The loop works on a disguised manifest; make it work on a noisy capture.**
