@@ -1146,8 +1146,23 @@ public class HydraWebView {
                                     return;
                                 done[0] = true;
                                 final Uri u = Uri.parse(url);
-                                if ("app.bankid.com".equals(u.getHost())
-                                    && HydraIntents.openInOwnApp(parent.getContext(), url)) {
+                                final int handed = HydraIntents.handOff(parent.getContext(),
+                                                                        url, gesture,
+                                                                        parent.isShown());
+                                if (handed == HydraIntents.FALLBACK) {
+                                    final String fallback = HydraIntents.fallback();
+                                    main.post(new Runnable() {
+                                        @Override public void run() {
+                                            parent.loadUrl(fallback);
+                                            scout.destroy();
+                                        }
+                                    });
+                                    return;
+                                }
+                                if (handed == HydraIntents.HANDED_OVER
+                                    || ("app.bankid.com".equals(u.getHost())
+                                        && (gesture || parent.isShown())
+                                        && HydraIntents.openBankId(parent.getContext(), url))) {
                                     // Not from inside the scout's own callback.
                                     main.post(new Runnable() {
                                         @Override public void run() {
@@ -1680,7 +1695,24 @@ public class HydraWebView {
                         if (req == null || req.getUrl() == null)
                             return false;
                         final String url = req.getUrl().toString();
+                        // Before the shell's answer, which knows downloads and
+                        // nothing about apps: bankid:, intent:, mailto: and tel:
+                        // went there and were told nothing could open them.
+                        final boolean present = req.hasGesture() || v.isShown();
+                        final int handed = HydraIntents.handOff(v.getContext(), url,
+                                                                req.hasGesture(), v.isShown());
+                        if (handed == HydraIntents.HANDED_OVER)
+                            return true;
+                        if (handed == HydraIntents.FALLBACK) {
+                            v.loadUrl(HydraIntents.fallback());
+                            return true;
+                        }
                         if (takeExternalUrl(url))
+                            return true;
+                        // A frame starts BankID too: a bank's login is often one.
+                        if ("app.bankid.com".equals(req.getUrl().getHost())
+                            && url.contains("autostarttoken=") && present
+                            && HydraIntents.openBankId(v.getContext(), url))
                             return true;
                         // A subframe navigating itself is not the page going
                         // anywhere, and a locked tab is about the page. Asking
@@ -1690,8 +1722,8 @@ public class HydraWebView {
                         // BankID's own host alone, on purpose: a general "open
                         // in the app" would hand Teams and YouTube pages away,
                         // and this tree keeps those in the browser.
-                        if ("app.bankid.com".equals(req.getUrl().getHost())
-                            && HydraIntents.openInOwnApp(v.getContext(), url))
+                        if ("app.bankid.com".equals(req.getUrl().getHost()) && present
+                            && HydraIntents.openBankId(v.getContext(), url))
                             return true;
                         // True here means "handled, do not load", so a refusal
                         // is the negation of permission.

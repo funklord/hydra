@@ -43202,6 +43202,21 @@ hand Teams and YouTube pages away, against this tree's keeping them in the
 browser. It does not ask for a user gesture, because a bank's page commonly
 redirects after an asynchronous step.
 
+**That paragraph said `bankid:///` links already left the browser, and they did not**
+(reported again 2026-11-07, "doesn't open automatically"). Every link that is not a
+page went to `open_external_url`, which knows downloads, so `bankid:`, `intent:`,
+`mailto:` and `tel:` all ended at "Nothing here can open". The first fix was tested
+with a stand-in on `https://` alone, and a page written for `bankid:` never met it.
+`HydraIntents.handOff` now takes them before the shell does, on Chromium's rules from
+`components/external_intents`, since those are what pages are written against: a page
+starts an app only on a tap, and an `intent:` address loses its component, selector
+and flags and honours `browser_fallback_url`. BankID is excused the tap, in the tab on
+screen only: restored tabs warm in the background, and one left on a bank's page threw
+BankID up at startup, measured on the emulator. And
+`openBankId` no longer depends on the device having approved BankID for its host,
+which Android 12 does not promise: it tries the app by package, `com.bankid.bus`, then
+the `bankid:` scheme. A frame can start it too.
+
 The emulator has no BankID app, so a stand-in APK claimed the host, approved
 with `pm set-app-links-user-selection`, and a page sent itself there. Without
 the stand-in nothing else starts and hydra stays in front; with it, it received

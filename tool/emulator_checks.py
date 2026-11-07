@@ -56,7 +56,8 @@
 # by `adb emu kill` and then by its process group if that did not take.
 # `store` is refused: the screenshot target wipes it every run. An AVD that
 # is already running is refused rather than shared.
-import http.server, json, os, re, signal, subprocess, sys, threading, time
+import http.server, json, os, re, signal, subprocess, sys, tempfile, threading, time
+import urllib.parse
 import xml.etree.ElementTree as et
 
 SDK = os.environ.get("ANDROID_SDK_ROOT", os.path.expanduser("~/Android/Sdk"))
@@ -96,6 +97,46 @@ def wait_for(what, test, limit, step=3):
 		time.sleep(step)
 	print(f"  gave up waiting for {what} after {limit}s")
 	return False
+
+def build_stand_in(where):
+	# An app with no code of its own, signed with the debug key.
+	sdk = os.path.dirname(os.path.dirname(ADB))
+	tools = os.path.join(sdk, "build-tools", sorted(os.listdir(os.path.join(sdk, "build-tools")))[-1])
+	platform = os.path.join(sdk, "platforms", "android-36", "android.jar")
+	manifest = os.path.join(where, "AndroidManifest.xml")
+	with open(manifest, "w") as f:
+		f.write('''<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  package="com.bankid.bus" android:versionCode="1" android:versionName="1">
+ <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="33"/>
+ <application android:hasCode="false" android:label="BankID stand-in">
+  <activity android:name="android.app.Activity" android:exported="true">
+   <intent-filter>
+    <action android:name="android.intent.action.VIEW"/>
+    <category android:name="android.intent.category.DEFAULT"/>
+    <category android:name="android.intent.category.BROWSABLE"/>
+    <data android:scheme="bankid"/>
+   </intent-filter>
+   <intent-filter>
+    <action android:name="android.intent.action.VIEW"/>
+    <category android:name="android.intent.category.DEFAULT"/>
+    <category android:name="android.intent.category.BROWSABLE"/>
+    <data android:scheme="https" android:host="app.bankid.com"/>
+   </intent-filter>
+  </activity>
+ </application>
+</manifest>''')
+	raw = os.path.join(where, "raw.apk")
+	apk = os.path.join(where, "bankid.apk")
+	steps = [[os.path.join(tools, "aapt2"), "link", "-o", raw, "-I", platform, "--manifest", manifest],
+	         [os.path.join(tools, "zipalign"), "-f", "4", raw, apk],
+	         [os.path.join(tools, "apksigner"), "sign", "--ks",
+	          os.path.expanduser("~/.android/debug.keystore"), "--ks-pass", "pass:android", apk]]
+	for step in steps:
+		done = subprocess.run(step, capture_output=True, text=True, timeout=120)
+		if done.returncode != 0:
+			print(done.stderr[-400:])
+			return False
+	return True
 
 def probe(expression=None):
 	cmd = [sys.executable, os.path.join(HERE, "webview_probe.py"), ADB, SERIAL, str(PORT + 4000)]
@@ -162,7 +203,18 @@ class files(http.server.BaseHTTPRequestHandler):
 
 	def do_GET(self):
 		files.seen.append((self.path, dict(self.headers)))
-		if self.path.startswith("/article"):
+		if self.path.startswith("/launch") or self.path.startswith("/auto"):
+			# One big link to where the query says, or a page that goes there by
+			# itself a moment after loading, as a bank's does.
+			to = urllib.parse.unquote(self.path.split("?to=", 1)[1])
+			body = ("<!doctype html><meta name=viewport content='width=device-width'>"
+			        "<title>Launch</title><style>a{display:block;height:100vh}</style>"
+			        f"<a href='{to}'>go</a>").encode()
+			if self.path.startswith("/auto"):
+				body += f"<script>setTimeout(()=>location.href='{to}',800)</script>".encode()
+			self.send_response(200)
+			self.send_header("Content-Type", "text/html")
+		elif self.path.startswith("/article"):
 			para = ("<p>Rivers across the northern provinces rose to their highest level "
 			        "in a decade, after three days of rain that forecasters had warned "
 			        "about since the weekend, and the town opened its school to families.</p>")
@@ -1226,6 +1278,55 @@ def main():
 				check(any("Global" in n[0] for n in nodes() if n[2].endswith("Spinner")),
 				      "the last row is picked after an outside tap shut the list")
 			check(tap("Done", exact=True), "Done leaves it")
+
+			# **A stand-in for the real app, by its package name**, claiming the
+			# bankid scheme and app.bankid.com, and not approved for that host,
+			# which is what a phone can look like. Manifest only: its activity is
+			# the platform's own. Each link is one a real page uses, and the
+			# tapped ones are tapped, because a link needs a person.
+			print("\n== a link that is not a web page reaches its app ==")
+			with tempfile.TemporaryDirectory() as stand:
+				check(build_stand_in(stand), "the stand-in for BankID builds")
+				print(adb("install", "-r", os.path.join(stand, "bankid.apk"),
+				          timeout=120).strip().splitlines()[-1:])
+			def in_front():
+				return " ".join(l for l in adb("shell", "dumpsys", "activity", "activities")
+				                .splitlines() if "ResumedActivity" in l)
+			def tapped(to):
+				adb("shell", "am", "force-stop", APP)
+				adb("shell", "am", "force-stop", "com.bankid.bus")
+				open_url(f"http://127.0.0.1:{port}/launch?to=" +
+				         urllib.parse.quote(to, safe=""), wait=15)
+				adb("shell", "input", "tap", "540", "1400")
+				time.sleep(5)
+				return in_front()
+			def unprompted(to):
+				adb("shell", "am", "force-stop", APP)
+				adb("shell", "am", "force-stop", "com.bankid.bus")
+				open_url(f"http://127.0.0.1:{port}/auto?to=" +
+				         urllib.parse.quote(to, safe=""), wait=18)
+				return in_front()
+			check("com.bankid.bus" in tapped("bankid:///?autostarttoken=t1&redirect=null"),
+			      "a tapped bankid: link opens the app")
+			check("com.bankid.bus" in tapped("intent:///?autostarttoken=t2#Intent;"
+			                                 "scheme=bankid;package=com.bankid.bus;end"),
+			      "so does an intent: link naming it")
+			check("com.bankid.bus" in tapped("https://app.bankid.com/?autostarttoken=t3"
+			                                 "&redirect=null"),
+			      "and an https one, with the app not approved for the host")
+			check("com.bankid.bus" in unprompted("bankid:///?autostarttoken=t4&redirect=null"),
+			      "and a bank's page sending itself there with nobody tapping")
+			check(APP in unprompted("tel:123"),
+			      "but no other app starts without a tap")
+			check(APP in tapped("intent:#Intent;action=android.intent.action.VIEW;"
+			                    "component=com.bankid.bus/android.app.Activity;end"),
+			      "and a link cannot name a component")
+			tapped(f"intent://x#Intent;scheme=hydra-none;S.browser_fallback_url=" +
+			       urllib.parse.quote(f"http://127.0.0.1:{port}/article", safe="") + ";end")
+			time.sleep(8)
+			check("/article" in probe("location.href"),
+			      "and with no app, an intent: link's fallback address loads")
+			adb("uninstall", "com.bankid.bus")
 		finally:
 			adb("reverse", "--remove", f"tcp:{port}")
 			# The AVD keeps its data between runs, so what this run wrote

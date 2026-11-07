@@ -111,6 +111,122 @@ public class HydraIntents {
     }
 
     /**
+     * BankID's address, to BankID, by whichever door is open.
+     *
+     * openInOwnApp is what a browser asking would do, and it depends on the
+     * device having approved BankID for its host, which Android 12 and later
+     * do not promise. So the same address goes to the app by name, then by the
+     * scheme it has always answered to. A token is what makes it a start
+     * rather than a visit to BankID's site, so only that gets the last two.
+     */
+    public static boolean openBankId(final Context c, final String url) {
+        if (openInOwnApp(c, url))
+            return true;
+        if (c == null || url == null || !url.contains("autostarttoken="))
+            return false;
+        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        i.addCategory(Intent.CATEGORY_BROWSABLE);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        i.setPackage(BANKID_PACKAGE);
+        if (start(c, i))
+            return true;
+        final String query = Uri.parse(url).getEncodedQuery();
+        i = new Intent(Intent.ACTION_VIEW, Uri.parse("bankid:///?" + query));
+        i.addCategory(Intent.CATEGORY_BROWSABLE);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        return start(c, i);
+    }
+
+    private static final String BANKID_PACKAGE = "com.bankid.bus";
+
+    private static boolean start(final Context c, final Intent i) {
+        try {
+            c.startActivity(i);
+            return true;
+        } catch (ActivityNotFoundException | SecurityException e) {
+            return false;
+        }
+    }
+
+    /** What handOff did. FALLBACK means load `fallback()` in the page instead. */
+    public static final int NOT_OURS = 0, HANDED_OVER = 1, FALLBACK = 2;
+
+    private static String s_fallback = "";
+    public static String fallback() { return s_fallback; }
+
+    /**
+     * A link that is not a web page, to the app that takes it.
+     *
+     * The rules are Chromium's (components/external_intents), the ones pages
+     * are written against: a page starts another app only on a person's tap,
+     * and an intent: address may name an action and an app but no component,
+     * no selector and no grants, since those reach what a link should not.
+     * Its browser_fallback_url is where to go if no app answers. BankID is
+     * excused the tap, as app.bankid.com is, because a bank's page starts it
+     * after an asynchronous step, and the tap is long gone by then -- but only
+     * in the tab on screen (`inFront`): a restored tab warming in the background
+     * would otherwise throw BankID up at startup, on a token long dead.
+     *
+     * Schemes the engine renders, and magnet:, are left alone.
+     */
+    public static int handOff(final Context c, final String url, final boolean gesture,
+                              final boolean inFront) {
+        if (c == null || url == null)
+            return NOT_OURS;
+        final int colon = url.indexOf(':');
+        if (colon <= 0)
+            return NOT_OURS;
+        final String scheme = url.substring(0, colon).toLowerCase(java.util.Locale.ROOT);
+        switch (scheme) {
+            case "http": case "https": case "about": case "data": case "blob":
+            case "file": case "content": case "javascript": case "view-source":
+            case "chrome": case "magnet":
+                return NOT_OURS;
+            default:
+                break;
+        }
+        Intent i;
+        boolean bankid = scheme.equals("bankid");
+        String fallback = "";
+        if (scheme.equals("intent") || scheme.equals("android-app")) {
+            try {
+                i = Intent.parseUri(url, scheme.equals("intent") ? Intent.URI_INTENT_SCHEME
+                                                                  : Intent.URI_ANDROID_APP_SCHEME);
+            } catch (java.net.URISyntaxException e) {
+                return NOT_OURS;
+            }
+            final String wanted = i.getStringExtra("browser_fallback_url");
+            if (wanted != null && (wanted.startsWith("https://") || wanted.startsWith("http://")))
+                fallback = wanted;
+            // A page must not reach past what a link may reach.
+            i.setComponent(null);
+            i.setSelector(null);
+            i.setFlags(0);
+            final String aim = i.getDataString();
+            bankid = BANKID_PACKAGE.equals(i.getPackage())
+                     || (aim != null && aim.startsWith("bankid:"));
+            if (c.getPackageName().equals(i.getPackage()))
+                return NOT_OURS;
+            // Nothing left to aim at: Android would offer a chooser of every app.
+            if (i.getData() == null && i.getPackage() == null)
+                return NOT_OURS;
+        } else {
+            i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        }
+        if (!gesture && !(bankid && inFront))
+            return NOT_OURS;
+        i.addCategory(Intent.CATEGORY_BROWSABLE);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (start(c, i))
+            return HANDED_OVER;
+        if (!fallback.isEmpty()) {
+            s_fallback = fallback;
+            return FALLBACK;
+        }
+        return NOT_OURS;
+    }
+
+    /**
      * The address this activity was asked to open, once.
      *
      * **Taken rather than read**, and that is the whole of the design. The
