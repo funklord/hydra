@@ -40931,6 +40931,12 @@ the plain name and the rest take `.f<format>`, yt-dlp's own spelling. A browser 
 number the second file instead; that was rejected because the name would then depend
 on what is on disk, and saving one row twice would double it rather than be refused.
 
+**A site's text stays on its line.** A title or a chapter's name is the site's, and
+these files are read a line at a time, so one newline made an entry of the site's own:
+any address, or a VLC option. Every string is put on one line before it is written,
+and `test_sheet` holds a title built to do it. Fuzzing did not find this: nothing
+crashed, the output was simply wrong.
+
 **The times are the source's and no finer.** Descriptions give whole seconds, so a
 cue sheet's frames add no precision, and the text says "to the second". A source
 giving `1:02:03.250` keeps it now, which `entry_of` used to drop. **Refining a mark

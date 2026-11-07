@@ -156,6 +156,37 @@ int main(int argc, char **argv) {
 		check(back.text() == s.text() && back.cue("x") == s.cue("x"), "it survives as JSON");
 	}
 
+	// A title and a chapter's name are the site's, and these files are read a line
+	// at a time. One newline in either is an entry of the site's own: a playlist
+	// line naming any address, or a VLC option.
+	std::printf("-- a site's text stays on its line\n");
+	{
+		const QString hostile = "x\r\n#EXTVLCOPT:run=1\nhttp://evil.example/\n"
+		                        "FILE \"evil\" WAVE\x0b\xe2\x80\xa8y";
+		media_sheet s;
+		s.title    = QString::fromUtf8(hostile.toLatin1());
+		s.artist   = s.title;
+		s.duration = 100;
+		s.source   = "chapters";
+		s.entries  = { { 0, s.title }, { 10, s.title } };
+		const QStringList m3u = s.m3u("#set.webm").split('\n', Qt::SkipEmptyParts);
+		int options = 0, files = 0;
+		for (const QString &line : m3u) {
+			options += line.startsWith("#EXTVLCOPT:") && !line.contains("-time=");
+			files   += !line.startsWith('#');
+		}
+		check(options == 0, "a title cannot add a VLC option");
+		check(files == 2, QString("or a playlist entry (%1 file lines)").arg(files));
+		check(m3u.last() == "./#set.webm", "and a file name cannot read as a comment");
+		const QStringList cue = s.cue("set.webm").split('\n', Qt::SkipEmptyParts);
+		int declared = 0;
+		for (const QString &line : cue)
+			declared += line.startsWith("FILE ");
+		check(declared == 1, QString("nor a cue sheet name a file (%1)").arg(declared));
+		check(s.text().count('\n') < 30 && !s.text().startsWith("x\r"),
+		      "and the text's header stays one line");
+	}
+
 	std::printf("-- saying there is none\n");
 	{
 		media_sheet s;

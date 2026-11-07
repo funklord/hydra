@@ -46,8 +46,20 @@ void split_track(QString text, QString *performer, QString *title) {
 	*title     = text.mid(m.capturedEnd()).trimmed();
 }
 
+// **What a site says, kept on one line.** A title or a chapter's name is the
+// site's text, and a playlist and a cue sheet are read a line at a time: one
+// newline in it would be an entry of the site's own, naming any address, or a VLC
+// option. `simplified` takes every kind of line break, and what is left below a
+// space goes with it.
+QString one_line(const QString &text) {
+	QString out = text.simplified();
+	out.removeIf([](QChar c) { return c.unicode() < 0x20 || c.unicode() == 0x7f; });
+	return out;
+}
+
 // A cue sheet's strings are quoted and have no escape.
-QString quoted(QString s) {
+QString quoted(const QString &text) {
+	QString s = one_line(text);
 	return QLatin1Char('"') + s.replace(QLatin1Char('"'), QLatin1Char('\'')) +
 	       QLatin1Char('"');
 }
@@ -83,10 +95,11 @@ QString media_sheet::summary() const {
 }
 
 QString media_sheet::text() const {
-	QString out = title + QLatin1Char('\n') + QString(title.size(), QLatin1Char('=')) +
+	const QString heading = one_line(title);
+	QString out = heading + QLatin1Char('\n') + QString(heading.size(), QLatin1Char('=')) +
 	              QLatin1Char('\n');
 	if (!artist.isEmpty())
-		out += "Artist: " + artist + QLatin1Char('\n');
+		out += "Artist: " + one_line(artist) + QLatin1Char('\n');
 	if (page.isValid())
 		out += "From: " + page.toString() + QLatin1Char('\n');
 	if (duration > 0)
@@ -99,7 +112,7 @@ QString media_sheet::text() const {
 		              whole_seconds(entries) ? QStringLiteral("to the second")
 		                                     : QStringLiteral("to the millisecond"));
 		for (const media_evidence::entry &e : entries)
-			out += clock(e.start) + QStringLiteral("  ") + e.text + QLatin1Char('\n');
+			out += clock(e.start) + QStringLiteral("  ") + one_line(e.text) + QLatin1Char('\n');
 	} else if (!untimed.isEmpty()) {
 		out += QString("Tracklist: %1 tracks, from the %2, which gives no times.\n\n")
 		         .arg(untimed.size()).arg(untimed_source);
@@ -121,17 +134,20 @@ QString media_sheet::text() const {
 QString media_sheet::m3u(const QString &media_name) const {
 	if (!has_times())
 		return QString();
-	QString out = QStringLiteral("#EXTM3U\n#PLAYLIST:") + title + QLatin1Char('\n');
+	// A name opening with `#` would read as a comment and play nothing.
+	const QString file = media_name.startsWith(QLatin1Char('#'))
+	                       ? QStringLiteral("./") + media_name : media_name;
+	QString out = QStringLiteral("#EXTM3U\n#PLAYLIST:") + one_line(title) + QLatin1Char('\n');
 	for (int i = 0; i < entries.size(); ++i) {
 		const double start = entries.at(i).start;
 		const double stop  = i + 1 < entries.size() ? entries.at(i + 1).start : duration;
 		out += QString("#EXTINF:%1,%2\n")
 		         .arg(stop > start ? qRound64(stop - start) : -1)
-		         .arg(entries.at(i).text);
+		         .arg(one_line(entries.at(i).text));
 		out += QString("#EXTVLCOPT:start-time=%1\n").arg(start, 0, 'f', 3);
 		if (stop > start)
 			out += QString("#EXTVLCOPT:stop-time=%1\n").arg(stop, 0, 'f', 3);
-		out += media_name + QLatin1Char('\n');
+		out += file + QLatin1Char('\n');
 	}
 	return out;
 }
