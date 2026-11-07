@@ -131,7 +131,10 @@ void stream_assembly::assemble(const media_item &item,
 		// Hand the player the growing file as soon as there is something to
 		// play -- that is the sec 11.3 tee-to-disk trick, and it is what turns a
 		// live stream into a locally seekable one.
-		if (play_it && done == 1) {
+		//
+		// Not for a stream with its audio apart: the file growing here is silent,
+		// so the player waits for both and the mux (`completed`, below).
+		if (play_it && done == 1 && m_assembler && !m_assembler->has_audio_pass()) {
 			const QUrl via = m_proxy ? m_proxy->publish_file(out, "video/mp2t")
 			                          : QUrl();
 			QString error;
@@ -140,7 +143,8 @@ void stream_assembly::assemble(const media_item &item,
 		}
 	});
 
-	connect(m_assembler, &hls_assembler::completed, this, [this, out, play_it, sheet = item.sheet] {
+	connect(m_assembler, &hls_assembler::completed, this,
+	         [this, out, play_it, item, sheet = item.sheet] {
 		// A live list has no end, so running out of segments is the end of the
 		// *window it published* and not the end of the stream. `hls_assembler`
 		// said as much in a comment and told nobody; saying "saved" with no
@@ -173,6 +177,29 @@ void stream_assembly::assemble(const media_item &item,
 		           : QStringLiteral("Live stream, and this is the one window "
 		                             "the manifest offered -- it is not re-read "
 		                             "as it grows, so there is likely more.");
+		// **Video and audio apart: combined first, then played.** A mux needs both
+		// complete, so this gives up playing from the first segment for this one
+		// shape of manifest. Decided 2026-11-07: a wait is better than a refusal,
+		// which left a person who pressed Watch with nothing at all.
+		const QString apart = m_assembler ? m_assembler->audio_path() : QString();
+		if (play_it && !apart.isEmpty()) {
+			emit status(QStringLiteral("Combining video and audio…"));
+			auto *remux = new media_remux(this);
+			connect(remux, &media_remux::finished, this,
+			         [this, remux, item](bool ok, const QString &path, const QString &why) {
+				remux->deleteLater();
+				if (!ok) {
+					emit status(why);
+					return;
+				}
+				const QUrl via = m_proxy ? m_proxy->publish_file(path, "video/mp4") : QUrl();
+				QString error;
+				emit status(m_players->play(item, &error, via)
+				              ? QStringLiteral("Stream assembled and playing.") : error);
+			});
+			remux->start_mux(out, apart);
+			return;
+		}
 		if (play_it) {
 			// **Not remuxed, deliberately.** A player already has this file
 			// open and has been reading it since the first segment landed --
@@ -258,13 +285,6 @@ void stream_assembly::assemble(const media_item &item,
 	         [this](const QString &note) { m_live_note = note; });
 
 	emit status(QStringLiteral("Fetching manifest…"));
-	// **Only saving asks for the audio, and the asymmetry is the point.** A mux
-	// needs both streams complete; watching hands the player a file that is
-	// still growing, from the first segment. So Save passes somewhere to put a
-	// separately-carried audio stream and Watch does not -- which is what makes
-	// the assembler refuse such a manifest for Watch rather than produce a file
-	// that plays perfectly and is silent. Whether Watch should instead wait for
-	// both and play afterwards is recorded in project.md as the holder's.
-	m_assembler->start(item.url, ctx, out,
-	                    play_it ? QString() : out + QStringLiteral(".audio"));
+	// Somewhere for a separately-carried audio stream, for Watch as for Save.
+	m_assembler->start(item.url, ctx, out, out + QStringLiteral(".audio"));
 }

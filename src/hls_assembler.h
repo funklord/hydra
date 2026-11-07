@@ -75,6 +75,8 @@ public:
 	// A caller muxes when this is non-empty and does not when it is not, so it
 	// needs no separate flag for "was there audio".
 	QString audio_path() const { return m_audio_done ? m_audio_path : QString(); }
+	// Known once the manifest is read, before a segment has landed.
+	bool    has_audio_pass() const { return m_audio_done || !m_audio_pending.isEmpty(); }
 	qint64  bytes_written() const { return m_written; }
 	int     segments_done() const { return m_index; }
 	int     segments_total() const { return m_playlist.segments.size(); }

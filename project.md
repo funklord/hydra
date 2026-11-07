@@ -12842,7 +12842,8 @@ now: the pin is written to `url`, and it survives unlocking. The comment
 beside it records the measurement and says plainly that the obvious repair
 must fail loudly rather than quietly.
 
-**What is left is a decision and it is the copyright holder's**, because
+**Settled since without the format change:** `track_node_url` follows the page for an
+unlocked tab only, which the options below did not list. What this entry said then:
 separating the two meanings — a `pin` field distinct from `url` — is a change
 to the tree file's format, and every existing tree would have to be read by
 both. The options, with their costs:
@@ -28305,14 +28306,10 @@ carried along as amendments to a list item.
    theme is a test dependency rather than a build one. Left for whoever owns
    that list.
 
-11. **A node's url means two things at once, and rows can be internally
-   inconsistent.** See *One field with two meanings* above: the title follows
-   the page and the url does not, so a row can carry a title from one page and
-   a url from another — measured. The obvious repair breaks the tab lock,
-   which stores its pin in the same field. Separating them is a tree-file
-   format change and so the copyright holder's; the three options and their
-   costs are in that section. The pin is now asserted in `test_model`, so the
-   repair fails loudly rather than quietly.
+11. ~~**A node's url means two things at once.**~~ Closed, and this entry had gone on
+   saying otherwise: `track_node_url` makes an unlocked tab's address follow the page
+   and leaves a locked one on its pin, which a locked tab stays on anyway. So no format
+   change is needed, and *One field with two meanings* is history.
 
 12. **KeePassXC works end to end, measured in a hull machine** (2026-11-03,
    `make hull-keepass`). The bridge had never met a real KeePassXC, and the
@@ -30660,11 +30657,11 @@ third:
   property the feature exists for. A ten-minute stream becomes a ten-minute
   wait before anything plays.
 
-**That is the decision, and it is the copyright holder's**: it trades a
-headline behaviour for coverage of a manifest shape, and which way that goes
-is not a technical question. Recorded here rather than put in a message,
-because the same question reaches whoever reads this next and a message is the
-copy that does not get re-read.
+**Settled 2026-11-07: the second.** The holder asked for the outstanding items to be
+taken, and a wait is better than a refusal, which left a person who pressed Watch with
+nothing. It also stopped being only mplayer's question: while downloads have a route
+every manifest is assembled here (*Downloads through a VPN the system already has*),
+for any player. The status line says what is happening meanwhile.
 
 **Who is in that population is small, measured 2026-11-03.** The assembler
 is reached only for a player without `native_streams`, and in
@@ -30673,10 +30670,6 @@ command); mpv, VLC, SMPlayer and ffplay are handed the manifest and read the
 split audio themselves. So the decision is about mplayer users meeting a
 split-audio MPD, not about Watch on DASH in general.
 
-Nothing about the refusal is provisional in the meantime. It names the audio,
-it happens at the moment the manifest is read, and it is what the assembler's
-own comment says it is -- the alternative being a file that plays perfectly
-and is silent.
 
 ## Save muxes what the manifest kept apart
 

@@ -215,6 +215,12 @@ public:
 	}
 };
 
+static QString slurp_text(const QString &path) {
+	QFile f(path);
+	f.open(QIODevice::ReadOnly);
+	return QString::fromUtf8(f.readAll());
+}
+
 int main(int argc, char **argv) {
 	// **The live stall bound, shortened so cases can reach it.** A live
 	// playlist that stops growing ends the assembly after
@@ -2451,6 +2457,51 @@ int main(int argc, char **argv) {
 		check(again.first().file_name != again.last().file_name &&
 		      !again.last().file_name.contains(".f251.f251"),
 		      "and naming twice adds nothing");
+	}
+
+	// **The player waits for both.** A stand-in ffmpeg and player, each writing
+	// down that it ran, so the order is read off the disk: the file growing here
+	// is silent, and a player opened on it at the first segment would be too.
+	section("Watch on a stream with its audio apart combines, then plays");
+	{
+		QTemporaryDir bin;
+		const auto script = [&bin](const char *name, const QByteArray &body) {
+			QFile f(bin.filePath(name));
+			f.open(QIODevice::WriteOnly);
+			f.write("#!/bin/sh\n" + body);
+			f.setPermissions(f.permissions() | QFile::ExeOwner);
+			return f.fileName();
+		};
+		const QString log = bin.filePath("order");
+		script("ffmpeg", "echo ffmpeg >> '" + log.toUtf8() + "'\n"
+		                 "for a; do o=$a; done; echo muxed > \"$o\"\n");
+		const QString play = script("play", "echo \"player $1\" >> '" + log.toUtf8() + "'\n");
+		const QByteArray path = qgetenv("PATH");
+		qputenv("PATH", bin.path().toLocal8Bit() + ":" + path);
+		player_launcher apart;
+		apart.refresh();
+		apart.set_selected(player_launcher::custom_id());
+		apart.set_custom_command(play + " %U");
+		stream_assembly fresh(&apart, &downloads, &proxy, nullptr);
+		QStringList said;
+		QObject::connect(&fresh, &stream_assembly::status, &fresh,
+		                 [&said](const QString &s) { said << s; });
+		media_item row;
+		row.kind  = media_kind::dash;
+		row.label = "split.mpd";
+		row.url   = QUrl(base + "/split.mpd");
+		fresh.watch(row, stream_context{});
+		QElapsedTimer t;
+		t.start();
+		while (!slurp_text(log).contains("player") && t.elapsed() < 15000)
+			QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+		const QStringList order = slurp_text(log).split('\n', Qt::SkipEmptyParts);
+		check(order.size() == 2 && order.first() == "ffmpeg",
+		      QString("the streams are combined first (%1 | %2)")
+		        .arg(order.join(" / "), said.join(" / ")));
+		check(order.size() == 2 && order.last().startsWith("player http://127.0.0.1"),
+		      "and the player is handed the result, once");
+		qputenv("PATH", path);
 	}
 
 	section("a stream stopped before its first byte leaves no file");

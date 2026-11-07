@@ -809,12 +809,9 @@ public:
 	// empty url however far it was browsed, while one opened from a link kept
 	// that link's. Deterministic, and it reads as the save being flaky.
 	//
-	// **Only while empty, because the tab lock's pin lives in the same
-	// field.** `set_locked` writes the pinned address to `node::url`, so
-	// following the page unconditionally would overwrite pins. A locked node
-	// therefore has a non-empty url by construction and this never touches
-	// one. Separating the two meanings is a tree-file format change and the
-	// copyright holder's; this is the narrower option they chose.
+	// **Never on a locked tab, because the lock's pin lives in the same field.**
+	// `set_locked` writes the pinned address to `node::url`, and a locked tab
+	// stays on it, so the one field serves both.
 	void track_node_url(web_view_backend *view, const QUrl &u);
 	QProgressBar    *m_progress   = nullptr;   // beside it, only while loading
 	find_bar        *m_find       = nullptr;   // above the status bar, hidden
