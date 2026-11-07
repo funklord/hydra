@@ -20,6 +20,7 @@
 #include "qtwebengine_factory.h"
 #include "web_view_backend.h"
 #include "autofill_controller.h"
+#include "credential_store.h"
 #include "keepass_bridge.h"
 #include "keepass_protocol.h"
 #include "autofill_script.h"
@@ -501,15 +502,21 @@ int main(int argc, char *argv[]) {
 		const bool other_up = other.listen(QHostAddress::LocalHost, 9934);
 		check(listening && other_up, "the vault's site is served on its own origin");
 
-		section("the shell pairs with the stored pairing, asking nobody");
+		// **Nothing is pressed here, and that is the test.** This is a browser
+		// just started on a stored pairing, and the holder's report: the
+		// connection did not survive a restart, because only Connect made one.
+		section("after a restart, a login form brings the pairing back by itself");
 		auto *bridge = w.findChild<keepass_bridge *>();
 		check(bridge != nullptr, "the shell has a bridge");
-		QMetaObject::invokeMethod(&w, "toggle_password_manager");
-		const bool paired = bridge && wait_for([&] { return bridge->associated(); }, 20000);
-		check(paired, "Passwords > Connect takes the stored pairing");
+		check(bridge && !bridge->connected() && !bridge->associated(),
+		      "a browser just started holds no connection");
+		web_view_backend *login = open_url("http://127.0.0.1:9931/login");
+		const bool paired = bridge && wait_for([&] {
+			return bridge->connected() && bridge->associated();
+		}, 20000);
+		check(paired, "the form connects and takes the stored pairing, asking nobody");
 
 		section("a login form is filled from the vault");
-		web_view_backend *login = open_url("http://127.0.0.1:9931/login");
 		// **Either state is the key coming alive**, because a paired shell
 		// fills on load (sec 13.2: the script asks as soon as it sees a
 		// password field). With a vault that answers fast the key can pass
@@ -735,6 +742,33 @@ int main(int argc, char *argv[]) {
 		      QString("dave's password, without asking which (%1 pickers)")
 		          .arg(pickers - pickers_before));
 		sweep.stop();
+
+		// The holder's second report: with the pairing gone from KeePassXC's side,
+		// Connect said "Already paired" and there was no way to link again.
+		section("a pairing KeePassXC refuses is linked again by Connect");
+		{
+			const QString stale = QStringLiteral("no-such-connection");
+			const QString stale_key = QString::fromLatin1(QByteArray(32, 'k').toBase64());
+			credential_store::save(stale, stale_key);
+			bridge->set_association(stale, stale_key);
+			QMetaObject::invokeMethod(&w, "toggle_password_manager");
+			const bool again = wait_for([&] {
+				return bridge->association_id() != stale;
+			}, 40000);
+			check(again, QString("Connect asks KeePassXC again (%1)").arg(bridge->association_id()));
+			check(!bridge->pairing_refused(), "and the refusal is over");
+			QString kept_id, kept_key;
+			check(credential_store::load(&kept_id, &kept_key) &&
+			      kept_id == bridge->association_id() && kept_key != stale_key,
+			      "and the new pairing is what is stored, with a key of its own");
+			bool accepted = false;
+			QObject scope;
+			QObject::connect(bridge, &keepass_bridge::associated_changed, &scope,
+			                 [&accepted](bool ok, const QString &) { accepted = ok; });
+			QMetaObject::invokeMethod(&w, "toggle_password_manager");
+			check(wait_for([&] { return accepted; }, 15000),
+			      "and Connect after that finds it accepted, asking nobody");
+		}
 
 		section("a locked vault is said to be locked, on the key");
 		// Locked the way the holder's would be, from KeePassXC itself; its

@@ -125,6 +125,15 @@ echo "=== the shell against the vault ==="
 			echo "  (rig) applied KeePassXC's generated password"
 			sleep 2
 		fi
+		# Linking again after a refused pairing raises the same dialog.
+		w=$(xdotool search --name 'association request' 2>/dev/null | head -1 || true)
+		if [ -n "$w" ]; then
+			xdotool windowactivate --sync "$w" 2>/dev/null || true
+			xdotool type --delay 20 "hydra-hull-relink"
+			xdotool key Return
+			echo "  (rig) answered the second pairing"
+			sleep 2
+		fi
 		sleep 1
 		i=$((i + 1))
 	done

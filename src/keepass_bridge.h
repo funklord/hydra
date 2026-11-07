@@ -36,6 +36,12 @@ public:
 
 	bool connected() const;
 	bool associated() const { return !m_assoc_id.isEmpty(); }
+	// **KeePassXC answered that it does not know this pairing.** `associated()`
+	// is about what this run holds, which a restored pairing makes true whatever
+	// the other end thinks, so Connect said "Already paired" and could never ask
+	// for a new one. A locked vault is not this: that pairing comes back by
+	// itself on unlocking.
+	bool pairing_refused() const { return m_pairing_refused; }
 
 	// How the last encrypted reply was matched to the request it answered.
 	// Exposed for one reason: `match_reply`'s first rule is the protocol's
@@ -129,6 +135,7 @@ private:
 	QByteArray m_nonce;
 	QString    m_client_id;
 	QString    m_assoc_id;
+	bool    m_pairing_refused = false;
 	QString    m_id_key_b64;
 	// Every request sent and not yet answered, with the nonce it was sealed
 	// with. This was a tag per action, which stopped three *different*

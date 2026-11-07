@@ -105,7 +105,7 @@ QString autofill_controller::blocked_reason(const QString &origin) const {
 
 	if (!m_bridge || !m_bridge->connected())
 		return "KeePassXC is not connected.";
-	if (!m_bridge->associated())
+	if (!m_bridge->associated() || m_bridge->pairing_refused())
 		return "Not paired with KeePassXC yet.";
 
 	return QString();
@@ -118,6 +118,23 @@ void autofill_controller::request_credentials(const QString &origin) {
 	// precisely when it has something to say.
 	emit requested();
 	const QString why = blocked_reason(origin);
+	// **A connection is not kept across a restart, and a pairing is.** So asking
+	// is what brings the link back, and the request carries on once it is up;
+	// said as a refusal, the person had to know to go through Connect first.
+	const bool identifier = m_asked_identifier;
+	const auto carry_on = [this, origin, identifier] {
+		m_linking = true;
+		request_credentials(origin);
+		m_linking = false;
+		if (m_pending && identifier)
+			m_identifier_only = true;
+	};
+	if (!m_linking && m_link && m_bridge &&
+	    (!m_bridge->connected() || !m_bridge->associated()) &&
+	    (why == QLatin1String("KeePassXC is not connected.") ||
+	     why == QLatin1String("Not paired with KeePassXC yet.")) &&
+	    m_link(carry_on))
+		return;
 	if (!why.isEmpty()) {
 		emit refused(why);
 		return;
@@ -128,7 +145,9 @@ void autofill_controller::request_credentials(const QString &origin) {
 }
 
 void autofill_controller::request_identifier(const QString &origin) {
+	m_asked_identifier = true;
 	request_credentials(origin);
+	m_asked_identifier = false;
 	// After, because request_credentials clears it; only a request that went
 	// out is marked.
 	if (m_pending)

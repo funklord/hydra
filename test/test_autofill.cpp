@@ -700,6 +700,10 @@ int main(int argc, char **argv) {
 		              "unlock (%1)").arg(kept));
 		check(fresh.contains("locked") && fresh.contains("Connect"),
 		      QString("a new pairing refused by one is asked for again (%1)").arg(fresh));
+		QJsonObject unknown = other;
+		unknown.insert("errorCode", QStringLiteral("8"));
+		check(keepass_protocol::describe_pairing_failure(unknown, true).contains("Connect"),
+		      "a stored pairing KeePassXC does not know says how to pair again");
 		check(keepass_protocol::describe_pairing_failure(other, true) == "Something else (code 9)",
 		      QString("and anything else is KeePassXC's message (%1)")
 		          .arg(keepass_protocol::describe_pairing_failure(other, true)));

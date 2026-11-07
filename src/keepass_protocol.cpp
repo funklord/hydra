@@ -186,6 +186,9 @@ QString describe_pairing_failure(const QJsonObject &reply, bool stored_pairing) 
 		                   "the pairing works again.")
 		  : QStringLiteral("KeePassXC's database is locked. Unlock it, then "
 		                   "choose Passwords > Connect again.");
+	if (stored_pairing && error_code(reply) == association_failed)
+		return QStringLiteral("KeePassXC does not recognise this browser's pairing. "
+		                      "Choose Passwords > Connect to pair again.");
 	QString err;
 	is_error(reply, &err);
 	return err;

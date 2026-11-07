@@ -164,6 +164,8 @@ constexpr int no_logins_found = 15;
 // request is refused straight away with "Database not opened" and code 1,
 // rather than held while somebody unlocks it.
 constexpr int database_not_opened = 1;
+// "Association failed": KeePassXC does not know this pairing.
+constexpr int association_failed = 8;
 
 // What to tell a person when a request for this page's logins failed, in
 // words that say what to do. `reply` is the decrypted error reply.

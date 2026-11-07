@@ -7,6 +7,8 @@
 #include <QSet>
 #include <QString>
 
+#include <functional>
+
 class keepass_bridge;
 class policy_engine;
 
@@ -30,6 +32,11 @@ class policy_engine;
 class autofill_controller : public QObject {
 	Q_OBJECT
 public:
+	// Brings the link to KeePassXC back, then runs the function given. False if
+	// it will not try, and the request is refused as it always was.
+	using link_helper = std::function<bool(std::function<void()>)>;
+	void set_link_helper(link_helper fn) { m_link = std::move(fn); }
+
 	autofill_controller(keepass_bridge *bridge, policy_engine *policy,
 	                     QObject *parent = nullptr);
 
@@ -142,6 +149,9 @@ private:
 	void deliver(const credential &c);
 
 	keepass_bridge *m_bridge = nullptr;
+	link_helper     m_link;
+	bool            m_linking = false;
+	bool            m_asked_identifier = false;
 	policy_engine  *m_policy = nullptr;
 	QString m_origin;
 	bool    m_https_only = k_https_only_default;

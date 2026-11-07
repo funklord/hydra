@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include "tree_diff.h"   // for the sec 9.4 undo snapshot
 #include "cosmetic_filters.h"
 #include "site_extractor.h"
@@ -306,6 +308,9 @@ private slots:
 	void open_filter_evolution();
 	void toggle_password_manager();
 	void ask_to_pair();
+	void link_keepass(bool ask, std::function<void()> then);
+	void keepass_settled();
+	bool keepass_link_for_form(std::function<void()> then);
 	void forget_keepass_pairing();
 	void start_element_picker();
 	void open_site_rules();
@@ -908,6 +913,9 @@ public:
 	// cannot forge one; used once.
 	QHash<QString, QUrl> m_page_block_tokens;
 	keepass_bridge     *m_keepass       = nullptr;
+	std::function<void()> m_keepass_then;     // set while a link is under way
+	bool                  m_keepass_ask = false;
+	QElapsedTimer         m_keepass_failed;
 	// One autofill controller per view now, parented to the view and found
 	// through it -- see `current_autofill` and the per-view creation in
 	// `open_node`. There is no shared one: it delivered a filled credential to

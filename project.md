@@ -6144,6 +6144,18 @@ reply handler, not by the caller — so no path can pair and forget to save.
 Failing to store is reported as its own outcome rather than as a failure to pair,
 because this run works either way and the difference only shows up next launch.
 
+**A pairing is kept across a restart and a connection is not, and only Connect made
+one.** Reported by the holder 2026-11-07: "doesn't remain after restarting, and now
+it doesn't work to link a second time". Nothing started the bridge after a restart, so
+every login form heard "KeePassXC is not connected". And a restored pairing made
+`associated()` true whatever KeePassXC thought, so Connect then answered "Already
+paired" and could not ask for a new one. Now a login form brings the link back
+(`link_keepass`, without asking anything), where a pairing is stored and not for
+thirty seconds after failing, so a browser that has never met KeePassXC does not go
+looking on every form. Connect always asks KeePassXC, and if the pairing is refused,
+as opposed to the vault being locked, it pairs again with a fresh key. Only a person
+at Connect can raise that window: a page's form never does.
+
 **A refused `test-associate` deliberately does not delete it.** A locked vault, a
 different database, and a pairing KeePassXC has genuinely forgotten are the same
 answer from out here, and dropping the pairing on that would make locking your

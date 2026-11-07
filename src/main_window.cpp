@@ -488,6 +488,22 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	connect(m_keepass, &keepass_bridge::associated_changed, this,
 	         [this](bool ok, const QString &msg) {
 		m_status->showMessage((ok ? "KeePassXC: " : "KeePassXC: ") + msg, 6000);
+		if (!ok && m_keepass->pairing_refused() && m_keepass_ask) {
+			m_keepass_ask = false;
+			ask_to_pair();
+			return;
+		}
+		keepass_settled();
+	});
+	// Once, here, and not per press: a start that never reached KeePassXC would
+	// leave one behind each time, and the next success would run them all.
+	connect(m_keepass, &keepass_bridge::ready, this, [this] {
+		if (m_keepass->restore_pairing() || m_keepass->associated())
+			m_keepass->test_association();
+		else if (m_keepass_ask)
+			ask_to_pair();
+		else
+			keepass_settled();
 	});
 	connect(m_keepass, &keepass_bridge::error, this, [this](const QString &msg) {
 		m_status->showMessage("KeePassXC: " + msg, 8000);
@@ -3329,28 +3345,66 @@ void main_window::toggle_password_manager() {
 		m_status->showMessage(keepass_bridge::unavailable_reason(), 8000);
 		return;
 	}
-	if (!m_keepass->connected()) {
-		connect(m_keepass, &keepass_bridge::ready, this, [this] {
-			// A stored pairing is tested rather than re-created, so the user is
-			// not asked to confirm a new connection on every launch (sec 13.1).
-			//
-			// This comment described what was *meant* to happen for as long as
-			// there was nowhere to store a pairing: `associated()` only ever
-			// answered for this process's memory, which on a fresh launch is
-			// empty, so the test branch was unreachable and every launch asked
-			// the user to confirm again. Loading it is what makes it true.
-			if (m_keepass->restore_pairing() || m_keepass->associated())
-				m_keepass->test_association();
-			else
-				ask_to_pair();
-		}, Qt::SingleShotConnection);
-		m_status->showMessage("Connecting to KeePassXC…", 4000);
-		m_keepass->start();
-	} else if (!m_keepass->associated()) {
-		ask_to_pair();
-	} else {
-		m_status->showMessage("Already paired with KeePassXC.", 4000);
+	link_keepass(/*ask=*/true, {});
+}
+
+// **Connect and the key share one way up**, since a connection does not outlive
+// the program and a pairing does. `ask` is whether a person is here to answer
+// KeePassXC's window: Connect is, and a page's login form is not, so a form can
+// bring back a pairing but never ask for a new one.
+//
+// A stored pairing is tested rather than re-created, so nobody is asked to
+// confirm on every launch (sec 13.1). A refused one is asked for again.
+void main_window::link_keepass(bool ask, std::function<void()> then) {
+	const bool running = bool(m_keepass_then);
+	m_keepass_ask = m_keepass_ask || ask;
+	m_keepass_then = [earlier = m_keepass_then, then] {
+		if (earlier)
+			earlier();
+		if (then)
+			then();
+	};
+	if (running)
+		return;
+	if (m_keepass->connected()) {
+		if (m_keepass->associated())
+			m_keepass->test_association();
+		else if (m_keepass_ask)
+			ask_to_pair();
+		else
+			keepass_settled();
+		return;
 	}
+	if (ask)
+		m_status->showMessage("Connecting to KeePassXC…", 4000);
+	m_keepass->start();
+	if (!m_keepass->connected()) {
+		m_keepass_failed.restart();
+		m_keepass_then = nullptr;
+		m_keepass_ask  = false;
+	}
+}
+
+void main_window::keepass_settled() {
+	const std::function<void()> then = std::move(m_keepass_then);
+	m_keepass_then = nullptr;
+	m_keepass_ask  = false;
+	if (then)
+		then();
+}
+
+// For a login form. Only where there is a pairing to bring back, or a browser
+// that has never met KeePassXC would look for it on every form, and not again
+// for a while after failing, or it would say so on every form as well.
+bool main_window::keepass_link_for_form(std::function<void()> then) {
+	if (!keepass_bridge::supported() ||
+	    (m_keepass_failed.isValid() && m_keepass_failed.elapsed() < 30000))
+		return false;
+	if (!m_keepass->connected() && !m_keepass->associated() &&
+	    !keepass_bridge::pairing_is_stored())
+		return false;
+	link_keepass(/*ask=*/false, std::move(then));
+	return true;
 }
 
 // **KeePassXC answers a pairing with a window of its own**, like its
@@ -3451,6 +3505,9 @@ autofill_controller *main_window::current_autofill() const {
 // modal and shown synchronously, so `c` is still the right one when they
 // return.
 void main_window::wire_autofill(autofill_controller *c) {
+	c->set_link_helper([this](std::function<void()> then) {
+		return keepass_link_for_form(std::move(then));
+	});
 	connect(c, &autofill_controller::choice_needed, this,
 	         [this, c](const QStringList &labels) {
 		bool ok = false;

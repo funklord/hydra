@@ -204,7 +204,8 @@ bool keepass_bridge::send_encrypted(const QString &action, const QJsonObject &in
 }
 
 void keepass_bridge::associate() {
-	if (m_id_key_b64.isEmpty())
+	// A refused pairing's key goes with it: it is the one KeePassXC does not know.
+	if (m_id_key_b64.isEmpty() || m_pairing_refused)
 		m_id_key_b64 = b64(box_crypto::random_bytes(32));
 	send_encrypted("associate",
 	                keepass_protocol::associate_request(b64(m_our_public), m_id_key_b64));
@@ -384,6 +385,8 @@ void keepass_bridge::handle(const QJsonObject &reply) {
 			// Throwing the pairing away on that would make a locked vault cost
 			// the user their pairing, and re-pairing is the one step that needs
 			// a human. Forgetting stays an explicit act.
+			m_pairing_refused = keepass_protocol::error_code(inner) ==
+			                    keepass_protocol::association_failed;
 			emit associated_changed(
 			  false, keepass_protocol::describe_pairing_failure(inner, true));
 		} else if (action == "associate") {
@@ -414,6 +417,7 @@ void keepass_bridge::handle(const QJsonObject &reply) {
 		QString id;
 		if (keepass_protocol::parse_associate(inner, &id)) {
 			m_assoc_id = id;
+			m_pairing_refused = false;
 			// Stored here rather than by the caller, at the one moment the
 			// pairing is known good, so no path can pair and forget to save.
 			// Failing to store is not failing to pair: this run works either
@@ -430,6 +434,7 @@ void keepass_bridge::handle(const QJsonObject &reply) {
 			emit associated_changed(false, "KeePassXC declined the pairing.");
 		}
 	} else if (action == "test-associate") {
+		m_pairing_refused = false;
 		emit associated_changed(true, "Existing pairing accepted.");
 	} else if (action == "get-logins") {
 		emit logins(tag, keepass_protocol::parse_logins(inner));
