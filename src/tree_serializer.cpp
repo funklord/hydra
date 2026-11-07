@@ -16,7 +16,7 @@ void write_node(QString &out, node *n, int depth) {
 	out += indent + "- [" + n->id + "] " + tree_outline::type_to_string(n->type)
 	     + " | " + tree_outline::title_field(n->title);
 	if (!n->is_folder())
-		out += " | " + n->url;
+		out += " | " + tree_outline::url_field(n->url);
 	out += tree_outline::tags_field(n->tags);
 	out += "\n";
 	for (node *c : n->children)

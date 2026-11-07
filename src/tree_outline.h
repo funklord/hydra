@@ -55,6 +55,7 @@ node_type type_from_string(const QString &s);
 // `tags_field` returns the whole field, " | tags=..." or nothing, so the key
 // is spelled in one place as well.
 QString title_field(const QString &title);
+QString url_field(const QString &url);
 QString tags_field(const QStringList &tags);
 
 }  // namespace tree_outline

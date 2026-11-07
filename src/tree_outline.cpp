@@ -281,6 +281,15 @@ QString title_field(const QString &title) {
 	return t;
 }
 
+// A session file from another browser hands its addresses over unchecked, and
+// no address holds a line break.
+QString url_field(const QString &url) {
+	static const QRegularExpression breaks(
+	  QStringLiteral("[\\x{00}-\\x{1f}\\x{7f}\\x{85}\\x{2028}\\x{2029}]+"));
+	QString u = url;
+	return u.remove(breaks);
+}
+
 static void write_node(QTextStream &out, node *n, int depth) {
 	// A mirror is a view of another browser's session, not part of this tree.
 	// Writing it would resurrect a stale copy of somebody else's tabs on the
@@ -302,7 +311,7 @@ static void write_node(QTextStream &out, node *n, int depth) {
 	} else {
 		out << indent << "- [" << n->id << "] " << type_to_string(n->type)
 		     << " | " << title_field(n->title)
-		     << " | " << n->url
+		     << " | " << url_field(n->url)
 		     << " | created=" << n->created.toString(Qt::ISODate)
 		     << " | seen="    << n->last_seen.toString(Qt::ISODate);
 		// Only when true, so a file full of ordinary tabs does not grow a column

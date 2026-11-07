@@ -338,6 +338,18 @@ int main(int argc, char **argv) {
 			delete forged;
 			check(tree_outline::title_field("a\u2028b\tc") == "a b c",
 			      "and every kind of line break is a space");
+			auto *imported = new node;
+			imported->id = "b3";
+			imported->type = node_type::unopened_tab;
+			imported->title = "imported";
+			imported->url = "https://shop.test/a\n- [evil] unopened | Forged | https://evil.test/";
+			imported->parent = &root;
+			root.children.push_back(imported);
+			check(!tree_serializer::to_payload(&root)
+			         .contains(QRegularExpression("\\n\\s*- \\[evil\\]")),
+			      "and nor can one in an imported address");
+			root.children.removeOne(imported);
+			delete imported;
 		}
 
 		const QString payload = tree_serializer::to_payload(&root);
