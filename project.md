@@ -40935,7 +40935,11 @@ on what is on disk, and saving one row twice would double it rather than be refu
 these files are read a line at a time, so one newline made an entry of the site's own:
 any address, or a VLC option. Every string is put on one line before it is written,
 and `test_sheet` holds a title built to do it. Fuzzing did not find this: nothing
-crashed, the output was simply wrong.
+crashed, the output was simply wrong. **The tab tree had the same shape:**
+`title_field` kept a title off the separators and not off the line break, so a model's
+folder name or an imported tab could write a row of its own. Chromium collapses a
+page's title, which is why it never showed. Tags were already safe, and the settings
+stores escape what they write.
 
 **The times are the source's and no finer.** Descriptions give whole seconds, so a
 cue sheet's frames add no precision, and the text says "to the second". A source

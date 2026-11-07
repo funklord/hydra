@@ -1,4 +1,6 @@
 #include "tree_outline.h"
+
+#include <QRegularExpression>
 #include "node.h"
 
 #include <QFile>
@@ -267,7 +269,13 @@ QString tags_field(const QStringList &tags) {
 // A title is page-supplied, so this is reachable from any site, and the rename
 // dialog puts it within reach of a keystroke.
 QString title_field(const QString &title) {
+	// **One line, whoever wrote it.** Chromium collapses a page's title, but a
+	// model's folder name and another browser's imported tab arrive as they
+	// came, and a line break would write a row of its own into the tree.
+	static const QRegularExpression breaks(
+	  QStringLiteral("[\\x{00}-\\x{1f}\\x{7f}\\x{85}\\x{2028}\\x{2029}]+"));
 	QString t = title;
+	t.replace(breaks, QStringLiteral(" "));
 	while (!t.isEmpty() && (t.back() == QLatin1Char('|') || t.back().isSpace()))
 		t.chop(1);
 	return t;
