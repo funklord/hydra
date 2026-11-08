@@ -27902,6 +27902,25 @@ same with or without it; the URL keyboard (`ImhUrlCharactersOnly`) does
 have a space bar, contrary to the comment that refused it, and was not
 needed either.
 
+## Open: Qt's main thread can wedge in eglSurface() while the activity is stopped
+
+From beerssh, 2026-11-07, as a finding to weigh (inbox 20261107T1712Z). This tree has
+`android.app.background_running` true, which is the condition. Qt 6.12's main thread
+blocks without a timeout in `QAndroidPlatformOpenGLWindow::eglSurface()` while the
+activity is stopped, and stays there until the app is shown again: timers, sockets and
+queued signals stop, with the process and any foreground service alive. For Hydra that
+is downloads, torrents and media playing on with the screen off. The cause, as beerssh
+read it: applying Suspended destroys the surface and flushes window system events
+inside that handler; the flush applies an Active or Inactive queued by a brief resume;
+Qt paints, finds no surface, and waits for one a stopped activity cannot get. It needs
+a window with something to repaint. Reproduced there on an API 36 emulator about one
+cycle in twelve (`tool/check-surface-wait.sh`: screen off, `wm size` and density,
+back, with output flowing), read off `/proc/PID/task/TID/wchan` of `qtMainLoopThread`:
+a futex, and a count that stops. Their fix, `a4b401b`: a watchdog on loop silence hands
+a stopped activity's QtWindows an unseen ImageReader surface, which ends the wait
+(`BsshLifecycle.release()`, `BsshSurfaceFeed.java`, their `project.md` §5.6). **Not
+yet reproduced here.**
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
