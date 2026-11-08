@@ -76,7 +76,19 @@ SERIAL = f"emulator-{PORT}"
 
 failures = []
 
+# The emulator process, once started. The emulator can die under the app --
+# qemu took SIGSEGV in SwiftShader rendering dailymail.com on 2026-11-08 --
+# and every check after it then failed with nothing to say why, which read
+# as twenty-three faults in Hydra. A failure is now first checked against
+# the emulator still being there, and the run stops naming that instead.
+emu = None
+
+class emulator_died(Exception):
+	pass
+
 def check(ok, what):
+	if not ok and emu is not None and emu.poll() is not None:
+		raise emulator_died(f"the emulator itself exited ({emu.returncode}) by: {what}")
 	print(("  ok    " if ok else "  FAIL  ") + what)
 	if not ok:
 		failures.append(what)
@@ -388,6 +400,7 @@ def main():
 		print(f"no apk at {APK}")
 		return 2
 
+	global emu
 	print(f"starting {AVD} on {SERIAL}")
 	emu = subprocess.Popen([EMULATOR, "-avd", AVD, "-port", str(PORT), "-no-window",
 	                        "-no-audio", "-no-boot-anim", "-no-snapshot",
@@ -1338,6 +1351,10 @@ def main():
 				    f"'/sdcard/Android/data/{APP}/files/Download/{name}'")
 			server.shutdown()
 			server.server_close()
+	except emulator_died as x:
+		# Not a check that failed: nothing after this point was tested.
+		print(f"\nSTOPPED: {x}")
+		failures.append(str(x))
 	finally:
 		try:
 			adb("emu", "kill", timeout=20)

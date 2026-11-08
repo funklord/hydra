@@ -27937,6 +27937,17 @@ for four, the activity's Qt windows get an `ImageReader` surface nobody sees
 that changes it fails the build rather than going quiet). Forty cycles then passed,
 with the watchdog stepping in five times and the thread moving again each time.
 
+**The full emulator checks then failed 23 of 106, and it was the emulator.** From
+*a list's procedural rule hides by what an element says* on, which opens live
+www.dailymail.com, every check failed. Loading that page alone, `qemu-system` itself
+exited on SIGSEGV (status -11) within 15 s, in 3 runs of 5 with this build and in 1 of
+2 with an APK built from the commit before the watchdog (`4e83559`), under
+`-gpu swiftshader_indirect`. So the watchdog does not cause it. The page's live
+content decides whether a run crashes. `adb` meanwhile reported the app's pid
+"gone" and `logcat` hung, which looked like the app being killed. The checks
+now look at the emulator process when a check fails, and if it has exited they
+stop with *the emulator itself exited*, not a list of failures nothing tested.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
