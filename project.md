@@ -27902,7 +27902,7 @@ same with or without it; the URL keyboard (`ImhUrlCharactersOnly`) does
 have a space bar, contrary to the comment that refused it, and was not
 needed either.
 
-## Open: Qt's main thread can wedge in eglSurface() while the activity is stopped
+## ~~Open:~~ Qt's main thread can wedge in eglSurface() while the activity is stopped
 
 From beerssh, 2026-11-07, as a finding to weigh (inbox 20261107T1712Z). This tree has
 `android.app.background_running` true, which is the condition. Qt 6.12's main thread
@@ -27918,8 +27918,24 @@ cycle in twelve (`tool/check-surface-wait.sh`: screen off, `wm size` and density
 back, with output flowing), read off `/proc/PID/task/TID/wchan` of `qtMainLoopThread`:
 a futex, and a count that stops. Their fix, `a4b401b`: a watchdog on loop silence hands
 a stopped activity's QtWindows an unseen ImageReader surface, which ends the wait
-(`BsshLifecycle.release()`, `BsshSurfaceFeed.java`, their `project.md` §5.6). **Not
-yet reproduced here.**
+(`BsshLifecycle.release()`, `BsshSurfaceFeed.java`, their `project.md` §5.6).
+
+**Reproduced here, and fixed the same way, 2026-11-08.** `tool/check-surface-wait.sh`
+is that check aimed at hydra: on the emulator, with a page retitling itself every
+200 ms so hydra's own widgets repaint, it turns the screen off and on and resizes the
+display. The second cycle stopped with the main thread in `QOpenGLContext::makeCurrent`
+waiting on the Android plugin, its switch count unmoving for ten seconds, read with
+`debuggerd -b` under `adb root`. **The plugin's symbols are stripped**, so the stack
+shows `QEGLPlatformContext` and `makeCurrent` and never `eglSurface`; the check matches
+those, and a version that looked for `eglSurface` alone called the stuck thread idle.
+
+There is no hang watchdog here as there is in beerssh, so this one stands alone: Qt's
+main thread calls `HydraActivity.beat()` once a second (main.cpp), and while the
+activity is stopped a thread of `HydraActivity`'s own looks every two seconds. Silent
+for four, the activity's Qt windows get an `ImageReader` surface nobody sees
+(`HydraSurfaceFeed`, in Qt's package because `QtWindow` is package private, so a Qt
+that changes it fails the build rather than going quiet). Forty cycles then passed,
+with the watchdog stepping in five times and the thread moving again each time.
 
 ## What is next (in order)
 

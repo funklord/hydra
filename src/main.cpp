@@ -45,6 +45,7 @@
 #include "android_intents.h"
 #include "android_tls.h"
 #include "store_view.h"
+#include <QJniObject>
 #endif
 #include "policy_engine.h"
 #include "request_filter.h"
@@ -223,6 +224,18 @@ int main(int argc, char *argv[]) {
 #endif
 
 	QApplication app(argc, argv);
+#ifdef Q_OS_ANDROID
+	// **The beat a watchdog in HydraActivity listens for**, so a main thread
+	// left waiting for a surface while the activity is stopped can be freed.
+	// See that class.
+	{
+		auto *beat = new QTimer(&app);
+		QObject::connect(beat, &QTimer::timeout, [] {
+			QJniObject::callStaticMethod<void>("se/vibes/hydra/HydraActivity", "beat");
+		});
+		beat->start(1000);
+	}
+#endif
 #ifdef Q_OS_ANDROID
 	// Dialogs here were laid out for a desktop and come up wider than a phone
 	// screen, which puts their buttons off the edge with no way to reach them.
