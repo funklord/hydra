@@ -24,6 +24,7 @@
 #include <QTemporaryDir>
 #include <QWebEnginePage>
 #include <QWebEngineView>
+#include <QMouseEvent>
 
 using namespace shell;
 
@@ -121,7 +122,7 @@ int main(int argc, char *argv[]) {
 	check(shown, "and is on screen");
 	if (!shown)
 		return report();
-	const auto run = [shown](const QString &js) {
+	const auto run = [&shown](const QString &js) {
 		shown->page()->runJavaScript(js);
 	};
 	const auto job_for = [manager](const QString &path) {
@@ -186,5 +187,65 @@ int main(int argc, char *argv[]) {
 	        .arg(bar ? bar->currentMessage() : QString()));
 
 	download_route::shared().set_interface_name(QString());
+
+	// **A link that is not a page goes to the desktop's own handler.** Android's
+	// equivalent ended at "Nothing here can open" for months while its record said
+	// otherwise, so this one is read off a stand-in xdg-open rather than assumed.
+	section("a mailto: link reaches the desktop's handler");
+	{
+		QTemporaryDir bin;
+		const QString log = bin.filePath("opened");
+		QFile opener(bin.filePath("xdg-open"));
+		opener.open(QIODevice::WriteOnly);
+		opener.write(("#!/bin/sh\necho \"$1\" >> '" + log + "'\n").toUtf8());
+		opener.setPermissions(opener.permissions() | QFile::ExeOwner);
+		opener.close();
+		qputenv("PATH", bin.path().toLocal8Bit() + ":" + qgetenv("PATH"));
+		// A page of its own: the one above has had a form sent from it.
+		fx.address->setText(origin + "/page?again");
+		emit fx.address->returnPressed();
+		check(wait_for(fx.address, "/page?again"), "a fresh page loads");
+		fx.wait_idle();
+		spin(800);
+		for (QWebEngineView *v : fx.window.findChildren<QWebEngineView *>())
+			if (v->isVisible())
+				shown = v;
+		run("const a = document.createElement('a'); a.href = 'mailto:someone@example.test';"
+		    "a.id = 'mail'; a.textContent = 'mail'; a.style = 'display:block;height:200px';"
+		    "document.body.prepend(a);");
+		spin(500);
+		// Posted the way the other drivers click, which the engine takes as a tap.
+		QWidget *target = shown->focusProxy() ? shown->focusProxy() : shown;
+		const auto click = [target] {
+			const QPoint at(40, 40);
+			QMouseEvent press(QEvent::MouseButtonPress, at, target->mapToGlobal(at),
+			                  Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+			QMouseEvent release(QEvent::MouseButtonRelease, at, target->mapToGlobal(at),
+			                    Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+			QApplication::sendEvent(target, &press);
+			QApplication::sendEvent(target, &release);
+		};
+		click();
+		for (int i = 0; i < 40 && !QFile::exists(log); ++i)
+			spin(100);
+		QFile got(log);
+		got.open(QIODevice::ReadOnly);
+		const QString said = QString::fromUtf8(got.readAll()).trimmed();
+		QStatusBar *status = fx.window.findChild<QStatusBar *>();
+		check(said == "mailto:someone@example.test",
+		      QString("xdg-open is handed the address (%1)").arg(said.isEmpty() ? "nothing" : said));
+		check(status && !status->currentMessage().contains("could not be loaded"),
+		      QString("and the page is not said to have failed (%1)")
+		        .arg(status ? status->currentMessage() : QString()));
+
+		// The control: the same click on a page link must navigate, or the click
+		// is what failed and not the handoff.
+		run("document.getElementById('mail').href = '/control-page';");
+		spin(300);
+		click();
+		for (int i = 0; i < 40 && !web.count("GET /control-page"); ++i)
+			spin(100);
+		check(web.count("GET /control-page") == 1, "the same click on a page link navigates");
+	}
 	return report();
 }

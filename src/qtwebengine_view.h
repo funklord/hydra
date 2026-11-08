@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QElapsedTimer>
+
 #include "web_view_backend.h"
 #include "webauth_dialog.h"
 
@@ -109,6 +111,7 @@ private:
 	proxy_authenticator m_proxy_authenticator;
 	certificate_chooser m_certificate_chooser;
 	QWebEngineView *m_view = nullptr;
+	QElapsedTimer m_handed_out;   // a link just given to another app
 	QWebEnginePage *m_page = nullptr;
 	view_settings   m_settings;
 	bool            m_local_document = false;   // see local_document_runs_no_scripts

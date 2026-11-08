@@ -1,4 +1,5 @@
 #include "qtwebengine_view.h"
+#include "scheme_rules.h"
 
 #include <algorithm>
 
@@ -418,6 +419,11 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	// Through the derived type: `m_page` is held as a `QWebEnginePage *` because
 	// nothing else needs to know, and this is the one place that does.
 	page->before_navigate = [this](const QUrl &u) {
+		// Not a page, so the page stays: its shim and its script setting with it.
+		if (!renders_as_page(u)) {
+			m_handed_out.restart();
+			return;
+		}
 		refresh_permissions_shim(u);
 		// Here rather than from the shell's `url_changed`, which arrives once the
 		// document exists and its first script may already have run.
@@ -462,8 +468,15 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	         [this](bool) { m_view->page()->setBackgroundColor(Qt::white); });
 	connect(m_view, &QWebEngineView::loadProgress, this,
 	         [this](int p) { emit load_progress(p); });
-	connect(m_view, &QWebEngineView::loadFinished, this,
-	         [this](bool ok) { emit load_finished(ok); });
+	// **A link handed to another app is not a page that failed.** Qt passes a
+	// mailto: or tel: to the desktop and then ends the navigation as a failed
+	// load, and the window said "could not be loaded" about a page that was
+	// fine. Measured in try_route.
+	connect(m_view, &QWebEngineView::loadFinished, this, [this](bool ok) {
+		const bool handed = m_handed_out.isValid() && m_handed_out.elapsed() < 3000;
+		m_handed_out.invalidate();
+		emit load_finished(ok || handed);
+	});
 	// Qt gives the page's own title, and falls back to the url when a document
 	// has none -- which is the right label either way, so it is passed on as it
 	// comes rather than second-guessed here.
