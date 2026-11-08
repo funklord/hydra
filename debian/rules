@@ -20,5 +20,8 @@ override_dh_auto_test:
 	# `make test` wants a display and a build tree the packaging keeps no
 	# part of.
 
+# The Android trees are no part of this package, and `clean` would take
+# them too: a deb built after an apk deleted the apk meant for the phone,
+# and the next Android build started from nothing (2026-11-08).
 override_dh_auto_clean:
-	$(MAKE) clean
+	$(MAKE) clean ANDROID_BUILD_DIR= ANDROID_BUILD_DIRS=
