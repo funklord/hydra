@@ -1140,8 +1140,11 @@ def main():
 			print("\n== a list's procedural rule hides by what an element says ==")
 			# dailymail's own rule, `.pufftext:has-text(/SPONSORED/):upward(2)`,
 			# on two puffs planted alike but for their text -- the site's layout
-			# changes, the rule's subject is what is under test.
-			open_url("https://www.dailymail.com/home/index.html", wait=20)
+			# changes, the rule's subject is what is under test. Its robots.txt
+			# rather than its front page: the rule is the site's, not the
+			# page's, and the front page made qemu itself take SIGSEGV under
+			# SwiftShader in 4 loads of 7 on 2026-11-08.
+			open_url("https://www.dailymail.com/robots.txt", wait=12)
 			probe("(function(){var mk=function(id,t){var o=document.createElement('div');o.id=id;"
 			      "o.innerHTML='<div><div class=\"pufftext\"><span>'+t+'</span></div></div>';"
 			      "document.body.appendChild(o);};mk('hc-sp','SPONSORED');mk('hc-no','Story');"
