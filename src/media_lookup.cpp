@@ -171,6 +171,14 @@ media_item from_json(const QJsonObject &o) {
 
 }  // namespace
 
+// **Which reading wrote an answer.** A lookup is kept for hours and across a
+// restart, so an answer read by an older build outlived the build that fixed
+// how it is read: on 2026-11-09 the rules learned to tell a mix and its
+// tracklist, and a page already looked up would have gone on saving with
+// none. Raise this when what a lookup decides changes; older answers are
+// then looked up again rather than listed.
+static const int k_reading = 2;
+
 bool media_lookups::save(const QString &path, const QDateTime &now) const {
 	QJsonArray out;
 	for (auto it = m_entries.cbegin(); it != m_entries.cend(); ++it) {
@@ -193,6 +201,7 @@ bool media_lookups::save(const QString &path, const QDateTime &now) const {
 			{ "failed", e.st == media_lookup::state::failed },
 			{ "expires", e.expires.toSecsSinceEpoch() },
 			{ "note", e.note },
+			{ "reading", k_reading },
 			{ "rows", rows },
 		});
 	}
@@ -223,7 +232,7 @@ bool media_lookups::load(const QString &path, const QDateTime &now) {
 		e.expires = QDateTime::fromSecsSinceEpoch(qint64(o.value("expires").toDouble()),
 		                                          QTimeZone::UTC);
 		e.note    = o.value("note").toString();
-		if (e.expires <= now)
+		if (e.expires <= now || o.value("reading").toInt() < k_reading)
 			continue;
 		for (const QJsonValue &r : o.value("rows").toArray())
 			e.rows << from_json(r.toObject());

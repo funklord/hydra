@@ -41007,6 +41007,35 @@ into the picture is not found, nor is a mix identified by listening.
 thing of that shape. It goes in the text and not the playlist, which has no positions
 to give, and it is not offered to the reading, which chooses what can be chaptered.
 
+### Nothing was written without a model, 2026-11-09
+
+The holder: "I can't see anything related to tracklists." Whether something is a
+mix, and which tracklist it has, came only from the model. `by_rules` set neither,
+so with no model, one past its time limit, one that failed, or one that answered
+"none", a set with its tracklist in plain sight was saved with no chapters, no
+files and nothing said. Find Media's answers are cached for hours across a restart
+too, so a page looked up once kept its first reading.
+
+- **The rules choose now.** The tracklist is the first candidate that passes
+  `tracklist_problem`, chapters first, then the description, then comments. It is
+  a mix when the title names one (a DJ or live set, mix, mixtape, Boiler Room,
+  b2b, full album), or when it runs 20 minutes or more with five or more timed
+  entries, mostly "Artist - Title" or under the site's Music category. A talk,
+  lecture, news, gaming, episode or short is never one. A set is music, so the
+  rules' film reading of an hour-long video with a year on it gives way. On the
+  twelve labelled cases the rules went from 10 to 12 on mix and 11 to 12 on
+  tracklist, and kind from 10 to 11. The suite now holds them at 12, and four
+  checks fail when the rules never call anything a mix.
+- **A model can add a mix and cannot take one away.** "None" against a tracklist
+  the rules found is recorded as the model's miss, and the rules' choice stands.
+  A candidate the model names that fails the check also leaves the rules' choice.
+  The cost of a wrong yes is a text file beside a long video; the cost of a
+  wrong no was the whole feature.
+- **Cached answers carry the reading that made them** (`k_reading` in
+  `media_lookup.cpp`). Older ones are looked up again.
+- **The status says something either way:** the tracklist when it is a mix, how
+  many lists of times or tracks were seen when it is not, or that none was.
+
 ## yt-dlp is told every JavaScript runtime it can use
 
 yt-dlp warns that YouTube extraction without a JavaScript runtime is

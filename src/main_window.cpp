@@ -9184,8 +9184,18 @@ void main_window::list_resolved_media(const QString &host, const QUrl &page,
 		        .arg(kind, r.is_set ? QStringLiteral(" (a set)") : QString(),
 		             r.artist, r.title)
 		  : QStringLiteral("yt-dlp found nothing playable.");
-		if (added && mix)
+		if (added && mix) {
 			said += QString(" Tracklist: %1.").arg(sheet.summary());
+		} else if (added) {
+			// **Whether there is one, said either way** (the holder, 2026-11-06):
+			// not read as a mix is not the same as nothing found, and a person
+			// looking for a tracklist should not have to guess which.
+			const media_evidence ev = media_evidence::from_json(m.json);
+			const int lists = int(ev.tracklists.size() + ev.untimed.size());
+			said += lists ? QString(" Not read as a mix; %1 list(s) of times or "
+			                        "tracks seen, none saved.").arg(lists)
+			              : QStringLiteral(" No tracklist seen.");
+		}
 		if (added && ai && r.model_answered)
 			said += QString(" Read by %1%2.").arg(model_id(ai),
 			    r.from_model.size() < 4

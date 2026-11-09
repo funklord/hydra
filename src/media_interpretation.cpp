@@ -321,6 +321,55 @@ media_reading media_interpretation::by_rules(const media_evidence &ev) {
 		r.what = media_reading::kind::learning;
 	else
 		r.what = media_reading::kind::misc;
+
+	// **Whether it is a mix, and its tracklist, without a model.** These were
+	// the model's alone, so with no model, a slow one or one that answered
+	// "none", a set with its tracklist in plain sight was saved with no
+	// chapters and no tracklist files -- the holder found nothing at all,
+	// 2026-11-09. The candidates are already extracted and the check of one
+	// is a rule (`tracklist_problem`); only the choosing was missing.
+	const media_evidence::tracklist *usable = nullptr;
+	for (const char *from : { "chapters", "description", "comment" })
+		for (const media_evidence::tracklist &t : ev.tracklists)
+			if (!usable && t.source.startsWith(QLatin1String(from)) &&
+			    tracklist_problem(t, ev.duration).isEmpty())
+				usable = &t;
+	// A title that names a set. Words, so "settings" and "remix" are not.
+	static const QRegularExpression set_title(
+	  QStringLiteral("\\b(dj|live|club|festival|vinyl|closing|opening|warm.?up|"
+	                 "sunrise|sunset)[ -]set\\b|\\bset (at|from|@|live)\\b|"
+	                 "\\bmix(ed|tape)?\\b|\\bmegamix\\b|\\bessential mix\\b|"
+	                 "\\bboiler room\\b|\\bb2b\\b|\\bfull album\\b|"
+	                 "\\bcontinuous mix\\b|\\bdj mix\\b"),
+	  QRegularExpression::CaseInsensitiveOption);
+	// A tracklist reads as songs when most lines are "Artist - Title";
+	// a talk's or a lecture's chapters are topics.
+	const auto songs = [](const media_evidence::tracklist &t) {
+		static const QRegularExpression dash(QStringLiteral("\\S\\s+[-\\x{2013}\\x{2014}]\\s+\\S"));
+		int n = 0;
+		for (const media_evidence::entry &e : t.entries)
+			n += dash.match(e.text).hasMatch() ? 1 : 0;
+		return 2 * n >= int(t.entries.size());
+	};
+	using k = media_reading::kind;
+	// A film is left out only when nothing says otherwise: "an hour long
+	// with a release year" is how the rules call a film, and an hour's set
+	// with a year on it is that too.
+	const bool spoken = r.what == k::talk || r.what == k::learning ||
+	                    r.what == k::news || r.what == k::gaming ||
+	                    r.what == k::episode || r.what == k::short_clip;
+	const bool long_enough = ev.duration >= 20 * 60;
+	const bool listed = long_enough && usable && usable->entries.size() >= 5;
+	r.is_set = !spoken &&
+	           (set_title.match(ev.title).hasMatch() ||
+	            (listed && songs(*usable)) ||
+	            (listed && r.what == k::music) ||
+	            (long_enough && r.what == k::music && !ev.untimed.isEmpty()));
+	// A set is music, whatever the length and the year made it look like.
+	if (r.is_set && (r.what == k::misc || r.what == k::movie))
+		r.what = k::music;
+	if (usable && (r.is_set || r.what == k::music))
+		r.tracklist = usable->source;
 	r.flagged = title_flags(r.title, r.artist);
 	return r;
 }
@@ -365,10 +414,17 @@ media_reading media_interpretation::checked(const QString &reply,
 		r.from_model << QLatin1String(field);
 	}
 
-	r.is_set = a.value("is_set").toBool();
+	// **The model can say it is a mix; it cannot unsay what the rules found.**
+	// A weak model answers "none" about a tracklist in plain sight, and the
+	// cost of that is the whole feature, where the cost of an extra text file
+	// beside a long video is a text file.
+	r.is_set = r.is_set || a.value("is_set").toBool();
 	const QString source = a.value("tracklist").toString().trimmed();
 	if (source.isEmpty()) {
-		r.from_model << QStringLiteral("tracklist");
+		if (r.tracklist.isEmpty())
+			r.from_model << QStringLiteral("tracklist");
+		else
+			r.rejected << QString("tracklist: none, but %1 is one").arg(r.tracklist);
 	} else {
 		const media_evidence::tracklist *found = nullptr;
 		for (const media_evidence::tracklist &t : ev.tracklists)

@@ -35,6 +35,9 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSet>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -500,6 +503,23 @@ int main(int argc, char **argv) {
 		      "and one that lapsed while closed is not read back");
 		media_lookups none;
 		check(none.load(dir.filePath("absent.json"), now), "an absent file is an empty cache");
+
+		// An answer read by an older build is looked up again, not listed:
+		// it was read before the rules could tell a mix.
+		QFile older(dir.filePath("older.json"));
+		older.open(QIODevice::WriteOnly);
+		QJsonObject entry;
+		entry.insert("page", QStringLiteral("https://v.invalid/watch?v=1"));
+		entry.insert("failed", false);
+		entry.insert("expires", double(1761100000 + 3600));
+		entry.insert("note", QStringLiteral("old"));
+		entry.insert("rows", QJsonArray());
+		older.write(QJsonDocument(QJsonArray{ entry }).toJson());
+		older.close();
+		media_lookups stale;
+		check(stale.load(older.fileName(), now) &&
+		          !stale.find(QUrl("https://v.invalid/watch?v=1"), now),
+		      "an answer from an older reading is not read back");
 	}
 
 	// **One pattern for every row**, whatever found it -- the holder,

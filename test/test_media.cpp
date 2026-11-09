@@ -162,10 +162,29 @@ int main(int argc, char **argv) {
 		  "{\"kind\":\"music\",\"artist\":\"Groovix\","
 		  "\"title\":\"CLASSIC DISCO FUNK\",\"tracklist\":\"description 2\"}",
 		  groovix);
-		check(good_set.tracklist == "description" && clocks.tracklist.isEmpty() &&
+		check(good_set.tracklist == "description" && clocks.tracklist == "chapters" &&
 		          clocks.rejected.join(" ").contains("do not rise"),
 		       QString("a set's tracklist is taken and the premiere's clock times "
-		               "beside it are not (%1)").arg(clocks.rejected.join("; ")));
+		               "beside it are not, the rules' choice standing (%1)")
+		           .arg(clocks.rejected.join("; ")));
+
+		// **With no model, or one that says "none", a set is still a set.**
+		// These were the model's alone, and the holder found no tracklist
+		// files at all, 2026-11-09.
+		const media_reading alone = media_interpretation::by_rules(groovix);
+		check(alone.is_set && alone.tracklist == "chapters" &&
+		          alone.what == media_reading::kind::music,
+		       QString("the rules alone read the set as a set, with its chapters "
+		               "(is_set %1, tracklist \"%2\")")
+		           .arg(alone.is_set).arg(alone.tracklist));
+		const media_reading denied = media_interpretation::checked(
+		  "{\"kind\":\"music\",\"artist\":\"Groovix\","
+		  "\"title\":\"CLASSIC DISCO FUNK\",\"is_set\":false,\"tracklist\":\"\"}",
+		  groovix);
+		check(denied.is_set && denied.tracklist == "chapters" &&
+		          !denied.clean("tracklist"),
+		       "a model saying \"none\" does not take the set's tracklist away, and "
+		       "is counted wrong for it");
 	}
 
 	// **A title the check cannot reject, and can still see is wrong.** The
@@ -401,7 +420,13 @@ int main(int argc, char **argv) {
 		for (const corpus_case &c : corpus) {
 			++rules.total;
 			++perfect.total;
-			const auto r = score_case(media_interpretation::by_rules(c.evidence), c);
+			const media_reading by_rules = media_interpretation::by_rules(c.evidence);
+			const auto r = score_case(by_rules, c);
+			for (const char *task : { "is_set", "tracklist" })
+				if (!r.value(task))
+					std::printf("     rules miss %s on %s (is_set %d, tracklist \"%s\")\n",
+					            task, qPrintable(c.name), by_rules.is_set,
+					            qPrintable(by_rules.tracklist));
 			for (auto it = r.cbegin(); it != r.cend(); ++it)
 				rules.right[it.key()] += it.value() ? 1 : 0;
 			media_reading ideal;
@@ -422,6 +447,12 @@ int main(int argc, char **argv) {
 			line << QString("%1 %2/%3").arg(it.key()).arg(it.value())
 			            .arg(rules.total);
 		std::printf("     rules: %s\n", qPrintable(line.join(", ")));
+		// The rules choose the mix and its tracklist when no model does, so
+		// they are held to the labels there, not only reported.
+		check(rules.right.value("is_set") == rules.total &&
+		          rules.right.value("tracklist") == rules.total,
+		       "the rules alone say which are mixes, and their tracklists, on "
+		       "every labelled case");
 		check(rules.outside().contains("artist") &&
 		          rules.outside().contains("title"),
 		       QString("the rules are outside the comfort zone on artist and "
