@@ -21,6 +21,10 @@ VERSION  = $$cat(VERSION, singleline)
 # app target beyond naming artifacts: without this the binary cannot say what
 # it is. One source still -- the file -- read once here.
 DEFINES += HYDRA_VERSION=\\\"$$VERSION\\\"
+# The Play edition (`make android-aab`, or ANDROID_EDITION=play): what Google
+# Play's policies forbid is left out of it, and nothing else. See
+# `play_edition()` in src/media_detector.h.
+play: DEFINES += HYDRA_PLAY
 
 # **Which commit this binary is, because every package says 0.1.** An installed
 # hydra days older than the tree looked the same as a current one: the holder

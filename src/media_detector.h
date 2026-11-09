@@ -289,9 +289,26 @@ bool media_saving_allowed_on(bool android, const QString &site_host,
 void media_saving_as_android(bool on);
 bool media_saving_is_android();
 
+// **The Play edition**, built with `CONFIG+=play` (`make android-aab`). It
+// leaves out what Google Play's policies forbid, and nothing else; the other
+// Android build and the desktop carry everything. The holder, 2026-11-09:
+// "one fully-featured Android version and a Playstore version with omitted
+// features".
+constexpr bool play_edition() {
+#ifdef HYDRA_PLAY
+	return true;
+#else
+	return false;
+#endif
+}
+
+// Whether an encrypted (AES-128) HLS stream may be decrypted to save or
+// watch it, which ffmpeg does. Not in the Play edition.
+constexpr bool media_decrypt_allowed() { return !play_edition(); }
+
 inline bool media_saving_allowed(const QString &site_host, const QUrl &media_url,
                                  QString *why = nullptr) {
-#ifdef Q_OS_ANDROID
+#if defined(Q_OS_ANDROID) && defined(HYDRA_PLAY)
 	return media_saving_allowed_on(true, site_host, media_url, why);
 #else
 	return media_saving_allowed_on(media_saving_is_android(), site_host, media_url, why);

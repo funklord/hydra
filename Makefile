@@ -175,14 +175,23 @@ APP_ID = se.vibes.hydra
 # build-android/ meant switching ABI reused the previous one's generated
 # Makefile and objects -- the same foot-gun one level down, and the one that
 # would have made the fix above look like it had not worked.
-ANDROID_BUILD_DIR ?= build-android-$(ANDROID_ABI)
+# **Two Android editions** (the holder, 2026-11-09): `full`, everything the
+# desktop has, which `make android` builds; and `play`, which leaves out what
+# Google Play's policies forbid -- saving from YouTube, decrypting a stream --
+# and is what `make android-aab` builds for the store. qmake's `play` config
+# defines HYDRA_PLAY. A directory of its own, so the two never share objects:
+# switching one define does not make qmake rebuild what it touches.
+ANDROID_EDITION ?= full
+ANDROID_EDITION_TAG = $(if $(filter play,$(ANDROID_EDITION)),-play)
+ANDROID_BUILD_DIR ?= build-android$(ANDROID_EDITION_TAG)-$(ANDROID_ABI)
 # Named, not globbed, so `clean` can say what it removes. The bare
 # `build-android` is what versions before the split left behind.
-ANDROID_BUILD_DIRS = $(foreach a,$(ANDROID_ABIS),build-android-$(a)) build-android
+ANDROID_BUILD_DIRS = $(foreach a,$(ANDROID_ABIS),build-android-$(a) build-android-play-$(a)) \
+                     build-android
 
 # What android-install and android-run in tool/android.mk reach for, and
 # what the `android` rule below verifies before naming.
-ANDROID_ARTIFACT = $(ANDROID_BUILD_DIR)/hydra-$(VERSION)-$(ANDROID_ABI).apk
+ANDROID_ARTIFACT = $(ANDROID_BUILD_DIR)/hydra-$(VERSION)$(ANDROID_EDITION_TAG)-$(ANDROID_ABI).apk
 
 # **-Os, and -Og under DEBUG.** Both live in `hydra.pro`, which subtracts
 # qmake's own -O2 and -O0 before adding them: two -O flags on one command line
@@ -831,6 +840,9 @@ deb-check: deb
 # Depends on android-build rather than on a qmake step of its own: qmake
 # runs inside that rule, so there is nothing else to hang this off without
 # splitting it, and the generated tree is what `aab` needs.
+# **The store's bundle is the Play edition, always**, whatever ANDROID_EDITION
+# says: the full one is not something Play would take.
+android-aab: ANDROID_EDITION = play
 android-aab: android-build
 	@if [ -z "$(ANDROID_KEYSTORE)" ]; then \
 		echo "android-aab: ANDROID_KEYSTORE is not set." >&2; \
@@ -946,7 +958,8 @@ android-build: android-fresh android-check android-gradle-check
 	cd $(ANDROID_BUILD_DIR) && \
 	  ANDROID_SDK_ROOT=$(ANDROID_SDK_ROOT) ANDROID_NDK_ROOT=$(ANDROID_NDK_ROOT) \
 	  JAVA_HOME=$(JAVA_HOME) \
-	  $(QT_ANDROID_ROOT)/bin/qmake $(CURDIR)/hydra.pro CONFIG+="$(QMAKE_CONFIG)" \
+	  $(QT_ANDROID_ROOT)/bin/qmake $(CURDIR)/hydra.pro \
+	    CONFIG+="$(QMAKE_CONFIG)" $(if $(ANDROID_EDITION_TAG),CONFIG+=play) \
 	    ANDROID_VERSION_CODE=$(ANDROID_VERSION_CODE)
 	ANDROID_SDK_ROOT=$(ANDROID_SDK_ROOT) ANDROID_NDK_ROOT=$(ANDROID_NDK_ROOT) \
 	  JAVA_HOME=$(JAVA_HOME) \
