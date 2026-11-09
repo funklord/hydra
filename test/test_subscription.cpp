@@ -247,13 +247,13 @@ int main(int argc, char **argv) {
 		// red the day the capability arrived. `json-edit` stood here next,
 		// declined on a measurement, until 2026-10-25 when uBlock's YouTube
 		// rules came to need its query language and it was ported.
-		// `jsonl-edit-xhr-response`, which rides on that language, is still
-		// not in the catalog.
+		// `jsonl-edit-xhr-response`, which rides on that language, followed
+		// on 2026-11-09 for Facebook's feed, and `spoof-css` stands here now.
 		const subscription_read rep = filter_subscription::read(
 		  "! Title: Annoyances\n"
 		  "youtube.com##+js(json-prune, adPlacements)\n"
 		  "player.test##+js(set-constant, cfg.ads, false)\n"
-		  "other.test##+js(jsonl-edit-xhr-response, x)\n");
+		  "other.test##+js(spoof-css, .ad, display, block)\n");
 		// **A list of nothing but scriptlets is usable.** An annoyance list
 		// can be exactly that, and refusing it for having no network rule
 		// would refuse the half of the ecosystem this build has just learned

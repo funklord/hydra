@@ -350,7 +350,7 @@ int main(int argc, char **argv) {
 		// language uBlock's YouTube rules came to depend on.
 		for (const char *no : { "spoof-css", "trusted-prune-fetch",
 		                         "trusted-prune-inbound-object",
-		                         "jsonl-edit-xhr-response", "eval", "" }) {
+		                         "eval", "" }) {
 			check(!scriptlets::vetted(QString::fromLatin1(no)),
 			       QString("\"%1\" is not in the catalog")
 			           .arg(QString::fromLatin1(no)));
@@ -920,9 +920,10 @@ int main(int argc, char **argv) {
 		// is the point: a name added without a test is an entry nothing ran.
 		// 54 since `xml-prune` and `m3u-prune`, which need an XML parser
 		// and a network and so are run by `try_prune` in a real engine; 58
-		// with the session-storage pair and the set-attr pair.
-		check(scriptlets::names().size() == 64,
-		       QString("sixty-four scriptlets in the catalog (%1)")
+		// with the session-storage pair and the set-attr pair; 66 with the
+		// jsonl-edit-xhr-response pair, for Facebook's feed.
+		check(scriptlets::names().size() == 66,
+		       QString("sixty-six scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 		// The trusted four, named here rather than counted: the question a
 		// reader has is which scriptlets can act on a page's behalf, and a
@@ -2934,6 +2935,55 @@ int main(int argc, char **argv) {
 		                "window.finish(x, '{\"adPlacements\":[1]}'); return x.responseText; })()")
 		          == "{\"adPlacements\":[1]}",
 		      "and another url's is not");
+	}
+
+	section("jsonl-edit-xhr-response edits a body of one document per line");
+	{
+		check(scriptlets::vetted("jsonl-edit-xhr-response") &&
+		          !scriptlets::requires_trust("jsonl-edit-xhr-response") &&
+		          scriptlets::requires_trust("trusted-jsonl-edit-xhr-response"),
+		      "it is in the catalog, and its twin needs trust");
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_fetch_stubs));
+		// Facebook's own rule, from quick-fixes.
+		run_one(&eng, "jsonl-edit-xhr-response",
+		        { ".data[?.category==\"SPONSORED\"].node", "propsToMatch", "/graphql" });
+		const char *feed =
+		  "'{\"data\":{\"category\":\"ORGANIC\",\"node\":{\"id\":1}}}\\r\\n"
+		  "{\"data\":{\"category\":\"SPONSORED\",\"node\":{\"id\":2}}}\\r\\n"
+		  "not json\\r\\n"
+		  "{\"data\":{\"category\":\"SPONS'";
+		const QString whole = ask(&eng, QString(
+		  "(function () { var x = new window.XMLHttpRequest();"
+		  "x.open('POST', 'https://www.facebook.com/api/graphql/'); x.send();"
+		  "window.finish(x, %1, 3); return JSON.stringify(x.responseText); })()")
+		  .arg(QString::fromLatin1(feed)).toUtf8().constData());
+		check(whole == "\"{\\\"data\\\":{\\\"category\\\":\\\"ORGANIC\\\",\\\"node\\\":{\\\"id\\\":1}}}\\r\\n"
+		               "{\\\"data\\\":{\\\"category\\\":\\\"SPONSORED\\\"}}\\r\\n"
+		               "not json\\r\\n"
+		               "{\\\"data\\\":{\\\"category\\\":\\\"SPONS\"",
+		      QString("mid-stream, the sponsored line loses its story, the rest are "
+		              "untouched and each keeps its ending (%1)").arg(whole));
+		check(ask(&eng, "(function () { var x = new window.XMLHttpRequest();"
+		                "x.open('POST', 'https://www.facebook.com/ajax/other'); x.send();"
+		                "window.finish(x, '{\"data\":{\"category\":\"SPONSORED\",\"node\":1}}');"
+		                "return x.responseText; })()")
+		          == "{\"data\":{\"category\":\"SPONSORED\",\"node\":1}}",
+		      "and another url's body is not touched");
+
+		QJSEngine bare;
+		give_page(&bare);
+		bare.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&bare, "jsonl-edit-xhr-response", { ".a=1" });
+		run_one(&bare, "jsonl-edit-xhr-response",
+		        { ".b", "jsonExtract", "(.*)" });
+		check(ask(&bare, "(function () { var x = new window.XMLHttpRequest();"
+		                 "x.open('GET', 'https://x.test/'); x.send();"
+		                 "window.finish(x, '{\"a\":0,\"b\":2}'); return x.responseText; })()")
+		          == "{\"a\":0,\"b\":2}",
+		      "an assignment without trust does nothing, and nor does a call "
+		      "asking for jsonExtract");
 	}
 
 	section("trusted-prevent-dom-bypass hands a fresh frame this window's fetch");

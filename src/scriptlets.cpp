@@ -251,7 +251,12 @@ C['json-prune-fetch-response'] = function (paths, needle, match) {
 // are separate rather than one derived from the other so that a caller which
 // can transform an object directly is not made to serialise it and parse it
 // back.
-var filter_xhr = function (wanted, on_text, on_parsed) {
+//
+// `progressive` hands every read to `on_text`, a fragment at readyState 3
+// included, for a transform that can tell a whole part of the body from an
+// unfinished one -- the line-at-a-time edit below, on a feed the page reads
+// as it streams.
+var filter_xhr = function (wanted, on_text, on_parsed, progressive) {
 	var XHR = window.XMLHttpRequest;
 	if (typeof XHR !== 'function' || !XHR.prototype) return;
 
@@ -290,7 +295,8 @@ var filter_xhr = function (wanted, on_text, on_parsed) {
 			// progressive read at readyState 3 is a fragment, and handing
 			// back a fragment unchanged is correct: what the page gets is
 			// what it would have got.
-			if (xhr.readyState !== 4 || typeof raw !== 'string') return raw;
+			if ((xhr.readyState !== 4 && !progressive) || typeof raw !== 'string')
+				return raw;
 			if (raw === raw_seen) return done;
 			raw_seen = raw;
 			try { done = on_text(raw); } catch (e) { done = raw; }
@@ -3189,6 +3195,61 @@ C['trusted-json-edit-xhr-response'] = function (query) {
 	edit_xhr_response(true, query, Array.prototype.slice.call(arguments, 1));
 };
 
+// jsonl-edit-xhr-response(query, propsToMatch, value): the same edit on a
+// body of one JSON document per line, as uBlock's `jsonl-edit.fn` does it
+// (read at uBlock 1909f13). Facebook's feed is the one subscribed use: its
+// `/graphql` answers stream a line per story, and the sponsored ones are
+// edited out of it.
+//
+// **Line by line, and on every read.** The page reads the body as it
+// arrives, so each read is edited, not only the finished one: a whole line
+// is parsed and edited, and a line that does not parse -- the unfinished
+// last one, or anything not JSON -- is handed back as it came. Each line
+// keeps its own ending, where uBlock splits on `\n` and joins with the
+// first ending it saw, which doubles a `\r` in a body that has them.
+//
+// `jsonExtract`, a pattern for the JSON within a line, is uBlock's too, and
+// no subscribed rule passes it: a call that does is refused here rather
+// than run as though it had not asked.
+var jsonl_edit = function (q, text) {
+	var lines = text.split('\n');
+	var changed = false;
+	for (var i = 0; i < lines.length; i++) {
+		var line = lines[i];
+		var cr = line.charAt(line.length - 1) === '\r';
+		var body = cr ? line.slice(0, -1) : line;
+		if (body === '') continue;
+		var obj;
+		try { obj = native_parse(body); } catch (e) { continue; }
+		if (obj === null || typeof obj !== 'object') continue;
+		var after = q.apply(obj);
+		if (after === undefined) continue;
+		lines[i] = native_stringify(after) + (cr ? '\r' : '');
+		changed = true;
+	}
+	return changed ? lines.join('\n') : text;
+};
+var edit_xhr_jsonl = function (trusted, query, extras) {
+	var q = edit_query(query, trusted);
+	if (!q) return;
+	var opts = named_args(extras);
+	if (opts.jsonExtract !== undefined) return;
+	var props = opts.propsToMatch ? props_matcher(opts.propsToMatch, 'url') : null;
+	filter_xhr(function (url) {
+		return !props || props({ url: url });
+	}, function (raw) {
+		return jsonl_edit(q, raw);
+	}, function (real) {
+		return real;
+	}, true);
+};
+C['jsonl-edit-xhr-response'] = function (query) {
+	edit_xhr_jsonl(false, query, Array.prototype.slice.call(arguments, 1));
+};
+C['trusted-jsonl-edit-xhr-response'] = function (query) {
+	edit_xhr_jsonl(true, query, Array.prototype.slice.call(arguments, 1));
+};
+
 // trusted-prevent-dom-bypass(method, property): keep a fresh frame from
 // handing the page an unpatched copy of what the scriptlets patched.
 //
@@ -3480,6 +3541,8 @@ const catalog_entry k_entries[] = {
 	{ "trusted-json-edit-fetch-request", 1 << 2, 0,      true  },
 	{ "json-edit-xhr-response",          1 << 2, 0,      false },
 	{ "trusted-json-edit-xhr-response",  1 << 2, 0,      true  },
+	{ "jsonl-edit-xhr-response",         1 << 2, 0,      false },
+	{ "trusted-jsonl-edit-xhr-response", 1 << 2, 0,      true  },
 	{ "edit-inbound-object",             0,      0,      false },
 	{ "trusted-edit-inbound-object",     0,      0,      true  },
 	// Not a query, but it exists for the same YouTube rules: a fresh frame
@@ -3493,7 +3556,8 @@ int query_arg(const QString &canonical) {
 	if (canonical == QLatin1String("edit-inbound-object") ||
 	    canonical == QLatin1String("trusted-edit-inbound-object"))
 		return 2;
-	if (canonical.contains(QLatin1String("json-edit")))
+	if (canonical.contains(QLatin1String("json-edit")) ||
+	    canonical.contains(QLatin1String("jsonl-edit")))
 		return 0;
 	return -1;
 }

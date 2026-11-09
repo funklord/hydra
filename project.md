@@ -39786,8 +39786,21 @@ refuses are commented out in the list itself.
 
 **Not yet seen against YouTube.** Whether the wall goes away is the
 holder's to see on the desktop; the phone gets the same catalog.
-`jsonl-edit-xhr-response` (4 rules) and `edit-object-on-setter` (4) are
-still not implemented.
+`edit-object-on-setter` (4 rules) is still not implemented.
+`jsonl-edit-xhr-response` is, since 2026-11-09, and it was never YouTube's: its
+four subscribed rules, in quick-fixes, take sponsored stories out of Facebook's
+feed, a `/graphql` answer of one JSON document per line. It follows uBlock's
+`jsonl-edit.fn` (read at `1909f13`) and edits every read, not only the finished
+body, because the feed is read as it streams. A whole line is edited; a line
+that does not parse, such as the unfinished last one, is left as it is. That
+took a `progressive` flag on the shared `filter_xhr`, which until then held a
+body back until readyState 4. Two departures from uBlock: each line keeps its
+own ending (uBlock's split on `\n` and join on the first ending doubles a `\r`),
+and a call passing `jsonExtract`, which no subscribed rule does, is refused, not
+run as if it had not asked. `test_scriptlets` holds it with Facebook's own rule
+on a CRLF stream read mid-body; dropping the progressive flag, or the edit,
+turns that check red. **Not yet seen on facebook.com**, which needs a
+signed-in feed.
 
 ## The subscribed lists' cosmetic rules were never applied
 
