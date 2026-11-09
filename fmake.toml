@@ -43,6 +43,11 @@
 # was checked is that fmake still reads this file -- the define below still
 # reaches the compile line -- and that the directory is skipped either way.
 #
+# **An exclude keeps a directory's sources out, not its headers**, measured
+# 2026-11-09 with a fixture: a header only an excluded directory provides is
+# still found. That is why main.cpp asks for its build stamp by define rather
+# than by `__has_include`.
+#
 # **`HYDRA_VERSION` is injected by the build, not written in any source.**
 # `main.cpp` prints it for `--version`, and the Makefile defines it from the
 # `VERSION` file so the number lives in one place. fmake reads the sources and

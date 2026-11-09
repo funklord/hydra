@@ -39,6 +39,9 @@ HYDRA_STAMP = "$${LITERAL_HASH}define HYDRA_BUILD \"$$HYDRA_BUILD\""
 HYDRA_STAMP_OLD = $$cat($$OUT_PWD/build_stamp.h, lines)
 !equals(HYDRA_STAMP_OLD, $$HYDRA_STAMP): write_file($$OUT_PWD/build_stamp.h, HYDRA_STAMP)
 INCLUDEPATH += $$OUT_PWD
+# main.cpp includes the stamp only when told it was written here, so a build
+# that did not write one cannot pick up another build's.
+DEFINES += HYDRA_STAMPED
 
 # **Qt 6.8, refused here rather than discovered in the compiler.** The floor
 # used to be stated as 6.4, derived once from the menu bar's addAction

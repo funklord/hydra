@@ -29,7 +29,14 @@
 
 // The commit and its date, from `hydra.pro`, which says why. A build that reads
 // the sources alone has no stamp and says nothing.
-#if __has_include("build_stamp.h")
+//
+// **Asked for by name, not found wherever one lies.** `__has_include` took
+// any `build_stamp.h` on the include path, and fmake, building the desktop
+// from the tree, keeps the headers of an Android build directory on its path:
+// the desktop binary would have named the commit the phone's build was made
+// from (fmake's report, 2026-11-09, confirmed with a fixture). Only the qmake
+// build that writes the stamp defines HYDRA_STAMPED.
+#ifdef HYDRA_STAMPED
 #include "build_stamp.h"
 #endif
 #ifndef HYDRA_BUILD

@@ -41117,6 +41117,19 @@ mpv found the same 20 tracks in the cue sheet, 12 of 12. Two things on the way:
   directories. Since `3a55a35` keeps the Android trees through `make deb`, it
   meets one far more often. The directory was moved aside for the run, and the
   finding is in fmake's inbox (20261109T1655Z).
+  **fmake answered the same evening (hydra inbox 20261109T2010Z): fixed in
+  fmake `99accee`.** fmake skips the sources of an ignored directory but keeps
+  its headers on purpose, because a configure step writes a `config.h` there.
+  `#include "build_stamp.h"` was answered only by the Android tree, so that
+  directory joined the include path, and its stale `.moc` came before fmake's
+  own. fmake now passes its moc directory as `-iquote`. **What it said was
+  hydra's:** a desktop fmake build read the Android build's `build_stamp.h`
+  through `__has_include`, so `--version` would have named the phone build's
+  commit. Its suggested remedy, `[project] exclude`, does not do it: a
+  fixture with `exclude = ["build-android-*/**"]` still printed the excluded
+  stamp. So `main.cpp` now includes the stamp only under `HYDRA_STAMPED`,
+  which only the qmake build that writes it defines; the same fixture then
+  prints none. The `exclude` finding went back to fmake's inbox.
 - **`try_media_reading` exits 139 under `QT_QPA_PLATFORM=offscreen`**, after
   every check has passed, in Chromium's in-process GPU thread, while the main
   thread joins it at teardown. 2 of 2 offscreen; 0 of 2 under Xvfb with xcb; and
