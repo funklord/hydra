@@ -41036,6 +41036,28 @@ too, so a page looked up once kept its first reading.
 - **The status says something either way:** the tracklist when it is a mix, how
   many lists of times or tracks were seen when it is not, or that none was.
 
+**Then run end to end through the real shell**, `HYDRA_TRY_SAVE=sound
+try_media_reading` on the Groovix set, 2026-11-09: Save, Sound only, left the
+`.webm` with 20 chapters and its `.tracklist.txt`, `.m3u` and `.cue` beside it.
+mpv found the same 20 tracks in the cue sheet, 12 of 12. Two things on the way:
+
+- **The live drivers did not build.** `try_adprobe` linked `qtwebengine_view`,
+  which now calls `renders_as_page`, without `scheme_rules`. `make test` builds
+  no driver, so nothing said so. The link sets were regenerated
+  (`test/objsets.mk`, fmake `e482e863`). **That fmake compiled the git-ignored
+  `build-android-arm64-v8a/`'s moc output** (build `830febee`; `e482e863` not
+  tried with it in place). `tool/objsets.py` relies on fmake skipping ignored
+  directories. Since `3a55a35` keeps the Android trees through `make deb`, it
+  meets one far more often. The directory was moved aside for the run, and the
+  finding is in fmake's inbox (20261109T1655Z).
+- **`try_media_reading` exits 139 under `QT_QPA_PLATFORM=offscreen`**, after
+  every check has passed, in Chromium's in-process GPU thread, while the main
+  thread joins it at teardown. 2 of 2 offscreen; 0 of 2 under Xvfb with xcb; and
+  `try_reader` exits 0 offscreen. So it takes the offscreen platform and this
+  page, a YouTube watch page. The installed browser runs on xcb. Not explained:
+  the stacks are in WebEngine without symbols, and whether a hydra object
+  outlives its view here, as the earlier exit crashes did, is not ruled out.
+
 ## yt-dlp is told every JavaScript runtime it can use
 
 yt-dlp warns that YouTube extraction without a JavaScript runtime is
