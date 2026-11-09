@@ -41054,9 +41054,15 @@ mpv found the same 20 tracks in the cue sheet, 12 of 12. Two things on the way:
   every check has passed, in Chromium's in-process GPU thread, while the main
   thread joins it at teardown. 2 of 2 offscreen; 0 of 2 under Xvfb with xcb; and
   `try_reader` exits 0 offscreen. So it takes the offscreen platform and this
-  page, a YouTube watch page. The installed browser runs on xcb. Not explained:
-  the stacks are in WebEngine without symbols, and whether a hydra object
-  outlives its view here, as the earlier exit crashes did, is not ruled out.
+  page, a YouTube watch page. The installed browser runs on xcb.
+  **Then ruled out as hydra's, by the experiment that would have blamed it.**
+  A bare `QWebEngineView` on the same page, no hydra code at all, offscreen,
+  told to quit after 30 s, died with 139 in 3 of 3 runs, each before `exec()`
+  returned (Debian's Qt WebEngine 6.10.2). So it is Qt WebEngine under the
+  offscreen platform on that page. The stacks have no symbols, so which part
+  of it is not known. A live driver run offscreen on YouTube should be read
+  by its tally, not its exit status. Whether to report it upstream is the
+  holder's call.
 
 ## yt-dlp is told every JavaScript runtime it can use
 
