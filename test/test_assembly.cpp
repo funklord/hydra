@@ -2697,6 +2697,82 @@ int main(int argc, char **argv) {
 		check(!bound.filter("not fetched").isEmpty() && cdn.asked.value("/k.key") == keys_bound,
 		      QString("bound to an interface, it is refused and the key not asked for (%1)")
 		          .arg(bound.join(" | ")));
+
+		const auto decodes_ok = [&ff](const QString &file) {
+			QProcess p;
+			p.setProcessChannelMode(QProcess::MergedChannels);
+			p.start(ff, { "-v", "error", "-i", file, "-f", "null", "-" });
+			return !file.isEmpty() && p.waitForFinished(30000) && p.exitCode() == 0 &&
+			       p.readAll().trimmed().isEmpty();
+		};
+		const auto saved_file = [](const QStringList &l) {
+			const QStringList s = l.filter(QRegularExpression("^Saved .*\\.mp4"));
+			return s.isEmpty() ? QString()
+			                   : s.last().mid(6).section(".mp4", 0, 0) + ".mp4";
+		};
+
+		// **Through a master playlist**, the shape a real site serves: the
+		// variant it names is the encrypted one, and that is what ffmpeg must
+		// be given.
+		cdn.files["/master.m3u8"] =
+		  "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=200000,RESOLUTION=160x120\nenc.m3u8\n";
+		it.url   = QUrl(base + "/master.m3u8");
+		it.label = "master.m3u8";
+		QStringList via_master;
+		save_enc(&via_master);
+		check(decodes_ok(saved_file(via_master)),
+		      QString("from a master playlist too (%1)").arg(via_master.join(" | ")));
+
+		// **A key that cannot be had**: said as ffmpeg's failure, and nothing
+		// left in the downloads folder under a name that reads as a video.
+		QByteArray nokey = cdn.files.value("/enc.m3u8");
+		nokey.replace("/k.key", "/gone.key");
+		cdn.files["/nokey.m3u8"] = nokey;
+		it.url   = QUrl(base + "/nokey.m3u8");
+		it.label = "nokey.m3u8";
+		QStringList failed;
+		save_enc(&failed);
+		const QStringList left = QDir(downloads.directory())
+		                           .entryList({ "nokey*" }, QDir::Files);
+		check(!failed.filter("could not decrypt").isEmpty() && left.isEmpty(),
+		      QString("an unreachable key is said, and leaves no file (%1; left: %2)")
+		          .arg(failed.join(" | "), left.join(", ")));
+
+		// **Watch**: the player is handed the decrypted stream. The stand-in
+		// player decodes what it is given with the real ffmpeg, so it proves
+		// the bytes, not only that it was called.
+		QTemporaryDir bin;
+		const QString log = bin.filePath("played");
+		{
+			QFile f(bin.filePath("play"));
+			f.open(QIODevice::WriteOnly);
+			f.write("#!/bin/sh\necho \"player $1\" >> '" + log.toUtf8() + "'\n'" +
+			        ff.toUtf8() + "' -v error -i \"$1\" -f null - 2>/dev/null"
+			        " && echo decoded >> '" + log.toUtf8() + "'\n");
+			f.setPermissions(f.permissions() | QFile::ExeOwner);
+		}
+		player_launcher watcher;
+		watcher.refresh();
+		watcher.set_selected(player_launcher::custom_id());
+		watcher.set_custom_command(bin.filePath("play") + " %U");
+		{
+			stream_assembly sa(&watcher, &downloads, &proxy, nullptr);
+			QStringList w;
+			QObject::connect(&sa, &stream_assembly::status,
+			                  [&w](const QString &t) { w << t; });
+			it.url   = QUrl(base + "/enc.m3u8");
+			it.label = "enc.m3u8";
+			sa.watch(it, ctx);
+			QElapsedTimer t;
+			t.start();
+			while (!slurp_text(log).contains("decoded") && t.elapsed() < 60000)
+				spin(50);
+			const QStringList seen = slurp_text(log).split('\n', Qt::SkipEmptyParts);
+			check(seen.filter("player http://127.0.0.1").size() == 1 &&
+			          seen.contains("decoded"),
+			      QString("Watch hands the player the decrypted stream, once (%1 | %2)")
+			          .arg(seen.join(" / "), w.join(" | ")));
+		}
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
