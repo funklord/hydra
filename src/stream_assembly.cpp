@@ -107,6 +107,12 @@ void stream_assembly::assemble(const media_item &item,
 		return;
 	}
 
+	// **Made if it is not there**, as the HTTP and torrent sources do. A
+	// profile whose Downloads folder did not exist yet had every stream save
+	// fail with "Cannot write", while a plain download beside it worked
+	// (try_encrypted, 2026-11-09).
+	if (!play_it)
+		QDir().mkpath(m_downloads->directory());
 	const QString saved_as = play_it ? QString() : QDir(m_downloads->directory()).filePath(
 	        // The metadata's name where there is one, as a transport stream,
 	        // which is what this writes; the list label's otherwise.
