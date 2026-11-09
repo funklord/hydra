@@ -40667,6 +40667,20 @@ it is the Play edition's.
   hand-off turned off, four checks go red.
 - On the full Android edition there is no ffmpeg, so an encrypted stream is
   refused there too, saying that ffmpeg is needed.
+- **End to end in the real window: `try_encrypted`** (the holder, 2026-11-09:
+  "i don't know of such sites, you should make tests for it"). A page served
+  here asks for an AES-128 master playlist from script and names it in a
+  `<video>`; Find Media lists detection's rows and yt-dlp's. Download on
+  each must leave an `.mp4` in Downloads that ffmpeg decodes, with the key
+  fetched for it: 5 of 5 under Xvfb. Both rows go through the hand-off, since
+  yt-dlp's row is HLS too. With the hand-off turned off, all four of those
+  checks fail. `test_assembly` adds a master playlist, a key that cannot be
+  fetched (said, and no file left behind) and Watch, where the stand-in player
+  decodes what it is handed.
+- **What it found: a stream save failed when the Downloads folder did not
+  exist yet.** "Cannot write", where a plain download beside it worked,
+  because the HTTP and torrent sources make the folder and `stream_assembly`
+  did not. It does now; `test_assembly` saves into a folder that is not there.
 
 ## What a video is: evidence, a weak model's checked reading, and its weaknesses
 

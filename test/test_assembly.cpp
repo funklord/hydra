@@ -2527,6 +2527,28 @@ int main(int argc, char **argv) {
 		qputenv("PATH", path);
 	}
 
+	section("a save makes the downloads folder when it is not there yet");
+	{
+		QTemporaryDir root;
+		const QString missing = root.filePath("not/yet/Downloads");
+		download_manager fresh_downloads;
+		fresh_downloads.set_directory(missing);
+		stream_assembly fresh(&players, &fresh_downloads, &proxy, nullptr);
+		QStringList w;
+		QObject::connect(&fresh, &stream_assembly::status, &fresh,
+		                 [&w](const QString &t) { w << t; });
+		fresh.save(item, stream_context{});
+		QElapsedTimer t;
+		t.start();
+		while (w.filter(QRegularExpression("^Saved [^…]*$|failed")).isEmpty() &&
+		       t.elapsed() < 30000)
+			spin(50);
+		const QStringList there = QDir(missing).entryList(QDir::Files);
+		check(!there.isEmpty() && w.filter("Cannot write").isEmpty(),
+		      QString("the folder is made and the stream saved into it (%1; %2)")
+		          .arg(there.join(", "), w.join(" | ")));
+	}
+
 	section("a stream stopped before its first byte leaves no file");
 	{
 		const QString path = QDir(downloads.directory()).filePath("stopped.ts");
