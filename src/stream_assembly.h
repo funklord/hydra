@@ -32,6 +32,8 @@ class player_launcher;
 // wants the progress in its own label; once it has gone the window's status bar
 // is the only place left to say that an assembly is still running, and an
 // assembly nobody can see is one people kill by quitting.
+class media_remux;
+
 class stream_assembly : public QObject {
 	Q_OBJECT
 public:
@@ -62,6 +64,14 @@ signals:
 private:
 	void assemble(const media_item &item, const stream_context &ctx,
 	               bool play_it);
+	// The save's last step, shared by an assembled stream and one ffmpeg
+	// decrypted: rewrap, or combine with `audio`, then write the mix files.
+	void finish_saved(const QString &out, const QString &audio,
+	                  const QString &note, const QString &sheet);
+	// An AES-128 playlist the assembler handed on: ffmpeg fetches and
+	// decrypts it into `out`.
+	void decrypt(const QUrl &playlist, const stream_context &ctx,
+	             const media_item &item, const QString &out, bool play_it);
 
 	// Why a live capture stopped, when it stopped for a reason. Set by the
 	// assembler's note and folded into the completion message, because a note
@@ -73,6 +83,7 @@ private:
 	download_manager *m_downloads = nullptr;   // injected, not owned
 	local_proxy      *m_proxy     = nullptr;   // injected, not owned
 	hls_assembler    *m_assembler = nullptr;
+	media_remux      *m_fetch     = nullptr;   // a decrypting ffmpeg, while it runs
 	QTemporaryDir     m_scratch;
 	// One name per assembly. A fixed one meant watching a second stream
 	// truncated the file the first player was still reading.

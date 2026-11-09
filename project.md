@@ -40628,6 +40628,46 @@ Separately, the Play policy's first example is "Apps that block or
 interfere with another app displaying ads", which is about other apps
 rather than web pages, and is noted rather than judged here.
 
+### Two Android editions, and encrypted streams on the desktop
+
+**The holder, 2026-11-09:** "decrypt on desktop via ffmpeg, refuse on
+Playstore-Android. We want one fully-featured Android version and a Playstore
+version with omitted features." So the refusal above is no longer Android's;
+it is the Play edition's.
+
+- **Two editions, chosen when building.** `make android` builds `full`, with
+  everything; `make android-aab`, the store's bundle, always builds `play`.
+  `ANDROID_EDITION=play make android` makes a Play apk to try. qmake's `play`
+  config defines `HYDRA_PLAY`, and `play_edition()` in `media_detector.h` is
+  the one place the code asks. Each edition builds in its own directory
+  (`build-android-play-<abi>` for Play) because changing one define does not
+  make qmake rebuild what depends on it. Both keep the package id, as settled
+  2026-10-22, so a phone holds one or the other.
+- **What the Play edition leaves out:** saving from YouTube (above), and
+  decrypting a stream (`media_decrypt_allowed`). The YouTube scriptlets and
+  watching YouTube in a player are still open questions for the holder, as
+  the paragraph above says, and are in both editions.
+- **An AES-128 HLS stream is decrypted by ffmpeg**, which fetches the key and
+  decrypts the segments itself. The playlist parser records the method
+  (`hls_playlist::key_method`) beside its refusal, and the assembler, when
+  `stream_assembly` asks it to, hands an AES-128 media playlist on
+  (`encrypted`) instead of failing. ffmpeg writes MPEG-TS into the file the
+  save had named, and the save then finishes as any other does: rewrap, then
+  the mix files. Watch plays the file once it holds half a megabyte. ffmpeg
+  gets the stream's User-Agent, Referer, its cookie and any extra headers.
+  It sends that one set to the key and the segments too, so a key on another
+  host gets the playlist host's cookie. Every encrypted stream seen here keeps
+  them on one host. `SAMPLE-AES` is still refused.
+- **Never around the VPN.** ffmpeg cannot use a SOCKS proxy, so with downloads
+  bound to an interface the save is refused, not fetched directly.
+- **Measured** in `test_assembly`. ffmpeg makes six seconds of AES-128 HLS
+  whose key the test's CDN serves. The save produces a file that ffmpeg
+  decodes without an error, and the key is fetched with the stream's cookie.
+  Bound to `lo`, it is refused and the key is never asked for. With the
+  hand-off turned off, four checks go red.
+- On the full Android edition there is no ffmpeg, so an encrypted stream is
+  refused there too, saying that ffmpeg is needed.
+
 ## What a video is: evidence, a weak model's checked reading, and its weaknesses
 
 **The holder's direction, 2026-10-10**, after a first version turned one

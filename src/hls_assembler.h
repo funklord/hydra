@@ -68,6 +68,11 @@ public:
 	            const QString &output_path,
 	            const QString &audio_output_path = QString());
 	void stop();
+	// **An AES-128 playlist is handed on rather than refused**, when the
+	// caller has something that decrypts it: `encrypted` is emitted with the
+	// media playlist's address in place of `failed`, and the output is left
+	// empty for whoever takes it over. Off by default, which is the refusal.
+	void set_hand_off_encrypted(bool on) { m_hand_off = on; }
 
 	QString output_path() const { return m_path; }
 	// Where the audio landed, or empty when there was none to assemble -- which
@@ -127,6 +132,9 @@ signals:
 	void progress(qint64 bytes, int segments_done, int segments_total);
 	void completed();
 	void failed(const QString &message);
+	// The media playlist at `playlist` is AES-128 encrypted and was handed
+	// on, per `set_hand_off_encrypted`; nothing was fetched past it.
+	void encrypted(const QUrl &playlist);
 	// **Something a completed assembly still needs to say.** A live capture that
 	// ended because the playlist could no longer be read is not a failure --
 	// everything fetched is on disk and playable -- and it is not the same event
@@ -226,6 +234,7 @@ private:
 	qint64  m_written  = 0;
 	int     m_index    = 0;
 	bool    m_finished = false;
+	bool    m_hand_off = false;
 	bool    m_stopped  = false;
 	// Attempts spent on the segment currently being fetched. A single failure
 	// used to end the whole assembly, which over a real CDN and hundreds of

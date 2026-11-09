@@ -5,6 +5,7 @@
 #include <QStandardPaths>
 #include <QString>
 #include <QStringList>
+#include <QUrl>
 
 class QProcess;
 
@@ -169,6 +170,44 @@ public:
 	// Chapters from `meta` into `out`, a copy of `in`; removes `in` on
 	// success. Emits exactly once, with `in` as the path on failure.
 	void start_chapters(const QString &in, const QString &meta, const QString &out);
+
+	// **An encrypted HLS stream, fetched and decrypted by ffmpeg** into `out`
+	// as MPEG-TS, which a player can read while it grows and the rewrap step
+	// then turns into a file like any other save. ffmpeg's HLS reader fetches
+	// the key and decrypts AES-128 itself. `headers` is the Cookie and any
+	// other header lines, each ending in CRLF. Emits exactly once; on failure
+	// the partial file is removed and `path` is empty.
+	void start_fetch(const QUrl &playlist, const QString &user_agent,
+	                 const QString &referer, const QString &headers,
+	                 const QString &out);
+	// The process, while a fetch runs, so a caller can tell it is going.
+	bool running() const { return m_proc != nullptr; }
+
+	static QStringList fetch_arguments(const QUrl &playlist, const QString &user_agent,
+	                                   const QString &referer, const QString &headers,
+	                                   const QString &out) {
+		QStringList a{ QStringLiteral("-y"),
+		               QStringLiteral("-loglevel"), QStringLiteral("error") };
+		if (!user_agent.isEmpty())
+			a << QStringLiteral("-user_agent") << user_agent;
+		if (!referer.isEmpty())
+			a << QStringLiteral("-referer") << referer;
+		if (!headers.isEmpty())
+			a << QStringLiteral("-headers") << headers;
+		// A segment named like a text file is how a site disguises one, and
+		// ffmpeg's HLS reader refuses extensions it does not expect unless
+		// told otherwise. The protocols are the ones an HLS fetch over the
+		// network needs and no more: no `file`, so a playlist cannot point
+		// ffmpeg at the local disk.
+		a << QStringLiteral("-allowed_extensions") << QStringLiteral("ALL")
+		  << QStringLiteral("-protocol_whitelist")
+		  << QStringLiteral("http,https,tcp,tls,crypto")
+		  << QStringLiteral("-i") << playlist.toString(QUrl::FullyEncoded)
+		  << QStringLiteral("-c") << QStringLiteral("copy")
+		  << QStringLiteral("-f") << QStringLiteral("mpegts")
+		  << out;
+		return a;
+	}
 
 signals:
 	// `path` is the file to keep -- the remuxed one when this worked, and the

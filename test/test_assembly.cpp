@@ -18,6 +18,7 @@
 #include "download_route.h"
 #include "fake_sources.h"
 #include "hls_assembler.h"
+#include "media_remux.h"
 #include "local_proxy.h"
 #include "media_detector.h"
 #include "media_dialog.h"
@@ -38,6 +39,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QProcess>
+#include <QRegularExpression>
 #include <QSet>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -2601,6 +2604,99 @@ int main(int argc, char **argv) {
 		check(!watch_as(QString()), "unbound, the player is handed it");
 		check(watch_as("lo"), "bound, it is assembled here");
 		qputenv("PATH", path);
+	}
+
+	// **An encrypted stream is saved through ffmpeg** (the holder, 2026-11-09:
+	// "decrypt on desktop via ffmpeg"). The fixture is made by ffmpeg itself:
+	// six seconds of test picture as AES-128 HLS, its key served by the same
+	// CDN at an address the playlist names, so the save has to fetch the key
+	// to produce anything that decodes.
+	section("an AES-128 stream is fetched and decrypted by ffmpeg");
+	{
+		const QString ff = media_remux::tool();
+		check(!ff.isEmpty(), "ffmpeg is here to make the fixture and decrypt it");
+		QTemporaryDir fx;
+		const QByteArray key = QByteArray::fromHex("00112233445566778899aabbccddeeff");
+		{
+			QFile k(fx.filePath("k.key"));
+			k.open(QIODevice::WriteOnly);
+			k.write(key);
+			QFile info(fx.filePath("k.info"));
+			info.open(QIODevice::WriteOnly);
+			info.write((base + "/k.key\n" + fx.filePath("k.key") + "\n").toUtf8());
+		}
+		QProcess make;
+		make.setProcessChannelMode(QProcess::MergedChannels);
+		make.start(ff, { "-v", "error", "-y", "-f", "lavfi", "-i",
+		                 "testsrc=duration=6:size=160x120:rate=10",
+		                 "-c:v", "mpeg2video", "-f", "hls", "-hls_time", "2",
+		                 "-hls_playlist_type", "vod",
+		                 "-hls_key_info_file", fx.filePath("k.info"),
+		                 "-hls_segment_filename", fx.filePath("e%d.ts"),
+		                 fx.filePath("enc.m3u8") });
+		const bool made = make.waitForFinished(60000) && make.exitCode() == 0;
+		check(made, QString("the fixture is made (%1)")
+		                .arg(QString::fromLocal8Bit(make.readAll()).trimmed()));
+		QDir dir(fx.path());
+		for (const QString &f : dir.entryList({ "*.ts", "*.m3u8", "k.key" })) {
+			QFile in(dir.filePath(f));
+			in.open(QIODevice::ReadOnly);
+			cdn.files["/" + f] = in.readAll();
+		}
+		// **The control**: the segments really are ciphertext. An MPEG-TS
+		// packet opens with 0x47; an encrypted one does not, so a save that
+		// copied the bytes would produce no picture.
+		const QByteArray first = cdn.files.value("/e0.ts");
+		check(made && cdn.files.value("/enc.m3u8").contains("METHOD=AES-128") &&
+		          !first.isEmpty() && first.at(0) != 0x47,
+		      "the playlist says AES-128 and its first segment is not plain TS");
+
+		media_item it;
+		it.kind  = media_kind::hls;
+		it.label = "enc.m3u8";
+		it.url   = QUrl(base + "/enc.m3u8");
+		stream_context ctx;
+		ctx.cookies = "sess=1";
+		auto save_enc = [&](QStringList *lines) {
+			auto *sa = new stream_assembly(&players, &downloads, &proxy, nullptr);
+			QObject::connect(sa, &stream_assembly::status,
+			                  [lines](const QString &t) { *lines << t; });
+			sa->save(it, ctx);
+			QElapsedTimer el;
+			el.start();
+			while (el.elapsed() < 60000 &&
+			       lines->filter(QRegularExpression("^Saved [^…]*$|could not|cannot|not fetched")).isEmpty())
+				spin(50);
+			delete sa;
+		};
+		const int keys_before = cdn.asked.value("/k.key");
+		QStringList lines;
+		save_enc(&lines);
+		const QStringList saved = lines.filter(QRegularExpression("^Saved .*\\.mp4"));
+		const QString file = saved.isEmpty() ? QString()
+		                   : saved.last().mid(6).section(".mp4", 0, 0) + ".mp4";
+		check(!saved.isEmpty() && QFileInfo(file).size() > 0,
+		      QString("it is saved as a file (%1)").arg(lines.join(" | ")));
+		check(cdn.asked.value("/k.key") > keys_before && cdn.cookie_seen.value("/k.key") == "sess=1",
+		      QString("the key was fetched, with the stream's cookie (%1)")
+		          .arg(QString::fromUtf8(cdn.cookie_seen.value("/k.key"))));
+		QProcess probe;
+		probe.setProcessChannelMode(QProcess::MergedChannels);
+		probe.start(ff, { "-v", "error", "-i", file, "-f", "null", "-" });
+		const bool decodes = probe.waitForFinished(30000) && probe.exitCode() == 0 &&
+		                     probe.readAll().trimmed().isEmpty();
+		check(!file.isEmpty() && decodes, "and it decodes without an error");
+
+		// **Never around the VPN**: bound downloads refuse rather than
+		// letting ffmpeg, which cannot be routed, fetch it directly.
+		download_route::shared().set_interface_name("lo");
+		const int keys_bound = cdn.asked.value("/k.key");
+		QStringList bound;
+		save_enc(&bound);
+		download_route::shared().set_interface_name(QString());
+		check(!bound.filter("not fetched").isEmpty() && cdn.asked.value("/k.key") == keys_bound,
+		      QString("bound to an interface, it is refused and the key not asked for (%1)")
+		          .arg(bound.join(" | ")));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

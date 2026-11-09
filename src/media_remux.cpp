@@ -49,6 +49,20 @@ void media_remux::start_chapters(const QString &in, const QString &meta,
 	     QStringLiteral("add chapters to"), QStringLiteral("given chapters"));
 }
 
+void media_remux::start_fetch(const QUrl &playlist, const QString &user_agent,
+                              const QString &referer, const QString &headers,
+                              const QString &out) {
+	if (tool().isEmpty()) {
+		emit finished(false, QString(),
+		               QStringLiteral("This stream is encrypted, and decrypting it "
+		                               "needs ffmpeg, which is not installed."));
+		return;
+	}
+	run(fetch_arguments(playlist, user_agent, referer, headers, out), out,
+	     QStringList(), QString(),
+	     QStringLiteral("decrypt"), QStringLiteral("decrypted"));
+}
+
 void media_remux::start_mux(const QString &video, const QString &audio,
                             const QString &out, const QString &meta) {
 	// **Not the same degradation as a rewrap.** There, the file that exists
@@ -105,9 +119,11 @@ void media_remux::run(const QStringList &args, const QString &out,
 		const QFileInfo made(out);
 		if (!ran || !made.exists() || made.size() == 0) {
 			QFile::remove(out);   // a zero-length stub is worse than nothing
-			const QString base =
-			  QString("ffmpeg could not %1 this stream, so it was kept as-is")
-			      .arg(verb);
+			// Nothing to keep is a fetch, whose partial output is gone.
+			const QString base = keep_on_failure.isEmpty()
+			  ? QString("ffmpeg could not %1 this stream").arg(verb)
+			  : QString("ffmpeg could not %1 this stream, so it was kept as-is")
+			        .arg(verb);
 			emit finished(false, keep_on_failure,
 			               said.isEmpty() ? base + QStringLiteral(".")
 			                              : base + QStringLiteral(": ") + said);

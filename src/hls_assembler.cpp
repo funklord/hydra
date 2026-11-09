@@ -154,6 +154,19 @@ void hls_assembler::fetch_manifest(const QUrl &url) {
 		// be read, and a byte range decides which bytes of which file a segment
 		// is -- so carrying on would write a file made of the wrong bytes and
 		// call it finished. See `hls_playlist::error`.
+		if (m_hand_off && m_playlist.key_method == QLatin1String("AES-128")) {
+			// Left empty for the decrypting step to write over, and not
+			// removed: it is that step's output now, under the name chosen
+			// for it.
+			if (m_file) {
+				m_file->close();
+				delete m_file;
+				m_file = nullptr;
+			}
+			m_finished = true;
+			emit encrypted(url);
+			return;
+		}
 		if (!m_playlist.error.isEmpty()) {
 			emit failed("Playlist not understood: " + m_playlist.error);
 			return;

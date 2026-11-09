@@ -74,6 +74,11 @@ struct hls_playlist {
 	// wrong file; the durations and the media sequence are read by nothing
 	// that decides anything. Empty means the manifest parsed.
 	QString error;
+	// **The encryption the playlist declared**, upper case: `AES-128` or
+	// `SAMPLE-AES`, empty for a clear one. Set beside `error` rather than in
+	// place of it, so a caller that cannot decrypt still refuses, and one
+	// that can hand the stream on -- ffmpeg decrypts AES-128 -- knows it may.
+	QString key_method;
 
 	double total_duration() const;
 };

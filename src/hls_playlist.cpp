@@ -166,11 +166,12 @@ hls_playlist parse(const QByteArray &text, const QUrl &base) {
 		// encrypted stretch, and refusing it would reject a clear stream for
 		// saying so.
 		//
-		// Decrypting is a feature: the key has to be fetched, and AES-128-CBC
-		// needs the IV, which is either the tag's or the segment's sequence
-		// number. Refusing by name is what this `error` field is for, and it is
-		// the difference between "we cannot do this" and a file that is not the
-		// programme.
+		// This engine still does not decrypt. `key_method` says what the
+		// stream used, so `stream_assembly` can hand an AES-128 one to ffmpeg,
+		// which fetches the key and decrypts it, where that is allowed
+		// (`media_decrypt_allowed`). Refusing by name stays the answer for
+		// everything else, and is the difference between "we cannot do this"
+		// and a file that is not the programme.
 		if (line.startsWith("#EXT-X-KEY:")) {
 			const QString v = line.section(':', 1);
 			// The attribute list is comma-separated; METHOD is the first by
@@ -188,6 +189,8 @@ hls_playlist parse(const QByteArray &text, const QUrl &base) {
 				if (out.error.isEmpty())
 					out.error = "the segments are encrypted (METHOD=" + method +
 					             "), which this cannot decrypt";
+				if (out.key_method.isEmpty())
+					out.key_method = method.toUpper();
 			}
 			continue;
 		}

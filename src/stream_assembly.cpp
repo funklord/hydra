@@ -11,6 +11,9 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QTimer>
+
+#include <memory>
 
 namespace {
 
@@ -237,31 +240,8 @@ void stream_assembly::assemble(const media_item &item,
 		// neither half is the programme; `audio_path()` is non-empty exactly
 		// then, so it answers "mux or rewrap" without a second flag to keep in
 		// step with it.
-		const QString audio = m_assembler ? m_assembler->audio_path() : QString();
-		emit status(audio.isEmpty()
-		  ? QString("Saved %1; rewrapping…%2").arg(out, note)
-		  : QString("Saved %1; combining video and audio…%2").arg(out, note));
-		auto *remux = new media_remux(this);
-		connect(remux, &media_remux::finished, this,
-		         [this, remux, note, sheet](bool ok, const QString &path,
-		                                     const QString &why) {
-			// The file's last name: a rewrap changes it.
-			QString mix;
-			if (!sheet.isEmpty()) {
-				const media_sheet s = media_sheet::from_json(sheet);
-				QString error;
-				mix = s.write_beside(path, &error)
-				  ? QString(" Mix: %1.").arg(s.summary()) : QLatin1Char(' ') + error;
-			}
-			emit status(ok ? QString("Saved %1.%2%3").arg(path, note, mix)
-			                : why.isEmpty() ? QString("Saved %1.%2%3").arg(path, note, mix)
-			                : QString("Saved %1 — %2%3%4").arg(path, why, note, mix));
-			remux->deleteLater();
-		});
-		if (audio.isEmpty())
-			remux->start(out);
-		else
-			remux->start_mux(out, audio);
+		finish_saved(out, m_assembler ? m_assembler->audio_path() : QString(),
+		             note, sheet);
 	});
 
 	// **The file is opened before anything is fetched**, so a stream refused
@@ -284,7 +264,127 @@ void stream_assembly::assemble(const media_item &item,
 	connect(m_assembler, &hls_assembler::status_note, this,
 	         [this](const QString &note) { m_live_note = note; });
 
+	// **An encrypted stream goes to ffmpeg**, which fetches the key and
+	// decrypts AES-128 itself, where this engine would write ciphertext.
+	// Not in the Play edition (`media_decrypt_allowed`).
+	connect(m_assembler, &hls_assembler::encrypted, this,
+	         [this, ctx, item, out, play_it](const QUrl &playlist) {
+		decrypt(playlist, ctx, item, out, play_it);
+	});
+	m_assembler->set_hand_off_encrypted(media_decrypt_allowed());
+
 	emit status(QStringLiteral("Fetching manifest…"));
 	// Somewhere for a separately-carried audio stream, for Watch as for Save.
 	m_assembler->start(item.url, ctx, out, out + QStringLiteral(".audio"));
+}
+
+void stream_assembly::finish_saved(const QString &out, const QString &audio,
+                                   const QString &note, const QString &sheet) {
+	emit status(audio.isEmpty()
+	  ? QString("Saved %1; rewrapping…%2").arg(out, note)
+	  : QString("Saved %1; combining video and audio…%2").arg(out, note));
+	auto *remux = new media_remux(this);
+	connect(remux, &media_remux::finished, this,
+	         [this, remux, note, sheet](bool ok, const QString &path,
+	                                     const QString &why) {
+		// The file's last name: a rewrap changes it.
+		QString mix;
+		if (!sheet.isEmpty()) {
+			const media_sheet s = media_sheet::from_json(sheet);
+			QString error;
+			mix = s.write_beside(path, &error)
+			  ? QString(" Mix: %1.").arg(s.summary()) : QLatin1Char(' ') + error;
+		}
+		emit status(ok ? QString("Saved %1.%2%3").arg(path, note, mix)
+		                : why.isEmpty() ? QString("Saved %1.%2%3").arg(path, note, mix)
+		                : QString("Saved %1 — %2%3%4").arg(path, why, note, mix));
+		remux->deleteLater();
+	});
+	if (audio.isEmpty())
+		remux->start(out);
+	else
+		remux->start_mux(out, audio);
+}
+
+void stream_assembly::decrypt(const QUrl &playlist, const stream_context &ctx,
+                              const media_item &item, const QString &out,
+                              bool play_it) {
+	auto drop_empty = [out] {
+		if (QFileInfo(out).size() == 0)
+			QFile::remove(out);
+	};
+	// **Never around the VPN.** ffmpeg speaks no SOCKS, so it cannot be put
+	// through the route downloads are bound to, and fetching it directly
+	// would send the one download a person routed on purpose outside it.
+	if (download_route::shared().bound()) {
+		drop_empty();
+		emit status(QStringLiteral("This stream is encrypted. ffmpeg decrypts "
+		                            "it, and it cannot be sent through the "
+		                            "interface downloads are bound to, so it "
+		                            "was not fetched."));
+		return;
+	}
+	if (m_fetch) {
+		drop_empty();
+		emit status(QStringLiteral("An encrypted stream is already being "
+		                            "decrypted; wait for it to finish."));
+		return;
+	}
+	// What this browser would send to the playlist's host. ffmpeg sends the
+	// same to the key and the segments, which are on that host on every
+	// encrypted stream seen here; a key on another host gets the playlist's
+	// cookies too, which is the price of handing the fetch to a tool that
+	// takes one header set.
+	const QString cookie = !ctx.cookies.isEmpty() ? ctx.cookies
+	                     : ctx.cookies_for ? ctx.cookies_for(playlist) : QString();
+	QString headers;
+	if (!cookie.isEmpty())
+		headers += QStringLiteral("Cookie: ") + cookie + QStringLiteral("\r\n");
+	for (auto it = ctx.extra.cbegin(); it != ctx.extra.cend(); ++it)
+		headers += it.key() + QStringLiteral(": ") + it.value() + QStringLiteral("\r\n");
+
+	m_fetch = new media_remux(this);
+	auto *fetch = m_fetch;
+	// Watch plays the file as it grows, once there is enough of it for a
+	// player to find its feet.
+	QTimer *poll = nullptr;
+	auto played = std::make_shared<bool>(false);
+	auto play = [this, item, out, played] {
+		if (*played)
+			return;
+		*played = true;
+		const QUrl via = m_proxy ? m_proxy->publish_file(out, "video/mp2t") : QUrl();
+		QString error;
+		if (!m_players->play(item, &error, via))
+			emit status(error);
+	};
+	if (play_it) {
+		poll = new QTimer(fetch);
+		poll->setInterval(500);
+		connect(poll, &QTimer::timeout, this, [out, play] {
+			if (QFileInfo(out).size() >= 512 * 1024)
+				play();
+		});
+		poll->start();
+	}
+	connect(fetch, &media_remux::finished, this,
+	         [this, fetch, out, play_it, play, sheet = item.sheet]
+	         (bool ok, const QString &, const QString &why) {
+		fetch->deleteLater();
+		m_fetch = nullptr;
+		if (!ok) {
+			emit status(why);
+			return;
+		}
+		if (play_it) {
+			play();
+			emit status(QStringLiteral("Decrypted by ffmpeg; playback continues "
+			                            "locally."));
+			return;
+		}
+		finish_saved(out, QString(), QStringLiteral(" Decrypted by ffmpeg."), sheet);
+	});
+	emit status(QStringLiteral("This stream is encrypted; ffmpeg is fetching "
+	                            "and decrypting it…"));
+	fetch->start_fetch(playlist, ctx.user_agent, ctx.referer, headers, out);
 }
