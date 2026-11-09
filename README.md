@@ -317,8 +317,6 @@ work, and most of them were got wrong here first and are written up in
 
 Kept here rather than left for you to discover.
 
-- **Android geolocation is built but unproven**: no page has yet asked for a
-  position on a real handset.
 - **Android has no screen sharing.** The desktop's delivers a stream to a real
   `getDisplayMedia`, tested under Xvfb; a real meeting has not been tried.
 - **Android cannot keep local addresses from WebRTC.** The desktop offers a page
@@ -330,8 +328,6 @@ Kept here rather than left for you to discover.
 - **The site-extractor loop is not finished**: where the server names a manifest
   it is reliable and needs no model, but where nothing does a local model still
   misses often. `project.md` has the measurements.
-- **A saved `policy.ini` pins the defaults that were current when it was
-  written**, so a default changed later does not reach an existing profile.
 
 ---
 
