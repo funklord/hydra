@@ -40644,9 +40644,16 @@ it is the Play edition's.
   make qmake rebuild what depends on it. Both keep the package id, as settled
   2026-10-22, so a phone holds one or the other.
 - **What the Play edition leaves out:** saving from YouTube (above), and
-  decrypting a stream (`media_decrypt_allowed`). The YouTube scriptlets and
-  watching YouTube in a player are still open questions for the holder, as
-  the paragraph above says, and are in both editions.
+  decrypting a stream (`media_decrypt_allowed`). **Nothing else, settled
+  2026-11-10:** "play version drops what is necessary only. The other one
+  drops nothing also useful for side-by-side comparison vs desktop." So the
+  YouTube scriptlets and watching YouTube in a player stay in both, and the
+  question the paragraph above left open is closed.
+- **Tested in that order:** the full edition first, as the one that compares
+  with the desktop, and the Play edition second. Each Android build says
+  which it is at start (`hydra: full edition` in the log), and
+  `tool/emulator_checks.py` holds it to the edition the apk's name claims, so
+  a build that came out as the other edition fails the run.
 - **An AES-128 HLS stream is decrypted by ffmpeg**, which fetches the key and
   decrypts the segments itself. The playlist parser records the method
   (`hls_playlist::key_method`) beside its refusal, and the assembler, when
@@ -41130,6 +41137,10 @@ mpv found the same 20 tracks in the cue sheet, 12 of 12. Two things on the way:
   stamp. So `main.cpp` now includes the stamp only under `HYDRA_STAMPED`,
   which only the qmake build that writes it defines; the same fixture then
   prints none. The `exclude` finding went back to fmake's inbox.
+  **Fixed in fmake `a57bfb5`** (hydra inbox 20261109T2310Z): the exclude was
+  compared as text with its `*` stripped, so `build-android-*/**` named
+  nothing; it is matched as a pattern now. The define stays, since it settles
+  the question whichever fmake builds.
 - **`try_media_reading` exits 139 under `QT_QPA_PLATFORM=offscreen`**, after
   every check has passed, in Chromium's in-process GPU thread, while the main
   thread joins it at teardown. 2 of 2 offscreen; 0 of 2 under Xvfb with xcb; and

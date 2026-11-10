@@ -4,6 +4,10 @@
 #
 #     tool/emulator_checks.py <apk> [avd] [port]
 #
+# Either edition's apk: the full one (`make android ANDROID_ABI=x86_64`) is
+# the one to test first, and the Play one (`ANDROID_EDITION=play`) second.
+# The run checks that the build says it is the edition its name claims.
+#
 # Build the apk for the emulator's ABI first:
 #
 #     make android ANDROID_ABI=x86_64
@@ -70,6 +74,11 @@ if len(sys.argv) < 2:
 	print(__doc__ or "usage: tool/emulator_checks.py <apk> [avd] [port]")
 	sys.exit(2)
 APK = sys.argv[1]
+# **Which edition the apk is**, from the name the Makefile gives it
+# (`hydra-<version>-play-<abi>.apk` for Play). The full edition is the one
+# tested first -- it drops nothing, so it compares side by side with the
+# desktop -- and the Play edition second (the holder, 2026-11-10).
+EDITION = "play" if "-play-" in os.path.basename(APK) else "full"
 AVD = sys.argv[2] if len(sys.argv) > 2 else "Resizable_Experimental_API_33"
 PORT = int(sys.argv[3]) if len(sys.argv) > 3 else 5590
 SERIAL = f"emulator-{PORT}"
@@ -181,6 +190,22 @@ def tap(label, limit=30, exact=False):
 	tree = et.fromstring(adb("shell", "cat", "/sdcard/ui.xml") or "<x/>")
 	shown = sorted({n.get("content-desc") or n.get("text") for n in tree.iter("node")} - {"", None})
 	print("  on screen instead: " + ", ".join(shown)[:600])
+	# **An ANR says where the app was stuck, if asked at once.** "Hydra isn't
+	# responding" took the BitTorrent section and everything after it on
+	# 2026-11-10, on a machine at load 32, and the trace had gone with the
+	# emulator. The system writes the main thread's stack under /data/anr,
+	# which the emulator's root can read.
+	if any("isn't responding" in (t or "") for t in shown):
+		adb("root", timeout=30)
+		time.sleep(2)
+		names = adb("shell", "ls -t /data/anr", timeout=30).split()
+		if names:
+			trace = adb("shell", "cat", "/data/anr/" + names[0], timeout=60)
+			main = re.search(r'"main" prio=.*?(?:\n\n|\Z)', trace, re.S)
+			print("  ANR, main thread:\n    " +
+			      "\n    ".join((main.group(0) if main else trace[:3000]).splitlines()[:40]))
+		else:
+			print("  ANR, and no trace under /data/anr")
 	return False
 
 def reports():
@@ -412,8 +437,18 @@ def main():
 		                                    timeout=10).strip() == "1", 300):
 			return 1
 		print(adb("install", "-r", "-g", APK, timeout=300).strip().splitlines()[-1:])
+		adb("logcat", "-c")
 		adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
 		    "-d", "https://m.youtube.com/", "-n", f"{APP}/.HydraActivity")
+
+		print(f"\n== the build is the {EDITION} edition its name says ==")
+		def said_edition():
+			log = adb("logcat", "-d", "-t", "4000", timeout=60)
+			m = re.search(r"hydra: (\w+) edition", log)
+			return m.group(1) if m else ""
+		wait_for("the edition line", lambda: said_edition() != "", 60, step=3)
+		said = said_edition()
+		check(said == EDITION, f"it says it is the {EDITION} edition ({said or 'nothing said'})")
 
 		print("\n== a youtube page cannot see hydra ==")
 		seen = {}

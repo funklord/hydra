@@ -44,6 +44,7 @@
 #endif
 
 #include "main_window.h"
+#include "media_detector.h"   // play_edition
 #include "touch_scroll.h"
 #include "settings_dialog.h"   // settings_store
 #include "theme.h"
@@ -231,6 +232,12 @@ int main(int argc, char *argv[]) {
 #endif
 
 	QApplication app(argc, argv);
+#ifdef Q_OS_ANDROID
+	// **Which edition this is, said once at start**, so the emulator checks
+	// can hold the build to the apk it claims to be (`tool/emulator_checks.py`)
+	// -- the full one is what they test first, and the Play one second.
+	qInfo("hydra: %s edition", play_edition() ? "play" : "full");
+#endif
 #ifdef Q_OS_ANDROID
 	// **The beat a watchdog in HydraActivity listens for**, so a main thread
 	// left waiting for a surface while the activity is stopped can be freed.
