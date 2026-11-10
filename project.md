@@ -40653,7 +40653,14 @@ it is the Play edition's.
   with the desktop, and the Play edition second. Each Android build says
   which it is at start (`hydra: full edition` in the log), and
   `tool/emulator_checks.py` holds it to the edition the apk's name claims, so
-  a build that came out as the other edition fails the run.
+  a build that came out as the other edition fails the run. First runs, 2026-11-10:
+  full 112 of 112 and Play 112 of 112, each saying the right edition. A
+  first full run before them lost its BitTorrent section and everything
+  after it to "Hydra isn't responding" as the magnet arrived, at load 32 from
+  other sessions' builds; the Play run and the full rerun, at load 9 and
+  10, passed that section. That is a correlation with load, not a cause:
+  the trace went with the emulator, so the checks now print the ANR's
+  main-thread stack, and the next one will say where it was stuck.
 - **An AES-128 HLS stream is decrypted by ffmpeg**, which fetches the key and
   decrypts the segments itself. The playlist parser records the method
   (`hls_playlist::key_method`) beside its refusal, and the assembler, when
