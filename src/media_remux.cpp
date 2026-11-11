@@ -28,6 +28,16 @@ void media_remux::start(const QString &assembled) {
 	     QStringLiteral("rewrap"), QStringLiteral("rewrapped"));
 }
 
+void media_remux::start(const QString &assembled, const QString &meta) {
+	if (meta.isEmpty() || tool().isEmpty()) {
+		start(assembled);
+		return;
+	}
+	const QString out = target_for(assembled);
+	run(chapter_arguments(assembled, meta, out), out, QStringList{ assembled },
+	     assembled, QStringLiteral("rewrap"), QStringLiteral("rewrapped"));
+}
+
 void media_remux::start_mux(const QString &video, const QString &audio) {
 	start_mux(video, audio, target_for(video));
 }

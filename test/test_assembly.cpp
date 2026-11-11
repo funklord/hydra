@@ -39,6 +39,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPair>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSet>
@@ -2527,6 +2528,94 @@ int main(int argc, char **argv) {
 		qputenv("PATH", path);
 	}
 
+	// **A saved file says what it is** (the holder, 2026-11-11): its title,
+	// who, when, where from and its description as tags, the tracklist as
+	// chapters when there is one, and Matroska in quarter-second clusters so
+	// MPlayer's chapter jumps land where the mark is. Through the real
+	// ffmpeg pass a download takes, on files made here.
+	section("a saved file carries its tags, and Matroska its small clusters");
+	{
+		const QString ff = media_remux::tool();
+		QTemporaryDir fx;
+		const auto make = [&](const QString &name, const QStringList &codec) {
+			QProcess p;
+			p.start(ff, QStringList{ "-v", "error", "-y", "-f", "lavfi", "-i",
+			                         "sine=frequency=440:duration=60" } + codec
+			              + QStringList{ fx.filePath(name) });
+			return p.waitForFinished(60000) && p.exitCode() == 0;
+		};
+		check(!ff.isEmpty() && make("in.webm", { "-c:a", "libopus" }) &&
+		          make("in.m4a", { "-c:a", "aac" }),
+		      "ffmpeg makes a WebM and an M4A to save");
+		const QList<QPair<QString, QString>> tags{
+			{ "title", "Classic Disco Funk" }, { "artist", "Groovix" },
+			{ "date", "2025-10-02" }, { "comment", "https://v.invalid/watch?v=1" },
+			{ "url", "https://v.invalid/watch?v=1" },
+			{ "description", "Line one\nLine två" },
+		};
+		const QString tags_only = media_remux::ffmetadata({}, 60, tags);
+		const QString both = media_remux::ffmetadata(
+		  { { 0, "A - One" }, { 20.5, "B - Two" } }, 60, tags);
+		check(media_remux::ffmetadata({}, 60).isEmpty() &&
+		          !tags_only.contains("[CHAPTER]") && both.contains("[CHAPTER]"),
+		      "with no tag and no tracklist there is nothing to write; tags alone "
+		      "are written without chapters");
+		const auto pass = [&](const QString &in, const QString &meta_text,
+		                      const QString &out) {
+			const QString meta = fx.filePath("meta.txt");
+			QFile m(meta);
+			m.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			m.write(meta_text.toUtf8());
+			m.close();
+			QFile::copy(fx.filePath(in), fx.filePath("work-" + in));
+			media_remux step;
+			bool done = false, ok = false;
+			QObject::connect(&step, &media_remux::finished,
+			                  [&](bool k, const QString &, const QString &) { done = true; ok = k; });
+			step.start_chapters(fx.filePath("work-" + in), meta, fx.filePath(out));
+			QElapsedTimer t;
+			t.start();
+			while (!done && t.elapsed() < 30000)
+				spin(50);
+			return ok;
+		};
+		const auto probe = [&](const QString &file, const QString &what) {
+			QProcess p;
+			p.start(ff.section('/', 0, -2) + "/ffprobe",
+			        { "-v", "error", "-show_entries", what, "-of", "compact=p=0", file });
+			p.waitForFinished(30000);
+			return QString::fromUtf8(p.readAll());
+		};
+		const auto clusters = [](const QString &file) {
+			QFile f(file);
+			f.open(QIODevice::ReadOnly);
+			return int(f.readAll().count(QByteArray::fromHex("1F43B675")));
+		};
+
+		check(pass("in.webm", tags_only, "tagged.webm"),
+		      "the pass runs with tags alone");
+		const QString webm = probe(fx.filePath("tagged.webm"), "format_tags");
+		check(webm.contains("title=Classic Disco Funk") && webm.contains("ARTIST=Groovix") &&
+		          webm.contains("URL=https://v.invalid/watch?v=1") &&
+		          webm.contains("DESCRIPTION=Line one"),
+		      QString("Matroska keeps the title, artist, source and description (%1)")
+		          .arg(webm.trimmed().left(200)));
+		check(clusters(fx.filePath("tagged.webm")) >= 100,
+		      QString("in quarter-second clusters: %1 in sixty seconds, against "
+		              "%2 as ffmpeg writes it by default")
+		          .arg(clusters(fx.filePath("tagged.webm")))
+		          .arg(clusters(fx.filePath("in.webm"))));
+
+		check(pass("in.m4a", both, "tagged.m4a"), "the pass runs with tags and chapters");
+		const QString m4a = probe(fx.filePath("tagged.m4a"), "format_tags");
+		const QString marks = probe(fx.filePath("tagged.m4a"), "chapter=start_time");
+		check(m4a.contains("title=Classic Disco Funk") &&
+		          m4a.contains("comment=https://v.invalid/watch?v=1") &&
+		          marks.contains("20.500000"),
+		      QString("MP4 keeps them too, the source as its comment, beside the "
+		              "chapters (%1 | %2)").arg(m4a.trimmed().left(160), marks.simplified()));
+	}
+
 	section("a save makes the downloads folder when it is not there yet");
 	{
 		QTemporaryDir root;
@@ -2759,6 +2848,27 @@ int main(int argc, char **argv) {
 		check(!failed.filter("could not decrypt").isEmpty() && left.isEmpty(),
 		      QString("an unreachable key is said, and leaves no file (%1; left: %2)")
 		          .arg(failed.join(" | "), left.join(", ")));
+
+		// **And it says what it is**: a row's tags go into the rewrap, as a
+		// download's file has them.
+		it.url      = QUrl(base + "/enc.m3u8");
+		it.label    = "tagged-enc.m3u8";
+		it.chapters = media_remux::ffmetadata({}, 6, {
+			{ "title", "An encrypted clip" }, { "comment", "https://v.invalid/e" },
+		});
+		QStringList tagged;
+		save_enc(&tagged);
+		it.chapters.clear();
+		QProcess tp;
+		tp.start(ff.section('/', 0, -2) + "/ffprobe",
+		         { "-v", "error", "-show_entries", "format_tags", "-of", "compact=p=0",
+		           saved_file(tagged) });
+		tp.waitForFinished(30000);
+		const QString tags_seen = QString::fromUtf8(tp.readAll());
+		check(tags_seen.contains("title=An encrypted clip") &&
+		          tags_seen.contains("comment=https://v.invalid/e") &&
+		          decodes_ok(saved_file(tagged)),
+		      QString("and the file carries the row's tags (%1)").arg(tags_seen.trimmed().left(160)));
 
 		// **Watch**: the player is handed the decrypted stream. The stand-in
 		// player decodes what it is given with the real ffmpeg, so it proves

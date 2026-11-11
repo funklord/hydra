@@ -181,8 +181,9 @@ void download_manager::settle_pair(int picture_id) {
 	const QString meta = write_chapters(out, p->chapters);
 	auto *mux = new media_remux(this);
 	connect(mux, &media_remux::finished, this,
-	         [this, mux, picture_id, sound_id, meta](bool ok, const QString &path,
-	                                                 const QString &message) {
+	         [this, mux, picture_id, sound_id, meta,
+	          listed = p->chapters.contains(QLatin1String("[CHAPTER]"))]
+	         (bool ok, const QString &path, const QString &message) {
 		mux->deleteLater();
 		if (!meta.isEmpty())
 			QFile::remove(meta);
@@ -190,7 +191,7 @@ void download_manager::settle_pair(int picture_id) {
 			p->status = download_state::done;
 			p->path   = path;
 			p->detail = !ok ? message
-			  : meta.isEmpty() ? QStringLiteral("Picture and sound, combined.")
+			  : !listed ? QStringLiteral("Picture and sound, combined.")
 			  : QStringLiteral("Picture and sound, combined, with the tracklist "
 			                   "as chapters.");
 			write_sheet(p);
@@ -253,11 +254,15 @@ void download_manager::add_chapters(int id) {
 	const QFileInfo fi(in);
 	const QString out = fi.dir().filePath(fi.completeBaseName() +
 	                                      QStringLiteral(".chaptered.") + fi.suffix());
-	j->detail = QStringLiteral("Adding the tracklist as chapters…");
+	// What the file is given: its title and source always, and the tracklist
+	// when there is one -- said as what it is.
+	const bool listed = j->chapters.contains(QLatin1String("[CHAPTER]"));
+	j->detail = listed ? QStringLiteral("Adding the tracklist as chapters…")
+	                   : QStringLiteral("Writing its title and source into it…");
 	auto *step = new media_remux(this);
 	connect(step, &media_remux::finished, this,
-	         [this, step, id, in, out, meta](bool ok, const QString &,
-	                                         const QString &message) {
+	         [this, step, id, in, out, meta, listed](bool ok, const QString &,
+	                                                 const QString &message) {
 		step->deleteLater();
 		QFile::remove(meta);
 		// `in` is gone on success, so the copy is the only file and takes its
@@ -266,12 +271,15 @@ void download_manager::add_chapters(int id) {
 		if (download_job *j = find(id)) {
 			j->status = download_state::done;
 			j->path   = (ok && !placed) ? out : in;
-			j->detail = placed ? QStringLiteral("Saved, with the tracklist as "
-			                                    "chapters.")
-			          : ok ? QStringLiteral("Saved with chapters, under a "
-			                                "different name: the original name "
-			                                "could not be taken.")
-			               : "Saved without chapters: " + message;
+			j->detail = placed ? (listed ? QStringLiteral("Saved, with the tracklist "
+			                                              "as chapters.")
+			                             : QStringLiteral("Saved."))
+			          : ok ? QStringLiteral("Saved, under a different name: the "
+			                                "original name could not be taken.")
+			               : (listed ? QStringLiteral("Saved without chapters: ")
+			                         : QStringLiteral("Saved without its title "
+			                                          "and source inside: "))
+			                   + message;
 			write_sheet(j);
 		}
 		emit changed();

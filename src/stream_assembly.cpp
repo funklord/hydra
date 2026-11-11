@@ -153,7 +153,7 @@ void stream_assembly::assemble(const media_item &item,
 	});
 
 	connect(m_assembler, &hls_assembler::completed, this,
-	         [this, out, play_it, item, sheet = item.sheet] {
+	         [this, out, play_it, item, sheet = item.sheet, chapters = item.chapters] {
 		// A live list has no end, so running out of segments is the end of the
 		// *window it published* and not the end of the stream. `hls_assembler`
 		// said as much in a comment and told nobody; saying "saved" with no
@@ -247,7 +247,7 @@ void stream_assembly::assemble(const media_item &item,
 		// then, so it answers "mux or rewrap" without a second flag to keep in
 		// step with it.
 		finish_saved(out, m_assembler ? m_assembler->audio_path() : QString(),
-		             note, sheet);
+		             note, sheet, chapters);
 	});
 
 	// **The file is opened before anything is fetched**, so a stream refused
@@ -285,14 +285,27 @@ void stream_assembly::assemble(const media_item &item,
 }
 
 void stream_assembly::finish_saved(const QString &out, const QString &audio,
-                                   const QString &note, const QString &sheet) {
+                                   const QString &note, const QString &sheet,
+                                   const QString &chapters) {
+	// **What the file is, inside it**, as a download's file has it: the
+	// row's tags and tracklist go into the rewrap or the combine, one ffmpeg
+	// run, from a file beside the output removed when it ends.
+	QString meta;
+	if (!chapters.isEmpty()) {
+		QFile f(out + QStringLiteral(".meta.txt"));
+		if (f.open(QIODevice::WriteOnly | QIODevice::Truncate) &&
+		    f.write(chapters.toUtf8()) >= 0 && f.flush())
+			meta = f.fileName();
+	}
 	emit status(audio.isEmpty()
 	  ? QString("Saved %1; rewrapping…%2").arg(out, note)
 	  : QString("Saved %1; combining video and audio…%2").arg(out, note));
 	auto *remux = new media_remux(this);
 	connect(remux, &media_remux::finished, this,
-	         [this, remux, note, sheet](bool ok, const QString &path,
-	                                     const QString &why) {
+	         [this, remux, note, sheet, meta](bool ok, const QString &path,
+	                                           const QString &why) {
+		if (!meta.isEmpty())
+			QFile::remove(meta);
 		// The file's last name: a rewrap changes it.
 		QString mix;
 		if (!sheet.isEmpty()) {
@@ -307,9 +320,9 @@ void stream_assembly::finish_saved(const QString &out, const QString &audio,
 		remux->deleteLater();
 	});
 	if (audio.isEmpty())
-		remux->start(out);
+		remux->start(out, meta);
 	else
-		remux->start_mux(out, audio);
+		remux->start_mux(out, audio, media_remux::target_for(out), meta);
 }
 
 void stream_assembly::decrypt(const QUrl &playlist, const stream_context &ctx,
@@ -374,7 +387,7 @@ void stream_assembly::decrypt(const QUrl &playlist, const stream_context &ctx,
 		poll->start();
 	}
 	connect(fetch, &media_remux::finished, this,
-	         [this, fetch, out, play_it, play, sheet = item.sheet]
+	         [this, fetch, out, play_it, play, sheet = item.sheet, chapters = item.chapters]
 	         (bool ok, const QString &, const QString &why) {
 		fetch->deleteLater();
 		m_fetch = nullptr;
@@ -388,7 +401,8 @@ void stream_assembly::decrypt(const QUrl &playlist, const stream_context &ctx,
 			                            "locally."));
 			return;
 		}
-		finish_saved(out, QString(), QStringLiteral(" Decrypted by ffmpeg."), sheet);
+		finish_saved(out, QString(), QStringLiteral(" Decrypted by ffmpeg."), sheet,
+		             chapters);
 	});
 	emit status(QStringLiteral("This stream is encrypted; ffmpeg is fetching "
 	                            "and decrypting it…"));

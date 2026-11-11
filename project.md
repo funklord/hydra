@@ -41232,6 +41232,27 @@ tracklist means joining the split streams into one file before MPlayer sees
 it, which a stream copy does in seconds. That is what Hydra already does when it
 saves or watches a stream it fetched in two halves.
 
+**Then, settled the same day: Hydra keeps whole files and makes them as useful as
+it can; splitting is fuzznet's, where it needs it** (the holder: "we are not a media
+tool, we just want to try to eject files that are as useful as possible from the get
+go"). Two things changed in what every save writes:
+
+- **The file says what it is.** The ffmpeg pass that puts the tracklist in now also
+  writes file-level tags -- the reading's title and artist, the upload day, the
+  source address and the whole description -- and runs for every yt-dlp save, not
+  only a mix. Matroska keeps them under those names, the source as `URL` as well;
+  MP4 keeps title, artist, date, comment and description, with the source as its
+  comment, having no tag for an address. MPlayer lists them (`ID_CLIP_INFO`). An
+  HLS save, the encrypted kind included, carries them through its rewrap.
+- **Matroska is written in 250 ms clusters** (`media_remux::container_options`),
+  so MPlayer's chapter jumps land within 0.2 s. A 60-second file has 250 clusters
+  where ffmpeg's default wrote 13.
+
+`test_assembly` holds both on real files: the tags read back from a WebM and an M4A,
+the clusters counted in the bytes, and an encrypted save carrying its row's tags.
+Writing the cluster limit back to 5000 ms, mapping the file's own metadata instead of
+the tags, or rewrapping without them each turns its check red.
+
 ## yt-dlp is told every JavaScript runtime it can use
 
 yt-dlp warns that YouTube extraction without a JavaScript runtime is

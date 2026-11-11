@@ -9055,18 +9055,32 @@ void main_window::list_resolved_media(const QString &host, const QUrl &page,
 		const bool music = r.what == media_reading::kind::music;
 		// **The tracklist, saved with the file**, as chapters: the one the
 		// reading chose, from the evidence that holds its entries.
-		QString chapters;
-		if (!r.tracklist.isEmpty()) {
-			const media_evidence ev = media_evidence::from_json(m.json);
-			for (const media_evidence::tracklist &t : ev.tracklists) {
-				if (t.source != r.tracklist)
-					continue;
-				QList<chapter_mark> marks;
-				for (const media_evidence::entry &e : t.entries)
-					marks << chapter_mark{ e.start, e.text };
-				chapters = media_remux::ffmetadata(marks, ev.duration);
-			}
-		}
+		//
+		// **And what it is, inside the file** (the holder, 2026-11-11): the
+		// reading's artist and title, the day it went up, where it came from
+		// and its whole description, so a file whose name and sidecars are
+		// lost, or that is later split into its streams, still says so.
+		const media_evidence ev = media_evidence::from_json(m.json);
+		QList<chapter_mark> marks;
+		if (!r.tracklist.isEmpty())
+			for (const media_evidence::tracklist &t : ev.tracklists)
+				if (t.source == r.tracklist)
+					for (const media_evidence::entry &e : t.entries)
+						marks << chapter_mark{ e.start, e.text };
+		const QString day = m.upload_date.size() == 8
+		  ? m.upload_date.left(4) + '-' + m.upload_date.mid(4, 2) + '-' + m.upload_date.right(2)
+		  : m.upload_date;
+		const QString source = m.webpage_url.toString();
+		const QString description =
+		  QJsonDocument::fromJson(m.json).object().value("description").toString();
+		const QString chapters = media_remux::ffmetadata(marks, ev.duration, {
+			{ QStringLiteral("title"),       r.title.isEmpty() ? m.title : r.title },
+			{ QStringLiteral("artist"),      r.artist },
+			{ QStringLiteral("date"),        day },
+			{ QStringLiteral("comment"),     source },
+			{ QStringLiteral("url"),         source },
+			{ QStringLiteral("description"), description },
+		});
 		// **A mix leaves its tracklist beside the file too**, and says so when it
 		// has none: whether there is one is worth knowing either way.
 		media_sheet sheet;

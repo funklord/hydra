@@ -65,9 +65,11 @@ private:
 	void assemble(const media_item &item, const stream_context &ctx,
 	               bool play_it);
 	// The save's last step, shared by an assembled stream and one ffmpeg
-	// decrypted: rewrap, or combine with `audio`, then write the mix files.
+	// decrypted: rewrap, or combine with `audio`, with the row's tags and
+	// tracklist (`chapters`, ffmetadata) inside, then write the mix files.
 	void finish_saved(const QString &out, const QString &audio,
-	                  const QString &note, const QString &sheet);
+	                  const QString &note, const QString &sheet,
+	                  const QString &chapters);
 	// An AES-128 playlist the assembler handed on: ffmpeg fetches and
 	// decrypts it into `out`.
 	void decrypt(const QUrl &playlist, const stream_context &ctx,

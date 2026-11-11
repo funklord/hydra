@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QList>
+#include <QPair>
 #include <QStandardPaths>
 #include <QString>
 #include <QStringList>
@@ -65,12 +66,25 @@ public:
 	// one from an interrupted run must not stop this; `-c copy` is the whole
 	// point; `-loglevel error` because ffmpeg's banner is not a diagnostic and
 	// the message shown to a person should be the part that went wrong.
+	// **Matroska in quarter-second clusters.** MPlayer jumps to a chapter at
+	// the start of a cluster, and ffmpeg writes one about every five seconds,
+	// so a jump to 20.5 s landed at 25.0; at 250 ms it lands within 0.2 s, for
+	// 1.3% more bytes (measured 2026-11-11, project.md). Only for Matroska:
+	// another muxer refuses an option it does not have.
+	static QStringList container_options(const QString &out) {
+		const QString ext = out.section('.', -1).toLower();
+		if (ext == QLatin1String("mkv") || ext == QLatin1String("mka") ||
+		    ext == QLatin1String("webm"))
+			return { QStringLiteral("-cluster_time_limit"), QStringLiteral("250") };
+		return {};
+	}
+
 	static QStringList arguments(const QString &in, const QString &out) {
 		return QStringList{ QStringLiteral("-y"),
 			                 QStringLiteral("-loglevel"), QStringLiteral("error"),
 			                 QStringLiteral("-i"), in,
 			                 QStringLiteral("-c"), QStringLiteral("copy"),
-			                 out };
+		} + container_options(out) + QStringList{ out };
 	}
 
 	// **Muxing two assembled streams, which is a different job from rewrapping
@@ -94,7 +108,7 @@ public:
 			                 QStringLiteral("-c"), QStringLiteral("copy"),
 			                 QStringLiteral("-map"), QStringLiteral("0:v:0"),
 			                 QStringLiteral("-map"), QStringLiteral("1:a:0"),
-			                 out };
+		} + container_options(out) + QStringList{ out };
 	}
 
 	// **A tracklist as chapters**, in ffmpeg's metadata format, so a set
@@ -102,8 +116,21 @@ public:
 	// that reads chapters. Each ends where the next starts and the last at
 	// `duration` (seconds; unknown is <= 0, which gives the last a minute).
 	// Empty for fewer than two marks: one chapter is no chapters.
-	static QString ffmetadata(const QList<chapter_mark> &marks, double duration) {
-		if (marks.size() < 2)
+	//
+	// **And what the file is**, as file-level tags before the chapters: the
+	// title, who, when, where from, the description. A file whose name and
+	// sidecars are lost, or which is split into its streams later, still
+	// says what it is (the holder, 2026-11-11). Matroska writes each as a
+	// tag of that name; MP4 keeps title, artist, date, comment and
+	// description and has no tag for a URL, so `comment` carries it there.
+	// Empty only when there is neither a tag nor two marks.
+	static QString ffmetadata(const QList<chapter_mark> &marks, double duration,
+	                          const QList<QPair<QString, QString>> &tags = {}) {
+		QList<QPair<QString, QString>> kept;
+		for (const auto &t : tags)
+			if (!t.second.trimmed().isEmpty())
+				kept << t;
+		if (marks.size() < 2 && kept.isEmpty())
 			return QString();
 		// '=', ';', '#', '\' and a newline are the format's own syntax.
 		auto escaped = [](QString s) {
@@ -112,7 +139,9 @@ public:
 			return s.replace('\n', QStringLiteral("\\\n"));
 		};
 		QString out = QStringLiteral(";FFMETADATA1\n");
-		for (int i = 0; i < marks.size(); ++i) {
+		for (const auto &t : kept)
+			out += escaped(t.first) + QLatin1Char('=') + escaped(t.second) + QLatin1Char('\n');
+		for (int i = 0; marks.size() >= 2 && i < marks.size(); ++i) {
 			const qint64 start = qint64(marks[i].start * 1000);
 			const qint64 end   = i + 1 < marks.size() ? qint64(marks[i + 1].start * 1000)
 			                   : duration > marks[i].start ? qint64(duration * 1000)
@@ -132,10 +161,10 @@ public:
 			                 QStringLiteral("-i"), in,
 			                 QStringLiteral("-i"), meta,
 			                 QStringLiteral("-map"), QStringLiteral("0"),
-			                 QStringLiteral("-map_metadata"), QStringLiteral("0"),
+			                 QStringLiteral("-map_metadata"), QStringLiteral("1"),
 			                 QStringLiteral("-map_chapters"), QStringLiteral("1"),
 			                 QStringLiteral("-c"), QStringLiteral("copy"),
-			                 out };
+		} + container_options(out) + QStringList{ out };
 	}
 
 	// The two-stream mux, with the chapters from `meta` as a third input.
@@ -149,12 +178,16 @@ public:
 			                 QStringLiteral("-c"), QStringLiteral("copy"),
 			                 QStringLiteral("-map"), QStringLiteral("0:v:0"),
 			                 QStringLiteral("-map"), QStringLiteral("1:a:0"),
+			                 QStringLiteral("-map_metadata"), QStringLiteral("2"),
 			                 QStringLiteral("-map_chapters"), QStringLiteral("2"),
-			                 out };
+		} + container_options(out) + QStringList{ out };
 	}
 
 	// Rewrap `assembled`. Emits exactly once.
 	void start(const QString &assembled);
+	// The same, with the tags and chapters in the ffmetadata file `meta`
+	// (`ffmetadata`); an empty `meta` is the plain rewrap.
+	void start(const QString &assembled, const QString &meta);
 
 	// Mux `video` and `audio` into one file. Emits exactly once, and removes
 	// **both** inputs on success rather than the one `start` removes -- two
