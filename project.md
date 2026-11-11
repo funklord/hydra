@@ -41054,7 +41054,12 @@ Downloads turns the files off. Not on Android: the file is copied to shared stor
 and a sidecar would stay in app-private storage.
 
 **A mix already saved gets its files by saving it again:** the file is refused as
-already there, and the tracklist files are written beside it.
+already there, and the tracklist files are written beside it. **Since 2026-11-11
+the chapters and tags go into the file too** (`download_manager::describe_existing`),
+so one saved before files carried them catches up: a copy beside it, put in its
+place under its own name, the original kept where that fails, and refused while a
+job is still finishing the same file. `test_assembly` holds it on a real WebM; with
+the copy left unplaced, both of its checks fail (`6239c0b`).
 
 **No two rows of one video share a file name** (`media_detector::name_apart`). yt-dlp's
 name holds the video and the extension, so a VP9 row and an Opus row were both
