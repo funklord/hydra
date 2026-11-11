@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include "download_source.h"
 
 #include <QList>
@@ -158,6 +160,14 @@ public:
 	bool load_history(const QString &path);
 
 	const QList<download_job> &jobs() const { return m_jobs; }
+
+	// **A file already saved, given what it is.** The tags and tracklist in
+	// `chapters` (ffmetadata) go into `path` the way a download's file gets
+	// them: a copy beside it, put in its place, the original kept where that
+	// fails. For a mix saved before files carried them; `done` is called once,
+	// on this object's thread, with the outcome said in a sentence.
+	void describe_existing(const QString &path, const QString &chapters,
+	                       std::function<void(bool ok, const QString &said)> done);
 
 signals:
 	void changed();   // any job's state or progress moved

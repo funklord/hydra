@@ -237,6 +237,49 @@ QString download_manager::write_chapters(const QString &path,
 	return meta;
 }
 
+void download_manager::describe_existing(const QString &path, const QString &chapters,
+                                         std::function<void(bool, const QString &)> done) {
+	// Not under a job still finishing it: its own chapter pass or combine is
+	// writing a copy and renaming it over this name.
+	for (const download_job &j : m_jobs)
+		if (!j.terminal() && QFileInfo(j.path) == QFileInfo(path)) {
+			done(false, QStringLiteral("It is still being finished; save it again "
+			                            "once it is done."));
+			return;
+		}
+	const QString meta = write_chapters(path, chapters);
+	if (meta.isEmpty() || !media_remux::available()) {
+		if (!meta.isEmpty())
+			QFile::remove(meta);
+		done(false, QStringLiteral("Its title and tracklist could not be written "
+		                            "into it."));
+		return;
+	}
+	const QFileInfo fi(path);
+	const QString out = fi.dir().filePath(fi.completeBaseName() +
+	                                      QStringLiteral(".described.") + fi.suffix());
+	const bool listed = chapters.contains(QLatin1String("[CHAPTER]"));
+	auto *step = new media_remux(this);
+	connect(step, &media_remux::finished, this,
+	         [step, path, out, meta, listed, done](bool ok, const QString &,
+	                                                const QString &message) {
+		step->deleteLater();
+		QFile::remove(meta);
+		// `start_chapters` removes its input on success, so the copy takes the
+		// name; where it cannot, it is kept under its own rather than lost.
+		const bool placed = ok && QFile::rename(out, path);
+		done(ok, placed ? (listed ? QStringLiteral("Its tracklist and title are "
+		                                           "in it now.")
+		                          : QStringLiteral("Its title and source are in it "
+		                                           "now."))
+		       : ok ? QStringLiteral("Its tracklist and title are in a copy "
+		                             "beside it; the original name could not be "
+		                             "taken.")
+		            : "Nothing was written into it: " + message);
+	});
+	step->start_chapters(path, meta, out);
+}
+
 void download_manager::add_chapters(int id) {
 	download_job *j = find(id);
 	if (!j)

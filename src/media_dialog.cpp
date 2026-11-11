@@ -20,6 +20,7 @@
 #include <QFileInfo>
 #include <QStandardPaths>
 #include <QFile>
+#include <QPointer>
 #include <QDir>
 #include <QLabel>
 #include <QMenu>
@@ -700,6 +701,20 @@ void media_dialog::save(const media_item &item, bool separate) {
 		if (QFile::exists(saved) &&
 		    media_sheet::from_json(item.sheet).write_beside(saved, &wrote))
 			error += QStringLiteral(" Its tracklist files are beside it.");
+		// **And into it**: a mix saved before files carried their chapters
+		// and tags gets them now, the way a new save would.
+		if (QFile::exists(saved) && !item.chapters.isEmpty()) {
+			error += QStringLiteral(" Writing its tracklist and title into it…");
+			QPointer<QLabel> status = m_status;
+			const QString before = error;
+			m_downloads->describe_existing(saved, item.chapters,
+			                               [status, before](bool, const QString &said) {
+				if (status)
+					status->setText("<b>" + (QString(before).replace(
+					    QStringLiteral(" Writing its tracklist and title into it…"),
+					    QStringLiteral(" ")) + said).toHtmlEscaped() + "</b>");
+			});
+		}
 	}
 #endif
 	// Where it lands, as the user will actually find it.

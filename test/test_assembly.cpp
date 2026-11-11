@@ -2616,6 +2616,46 @@ int main(int argc, char **argv) {
 		              "chapters (%1 | %2)").arg(m4a.trimmed().left(160), marks.simplified()));
 	}
 
+	// **A mix saved before files carried what they are** gets it when saved
+	// again: the tags and tracklist go into the file already there, under
+	// its own name, and nothing is left beside it.
+	section("a mix already saved is given its chapters and tags in place");
+	{
+		const QString ff = media_remux::tool();
+		QTemporaryDir dir;
+		download_manager here;
+		here.set_directory(dir.path());
+		const QString old = dir.filePath("Groovix - Set.webm");
+		QProcess p;
+		p.start(ff, { "-v", "error", "-y", "-f", "lavfi", "-i",
+		              "sine=frequency=440:duration=60", "-c:a", "libopus", old });
+		check(p.waitForFinished(60000) && p.exitCode() == 0, "an old save, with nothing in it");
+		const QString meta = media_remux::ffmetadata(
+		  { { 0, "A - One" }, { 20.5, "B - Two" }, { 41.25, "C - Three" } }, 60,
+		  { { "title", "Set" }, { "artist", "Groovix" }, { "url", "https://v.invalid/s" } });
+		bool done = false, ok = false;
+		QString said;
+		here.describe_existing(old, meta, [&](bool k, const QString &s) {
+			done = true; ok = k; said = s; });
+		QElapsedTimer t;
+		t.start();
+		while (!done && t.elapsed() < 30000)
+			spin(50);
+		QProcess probe;
+		probe.start(ff.section('/', 0, -2) + "/ffprobe",
+		            { "-v", "error", "-show_entries", "format_tags:chapter=start_time",
+		              "-of", "compact=p=0", old });
+		probe.waitForFinished(30000);
+		const QString seen = QString::fromUtf8(probe.readAll());
+		check(ok && seen.contains("ARTIST=Groovix") && seen.contains("URL=https://v.invalid/s") &&
+		          seen.contains("start_time=20.500000") && seen.contains("start_time=41.250000"),
+		      QString("under its own name, with its tags and three chapters (%1; %2)")
+		          .arg(said, seen.simplified().left(200)));
+		check(QDir(dir.path()).entryList(QDir::Files) == QStringList{ "Groovix - Set.webm" },
+		      QString("and nothing beside it (%1)")
+		          .arg(QDir(dir.path()).entryList(QDir::Files).join(", ")));
+	}
+
 	section("a save makes the downloads folder when it is not there yet");
 	{
 		QTemporaryDir root;
