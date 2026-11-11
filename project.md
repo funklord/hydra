@@ -41182,10 +41182,17 @@ Chapters at 20.500 s and 41.250 s, a non-ASCII title, written by ffmpeg:
     .cue beside      20.507, 41.253     none            1/75 s; drops PERFORMER
 
 So **Matroska for Opus and MP4 for AAC**, chapters inside, both read by both
-players and copied without re-encoding. **Ogg Opus is out**: ffmpeg 7.1.5 writes a
-chapter at 20.5 s as `00:00:21.500`, it rounds the seconds apart from the
-fraction, so any mark at .5 or later is a second late, and the chapter comments are
-a convention rather than a standard. MP3 and FLAC are out for re-encoding a lossy
+players and copied without re-encoding. **Ogg Opus was written off too quickly
+here, and the reason was ffmpeg's, not Ogg's.** ffmpeg 7.1.5's chapter writer
+puts a mark at 20.5 s down as `00:00:21.500` -- it rounds the seconds apart from
+the fraction -- so any mark at .5 or later is a second late. Written directly as
+the stream's `CHAPTERnnn` comments (`-metadata:s:a:0`, chapters not mapped), the
+times are right: mpv reads 20.492 and 41.242, and MPlayer, with the file in
+250 ms pages (`-page_duration 250000`, +0.8% size), jumps to 20.5 and 41.3 --
+exact, where Matroska at 250 ms gives 20.7. Ogg is Opus's own container
+(RFC 7845) and its tags are standard; what is a convention rather than a spec
+is the chapter comments, so fewer players may read them than read Matroska's.
+Not adopted: hydra saves YouTube's Opus as the WebM it arrives in. MP3 and FLAC are out for re-encoding a lossy
 source. The **`.cue` stays beside the file** as the portable tracklist: mpv,
 Audacious (its `cue` plugin is installed) and by reports foobar2000 read it; MPlayer
 does not.
