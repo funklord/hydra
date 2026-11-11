@@ -41162,6 +41162,49 @@ mpv found the same 20 tracks in the cue sheet, 12 of 12. Two things on the way:
   by its tally, not its exit status. Whether to report it upstream is the
   holder's call.
 
+### Which formats carry a tracklist, and split streams, to good players (measured 2026-11-11)
+
+The holder asked for a mix to be seekable track by track, with times finer than a
+second, and for picture and sound to be storable apart and joined while playing --
+fuzznet may keep video on one server and audio on several -- in formats good players
+read, and no poor ones. Measured here with mpv 0.40, MPlayer 1.5 and ffmpeg 7.1.5;
+VLC, foobar2000, Kodi and DJ software from their own reports, unmeasured.
+
+Chapters at 20.500 s and 41.250 s, a non-ASCII title, written by ffmpeg:
+
+    container        mpv reads          MPlayer reads   note
+    .mka / .webm     20.493, 41.243     20.500          Opus pre-skip, 7 ms
+    .m4a (AAC)       20.500, 41.250     20.500          exact
+    .mp4 (Opus)      20.500, 41.250     20.500          exact
+    .opus (Ogg)      21.492, 41.242     21.500          ffmpeg WRITES 21.500
+    .mp3 (ID3 CHAP)  20.475, 41.225     none            LAME delay; re-encoded
+    .flac            none               --              ffmpeg writes no chapters
+    .cue beside      20.507, 41.253     none            1/75 s; drops PERFORMER
+
+So **Matroska for Opus and MP4 for AAC**, chapters inside, both read by both
+players and copied without re-encoding. **Ogg Opus is out**: ffmpeg 7.1.5 writes a
+chapter at 20.5 s as `00:00:21.500`, it rounds the seconds apart from the
+fraction, so any mark at .5 or later is a second late, and the chapter comments are
+a convention rather than a standard. MP3 and FLAC are out for re-encoding a lossy
+source. The **`.cue` stays beside the file** as the portable tracklist: mpv,
+Audacious (its `cue` plugin is installed) and by reports foobar2000 read it; MPlayer
+does not.
+
+Split streams: picture and sound written apart with `-c copy` keep their offset
+(Matroska: video 0.007, audio 0.000, the same 7 ms as combined; MP4: both 0, AAC's
+priming in the edit list). Joined at playback -- mpv `--audio-file`, MPlayer
+`-audiofile` -- every pair reported A-V within 1 ms: mkv+mka, mp4+m4a, webm+webm and
+mkv+m4a. A DASH manifest of the two, served over HTTP, plays in mpv. Given two
+BaseURLs for the audio, a dead one first, mpv used the second; with only the dead one
+the audio failed, so it does read them. **MPlayer 1.5 does not play DASH at all**
+("Failed to open an initialization section", local or over HTTP), though it joins
+the separate files.
+
+**No DJ software found reads either form.** rekordbox, Traktor and Serato keep cue
+points in their own libraries; Mixxx 2.5 writes a cue sheet when recording and does
+not import one; VirtualDJ's forum is unclear. Where DJ software matters, the dependable
+form is the mix split into one file per track, which the cue sheet can drive.
+
 ## yt-dlp is told every JavaScript runtime it can use
 
 yt-dlp warns that YouTube extraction without a JavaScript runtime is
