@@ -41205,6 +41205,33 @@ points in their own libraries; Mixxx 2.5 writes a cue sheet when recording and d
 not import one; VirtualDJ's forum is unclear. Where DJ software matters, the dependable
 form is the mix split into one file per track, which the cue sheet can drive.
 
+**MPlayer is the player that has to work, with no argument trickery** (the holder,
+2026-11-11; Mixxx will be modified to read the tracklist). Measured with MPlayer 1.5:
+
+- **Chapter jumps in Matroska land on a cluster.** `-chapter 2` on an `.mka`
+  written by ffmpeg started at 25.0 for a mark at 20.5, and 45.0 for 41.25:
+  ffmpeg writes a cluster about every five seconds. With
+  `-cluster_time_limit 250` it lands at 20.7 and 41.3, for 1.3% more bytes
+  (100 ms: 20.6 and 41.3, +3.3%). **M4A is exact** (20.5, 41.3) as it is.
+  A video file jumps to a keyframe, so a mix's video lands where its source
+  put keyframes, which a copy cannot move.
+- **Opus in MP4 does not play at all** ("Cannot find codec for audio format
+  0x7375704F"), so MP4 means AAC.
+- **Split files join, and lose their chapters.** `-audiofile` joins picture and
+  sound in sync, and so does a per-file config beside the video
+  (`clip.mkv.conf` holding `audiofile=clip.mka`), read once
+  `use-filedir-conf=yes` is in MPlayer's own config, so `mplayer clip.mkv` then
+  needs no arguments. But with an audio file joined, MPlayer reports no
+  chapters and `-chapter 2` starts at 0, whichever file carries them.
+- **No manifest plays**: neither DASH nor an HLS master with a separate audio
+  rendition, local or over HTTP.
+
+So for MPlayer the dependable unit is one file. A mix's audio file standing alone,
+with its chapters (`mplayer mix.mka`), works as it is. Picture with sound and
+tracklist means joining the split streams into one file before MPlayer sees
+it, which a stream copy does in seconds. That is what Hydra already does when it
+saves or watches a stream it fetched in two halves.
+
 ## yt-dlp is told every JavaScript runtime it can use
 
 yt-dlp warns that YouTube extraction without a JavaScript runtime is
