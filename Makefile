@@ -340,7 +340,7 @@ endif
 # after a source change and never reproducible afterwards, with nothing kept.
 FAILED_DIR = $(TESTS_DIR)/failed
 
-.PHONY: all run test test-one test-sanitize drivers hull-keepass hull-keepass-image sweep replay deb deb-check version-check android android-build android-aab install uninstall clean veryclean distclean help style style-docs style-source check hooks jni seam \
+.PHONY: all run test test-one test-sanitize drivers hull-keepass hull-keepass-image sweep replay deb deb-check version-check android android-build android-aab install uninstall clean veryclean distclean help style style-docs style-source style-tool check hooks jni seam \
         resources manifest deps desktop doc policy cli-check
 
 # Always delegates, never compares timestamps itself. The first version made
@@ -1135,7 +1135,7 @@ help:
 # what the binary prints is wrong from the moment it drifts, and finding out
 # at packaging time is finding out after every commit in between. It says what
 # it could not check rather than failing when the binary is not built.
-style: style-source style-docs jni seam resources manifest deps desktop \
+style: style-tool style-source style-docs jni seam resources manifest deps desktop \
         doc policy version-check cli-check
 
 jni:
@@ -1192,6 +1192,14 @@ doc:
 # the first version of the sweep.
 policy:
 	@python3 tool/policy_check.py
+
+# The style gate's own suite, run ahead of the gate's verdict. A checker
+# that has stopped inspecting anything passes exactly as loudly as one
+# that works, so its pass is worth reading only once its suite has.
+# tool/test_style_gate.py arrives beside tool/style_gate.py and was
+# carried here unrun until 2026-11-12, on the holder's word.
+style-tool:
+	python3 tool/test_style_gate.py
 
 style-source:
 	python3 tool/style_gate.py check
