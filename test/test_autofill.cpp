@@ -884,6 +884,26 @@ int main(int argc, char **argv) {
 		qputenv("XDG_RUNTIME_DIR", saved);
 	}
 
+	// **The Passwords menu's entry, state by state** (the holder, 2026-11-12:
+	// connected and nothing said so; then the pairing forgotten on every
+	// restart, from a session whose message bus had died).
+	section("the Passwords menu says what state KeePassXC is in");
+	{
+		const auto plain = [](const QString &s) { return QString(s).remove('&'); };
+		check(plain(keepass_bridge::menu_label(true, true, true, "laptop")) ==
+		          QString("Connected to KeePassXC as \u201claptop\u201d"),
+		      "connected and kept: named, nothing more");
+		check(plain(keepass_bridge::menu_label(true, false, false, "laptop")) ==
+		          QString("Connected to KeePassXC as \u201claptop\u201d (not kept after a restart)"),
+		      "connected where nothing can be kept: says it will not survive a restart");
+		check(plain(keepass_bridge::menu_label(false, true, true, "laptop")) ==
+		          QString("Connect to KeePassXC\u2026 (paired as \u201claptop\u201d)"),
+		      "kept but not live: offers to connect, and says it is paired");
+		check(plain(keepass_bridge::menu_label(false, false, true, QString())) ==
+		          QString("Connect to KeePassXC\u2026"),
+		      "neither: as it always was");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

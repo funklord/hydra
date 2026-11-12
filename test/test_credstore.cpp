@@ -17,6 +17,8 @@
 
 #include <QByteArray>
 #include <QCoreApplication>
+#include <QProcess>
+#include <QProcessEnvironment>
 #include <QString>
 #include <cstdio>
 
@@ -105,6 +107,35 @@ int main(int argc, char **argv) {
 	          .arg(credential_store::available()
 	                   ? QStringLiteral("available")
 	                   : credential_store::unavailable_reason()));
+
+	// **A session whose message bus has died** says so, with the reason --
+	// the holder's desktop, 2026-11-12: every program started from it was
+	// handed a bus address with nothing behind it, and the pairing silently
+	// did not survive a restart. Asked of a child, since the answer is
+	// cached per process.
+	section("a dead session bus is a reason, not silence");
+	if (qEnvironmentVariableIsSet("HYDRA_CREDSTORE_CHILD")) {
+		std::printf("REASON:%s\n", qPrintable(credential_store::unavailable_reason()));
+		return 0;
+	}
+	{
+		QProcess child;
+		QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+		env.insert("HYDRA_CREDSTORE_CHILD", "1");
+		env.insert("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent/hydra-dead-bus");
+		child.setProcessEnvironment(env);
+		child.start(QCoreApplication::applicationFilePath(), {});
+		child.waitForFinished(30000);
+		const QString out = QString::fromUtf8(child.readAllStandardOutput());
+		const QString reason = out.section("REASON:", 1).trimmed();
+#ifdef HYDRA_HAVE_SECRET
+		check(reason.contains("No Secret Service is running") &&
+		          reason.contains("will not survive a restart"),
+		      QString("it says the pairing will not survive, and why (%1)").arg(reason));
+#else
+		check(!reason.isEmpty(), QString("built without libsecret, it says so (%1)").arg(reason));
+#endif
+	}
 
 	section("storing it, against a real Secret Service");
 	const QByteArray kind = qgetenv("HYDRA_SECRET_KIND");

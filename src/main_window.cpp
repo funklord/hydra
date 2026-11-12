@@ -488,7 +488,9 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	connect(m_keepass, &keepass_bridge::associated_changed, this,
 	         [this](bool ok, const QString &msg) {
 		m_keepass_verified = ok;
-		m_status->showMessage((ok ? "KeePassXC: " : "KeePassXC: ") + msg, 6000);
+		// Long enough to read when it carries a reason, as the one that the
+		// pairing will not be kept does; six seconds was not (2026-11-12).
+		m_status->showMessage("KeePassXC: " + msg, msg.size() > 60 ? 20000 : 6000);
 		if (!ok && m_keepass->pairing_refused() && m_keepass_ask) {
 			m_keepass_ask = false;
 			ask_to_pair();
@@ -3436,21 +3438,17 @@ void main_window::refresh_keepass_menu() {
 	const QString name = m_keepass ? m_keepass->association_id() : QString();
 	// Checked and named while it works; pressing it again only re-tests,
 	// which is harmless and is what somebody wondering would want.
+	const bool keepable = credential_store::available();
 	m_keepass_action->setCheckable(true);
 	m_keepass_action->setChecked(live);
-	if (live)
-		m_keepass_action->setText(name.isEmpty()
-		  ? QStringLiteral("&Connected to KeePassXC")
-		  : QString("&Connected to KeePassXC as \u201c%1\u201d").arg(name));
-	else if (stored || (m_keepass && m_keepass->associated()))
-		m_keepass_action->setText(name.isEmpty()
-		  ? QStringLiteral("&Connect to KeePassXC… (paired)")
-		  : QString("&Connect to KeePassXC… (paired as \u201c%1\u201d)").arg(name));
-	else
-		m_keepass_action->setText(QStringLiteral("&Connect to KeePassXC…"));
-	m_keepass_action->setStatusTip(live
-	  ? QStringLiteral("Paired and answering; choose it to check again")
-	  : QStringLiteral("Pair with a running KeePassXC for autofill"));
+	m_keepass_action->setText(keepass_bridge::menu_label(
+	    live, stored || (m_keepass && m_keepass->associated()), keepable, name));
+	// Where it cannot be kept, why, from libsecret's own words: a session
+	// whose message bus has gone looks exactly like a working one otherwise.
+	m_keepass_action->setStatusTip(!keepable
+	  ? credential_store::unavailable_reason()
+	  : live ? QStringLiteral("Paired and answering; choose it to check again")
+	         : QStringLiteral("Pair with a running KeePassXC for autofill"));
 	if (m_keepass_forget)
 		m_keepass_forget->setEnabled(stored);
 }

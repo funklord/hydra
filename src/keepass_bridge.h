@@ -31,6 +31,15 @@ public:
 	static bool supported();
 	static QString unavailable_reason();
 
+	// **What the Passwords menu's first entry says**, from the state alone,
+	// so it can be checked without a window. `live`: connected and accepted
+	// this run. `stored`: a pairing is kept for the next run. `keepable`:
+	// one could be kept -- false where the session has no Secret Service, as
+	// when its message bus has died (the holder's desktop, 2026-11-12),
+	// and then a pairing works for this run only, which the entry says.
+	static QString menu_label(bool live, bool stored, bool keepable,
+	                          const QString &name);
+
 	// The socket path KeePassXC listens on.
 	static QString socket_path();
 

@@ -43443,6 +43443,24 @@ harmless. "Accepted this run" is KeePassXC's own answer to the test or the
 pairing, cleared by any error, so a locked or vanished KeePassXC does not read
 as connected.
 
+**Then "it keeps forgetting its pairing each time I restart"** (the holder, the
+same day), and that was the session, not hydra. The holder's Trinity session had
+lost its message bus: konsole, konqueror and the programs started from them carry
+`DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/dbus-Q5OOBARyPU`, no daemon listens there
+and the socket file is gone, so every program started since -- hydra each time --
+reaches no Secret Service, and the pairing, which is kept nowhere else by design
+(*Pairing at rest*: no honest third option), is lost at exit. libsecret's own
+words: "Could not connect: No such file or directory". KeePassXC, connected
+before, is on no bus either. The remedy is the session's: log out and in.
+
+hydra said so, once, in a status line gone in six seconds and without the reason.
+Now the pairing message carries the reason and stays twenty seconds, and the
+Passwords entry says it while connected: "Connected to KeePassXC as “name” (not
+kept after a restart)", with libsecret's reason as its status tip
+(`keepass_bridge::menu_label`, checked state by state in `test_autofill`).
+`test_credstore` runs itself again with the bus address pointed at nothing and
+checks the reason says the pairing will not survive.
+
 `try_autofill` in the hull rig opens the menu as Qt does and reads the entry: it
 says connected, named, ticked (56 of 56). With the refresh unhooked that check
 fails. The Forget Pairing check passes either way there, because that driver

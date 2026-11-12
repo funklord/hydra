@@ -24,6 +24,20 @@ keepass_bridge::keepass_bridge(QObject *parent) : QObject(parent) {
 	m_client_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
 }
 
+QString keepass_bridge::menu_label(bool live, bool stored, bool keepable,
+                                   const QString &name) {
+	const QString as = name.isEmpty() ? QString()
+	                 : QString(" as \u201c%1\u201d").arg(name);
+	if (live)
+		return QStringLiteral("&Connected to KeePassXC") + as +
+		       (keepable ? QString() : QStringLiteral(" (not kept after a restart)"));
+	if (stored)
+		return name.isEmpty() ? QStringLiteral("&Connect to KeePassXC… (paired)")
+		                      : QString("&Connect to KeePassXC… (paired as \u201c%1\u201d)")
+		                            .arg(name);
+	return QStringLiteral("&Connect to KeePassXC…");
+}
+
 bool keepass_bridge::supported() {
 	return unavailable_reason().isEmpty();
 }
@@ -429,7 +443,10 @@ void keepass_bridge::handle(const QJsonObject &reply) {
 			               : QStringLiteral(
 			                     "Paired with KeePassXC, but the pairing could "
 			                     "not be stored and will have to be confirmed "
-			                     "again next time."));
+			                     "again next time: ") +
+			                     (credential_store::available()
+			                        ? QStringLiteral("the Secret Service refused it.")
+			                        : credential_store::unavailable_reason()));
 		} else {
 			emit associated_changed(false, "KeePassXC declined the pairing.");
 		}
