@@ -13,6 +13,8 @@
 // and whether its tooltip says anything -- and "a review UI that is correct and
 // never clicked" is the defect this project has shipped most often.
 #include "main_window.h"
+
+#include <QMenu>
 #include "settings_dialog.h"
 #include "theme.h"
 #include "policy_engine.h"
@@ -768,6 +770,34 @@ int main(int argc, char *argv[]) {
 			QMetaObject::invokeMethod(&w, "toggle_password_manager");
 			check(wait_for([&] { return accepted; }, 15000),
 			      "and Connect after that finds it accepted, asking nobody");
+		}
+
+		// **The menu says it is connected** (the holder, 2026-11-12: "it still
+		// says connect to keepassxc, nothing indicates if I'm connected"). Read
+		// as a person would see it, with the menu opened the way Qt opens it.
+		section("the Passwords menu says it is connected, and as whom");
+		{
+			QMenu *pw = nullptr;
+			for (QMenu *m : w.findChildren<QMenu *>())
+				if (QString(m->title()).remove('&') == "Passwords")
+					pw = m;
+			QAction *link = nullptr, *forget = nullptr;
+			for (QAction *a : pw ? pw->actions() : QList<QAction *>()) {
+				const QString t = QString(a->text()).remove('&');
+				if (t.startsWith("Connect"))
+					link = a;
+				if (t == "Forget Pairing")
+					forget = a;
+			}
+			if (pw)
+				emit pw->aboutToShow();
+			const QString shown = link ? QString(link->text()).remove('&') : QString();
+			check(link && link->isChecked() &&
+			          shown == QString("Connected to KeePassXC as \u201c%1\u201d")
+			                     .arg(bridge->association_id()),
+			      QString("the entry reads as connected, named, and ticked (%1)").arg(shown));
+			check(forget && forget->isEnabled(),
+			      "and Forget Pairing is offered for the pairing made in this run");
 		}
 
 		section("a locked vault is said to be locked, on the key");

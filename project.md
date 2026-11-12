@@ -43425,6 +43425,30 @@ The shared gate's brace fix found five lines here with a tab too many
 (`main_window.cpp`); they were retabbed in `45f624c` and the gate taken in
 `b38884b`.
 
+### The Passwords menu says whether it is connected
+
+The holder, 2026-11-12: "i connected to keepassxc but it still says 'connect to
+keepassxc' nothing indicates if I'm connected or not". The entry's text was fixed
+when the menu was built, and the only sign of a pairing was a status line gone in
+six seconds. Forget Pairing had the same fault from the other side: enabled or not
+from whether a pairing was stored at start, so one made during the run could not
+be forgotten until a restart.
+
+Both are now read from the live state each time the menu opens
+(`refresh_keepass_menu`): **"Connected to KeePassXC as “name”"**, ticked, when the
+socket is up and KeePassXC has accepted the pairing this run; "Connect to
+KeePassXC… (paired as “name”)" when a pairing is kept but not live; otherwise
+"Connect to KeePassXC…". Choosing the connected entry checks again, which is
+harmless. "Accepted this run" is KeePassXC's own answer to the test or the
+pairing, cleared by any error, so a locked or vanished KeePassXC does not read
+as connected.
+
+`try_autofill` in the hull rig opens the menu as Qt does and reads the entry: it
+says connected, named, ticked (56 of 56). With the refresh unhooked that check
+fails. The Forget Pairing check passes either way there, because that driver
+stores a pairing before the window exists, so it does not yet prove the
+in-run case.
+
 ## Fold, 2026-11-04: where the 2026-11-03 session left things
 
 **CI is green** since `0f858ee`, for the first time in about a month, after

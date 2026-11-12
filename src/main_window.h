@@ -312,6 +312,8 @@ private slots:
 	void keepass_settled();
 	bool keepass_link_for_form(std::function<void()> then);
 	void forget_keepass_pairing();
+	// The Passwords menu's first and last entries, from the live state.
+	void refresh_keepass_menu();
 	void start_element_picker();
 	void open_site_rules();
 	// One click, at the moment something got through. See annoyance_log.h for
@@ -912,6 +914,12 @@ public:
 	keepass_bridge     *m_keepass       = nullptr;
 	std::function<void()> m_keepass_then;     // set while a link is under way
 	bool                  m_keepass_ask = false;
+	// **Whether this run is paired and KeePassXC said so**, set by its answer
+	// to a test or a pairing and cleared by an error, so the Passwords menu
+	// can say what state it is in rather than always offering to connect.
+	bool                  m_keepass_verified = false;
+	QAction              *m_keepass_action   = nullptr;
+	QAction              *m_keepass_forget   = nullptr;
 	QElapsedTimer         m_keepass_failed;
 	// One autofill controller per view now, parented to the view and found
 	// through it -- see `current_autofill` and the per-view creation in

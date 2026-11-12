@@ -487,6 +487,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	});
 	connect(m_keepass, &keepass_bridge::associated_changed, this,
 	         [this](bool ok, const QString &msg) {
+		m_keepass_verified = ok;
 		m_status->showMessage((ok ? "KeePassXC: " : "KeePassXC: ") + msg, 6000);
 		if (!ok && m_keepass->pairing_refused() && m_keepass_ask) {
 			m_keepass_ask = false;
@@ -506,6 +507,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 			keepass_settled();
 	});
 	connect(m_keepass, &keepass_bridge::error, this, [this](const QString &msg) {
+		m_keepass_verified = false;
 		m_status->showMessage("KeePassXC: " + msg, 8000);
 	});
 
@@ -2271,6 +2273,13 @@ QMenuBar *main_window::build_menu_bar() {
 	                     ? QStringLiteral("Pair with a running KeePassXC for autofill")
 	                     : keepass_bridge::unavailable_reason());
 	kp->setEnabled(keepass_bridge::supported());
+	m_keepass_action = kp;
+	// **What state it is in, each time the menu opens.** The entry read
+	// "Connect to KeePassXC" whatever had happened, and the only sign of a
+	// pairing was a status line gone in six seconds: the holder connected,
+	// 2026-11-12, and could not tell. Asked when the menu opens, so it is
+	// never a copy of the state from when the menu was built.
+	connect(pw_menu, &QMenu::aboutToShow, this, &main_window::refresh_keepass_menu);
 	// Generating is triggered from here rather than from the page. A page could
 	// be given a way to ask, and then a page could ask unprompted -- and a
 	// browser that hands out passwords because a script requested one is a
@@ -2311,6 +2320,7 @@ QMenuBar *main_window::build_menu_bar() {
 	// Enabled on whether there is one to forget, asked now rather than assumed.
 	kpf->setEnabled(keepass_bridge::supported() &&
 	                keepass_bridge::pairing_is_stored());
+	m_keepass_forget = kpf;
 
 	// The two mirrors together. They are the same feature twice and were four
 	// items apart, so turning both on meant finding the second one by reading.
@@ -3415,6 +3425,34 @@ void main_window::ask_to_pair() {
 	m_status->showMessage("KeePassXC is asking whether to allow this browser: "
 	                      "name the connection there and press Save.", 20000);
 	m_keepass->associate();
+}
+
+void main_window::refresh_keepass_menu() {
+	if (!m_keepass_action || !keepass_bridge::supported())
+		return;
+	const bool stored = keepass_bridge::pairing_is_stored();
+	const bool live   = m_keepass && m_keepass->connected() &&
+	                    m_keepass->associated() && m_keepass_verified;
+	const QString name = m_keepass ? m_keepass->association_id() : QString();
+	// Checked and named while it works; pressing it again only re-tests,
+	// which is harmless and is what somebody wondering would want.
+	m_keepass_action->setCheckable(true);
+	m_keepass_action->setChecked(live);
+	if (live)
+		m_keepass_action->setText(name.isEmpty()
+		  ? QStringLiteral("&Connected to KeePassXC")
+		  : QString("&Connected to KeePassXC as \u201c%1\u201d").arg(name));
+	else if (stored || (m_keepass && m_keepass->associated()))
+		m_keepass_action->setText(name.isEmpty()
+		  ? QStringLiteral("&Connect to KeePassXC… (paired)")
+		  : QString("&Connect to KeePassXC… (paired as \u201c%1\u201d)").arg(name));
+	else
+		m_keepass_action->setText(QStringLiteral("&Connect to KeePassXC…"));
+	m_keepass_action->setStatusTip(live
+	  ? QStringLiteral("Paired and answering; choose it to check again")
+	  : QStringLiteral("Pair with a running KeePassXC for autofill"));
+	if (m_keepass_forget)
+		m_keepass_forget->setEnabled(stored);
 }
 
 void main_window::forget_keepass_pairing() {
