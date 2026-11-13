@@ -664,8 +664,16 @@ def main():
 			adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
 			    "-d", f"http://127.0.0.1:{port}/article", "-n", f"{APP}/.HydraActivity")
 			time.sleep(10)
-			adb("shell", "input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_F")
-			time.sleep(2)
+			# **Asked again until the bar is there**, then typed into. Once,
+			# after fixed sleeps, the shortcut or the word went nowhere on a
+			# start slower than the sleep, and the count never came
+			# (2026-11-13, one run in three on one apk).
+			def find_bar_up():
+				adb("shell", "input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_F")
+				time.sleep(1)
+				adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+				return "Text on this page" in adb("shell", "cat", "/sdcard/ui.xml")
+			wait_for("the find bar", find_bar_up, 20, step=1)
 			adb("shell", "input", "text", "rain")
 			def counted():
 				adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
@@ -790,6 +798,15 @@ def main():
 			clean = "https://example.org/story?id=5"
 			adb("shell", "input", "tap", "540", "900")
 			time.sleep(2)
+			# **Whatever page is in front, loaded.** The tap lands on the live
+			# front page, and where a story's link is under it that day it
+			# navigates -- the copy then ran on a page with no body yet, and
+			# the five paste checks failed on the clipboard's old contents
+			# (2026-11-13). Waiting for it serves either way: the copy
+			# needs a page, not that page.
+			wait_for("a loaded page to copy from",
+			         lambda: probe("document.readyState+' '+!!document.body").strip()
+			                 == "complete true", 30, step=2)
 			copied = probe("(function(){var t=document.createElement('textarea');"
 			               f"t.value='{tagged}';document.body.appendChild(t);t.focus();"
 			               "t.select();var ok=document.execCommand('copy');t.remove();"
