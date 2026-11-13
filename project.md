@@ -41915,6 +41915,31 @@ terminal that writes down its arguments.
 - The settings round trip.
 - The whole path through `play()`.
 
+## snurra is offered as a player
+
+The holder asked 2026-11-13 whether to support snurra, this workspace's own player
+-- "what mplayer was for the desktop", with a DJ's mixing, and a library others
+link. As an external player, yes: it speaks mplayer's command line and hands a
+URL with a scheme to FFmpeg as it is, so it takes Hydra's local-proxy address,
+which carries the headers a CDN checks, as mplayer does.
+
+It gets the URL alone. Its parser is `QCommandLineParser`, which stops on an option
+it does not know, so none of mplayer's `-cache` or `-audiofile`; it has no way to
+take a separate sound, so a stream whose sound comes apart is muxed first, and an
+HLS or DASH stream is assembled for it, as for mplayer, since whether its FFmpeg
+plays a manifest through the proxy is unmeasured. It opens its own window and is
+not run in a terminal. Offered when `snurra` is on PATH, greyed otherwise.
+`test_settings` checks its arguments. snurra's own binary, handed a proxy-shaped
+URL, took it and was still playing when killed at 12 s.
+
+Two things are not Hydra's. **snurra does not read chapters or a cue sheet yet**,
+so a saved mix plays in it as one track; Hydra's mixes carry Matroska/MP4
+chapters, a `.cue` and an `.m3u`, which went to snurra's inbox as a signal
+(20261113). **Embedding snurra's library** in place of the external handoff --
+`snurra/embed.h` plays bytes still arriving, which is what Hydra has while it
+assembles -- is a change of direction and waits on the holder, and on that
+library settling with its first consumers.
+
 ## Store screenshots: the app's half of `make android-screenshots`
 
 Asked for by the holder on 2026-10-22, through `claude-guidelines`, and

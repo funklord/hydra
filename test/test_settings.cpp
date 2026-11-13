@@ -341,6 +341,11 @@ int main(int argc, char **argv) {
 		check(player_launcher::arguments("ffplay", QString(), v, a)
 		        == QStringList({"-autoexit", v}),
 		      "ffplay, which cannot, gets the picture alone");
+		check(player_launcher::arguments("snurra", QString(), v, a) == QStringList({ v }) &&
+		          !player_launcher::takes_audio_beside("snurra") &&
+		          !player_launcher::controlled_from_terminal("snurra"),
+		      "snurra gets the url alone, nothing its parser would refuse, and its "
+		      "own window");
 		check(player_launcher::arguments("mpv", QString(), v, QString())
 		        == QStringList({"--force-window=yes", v}),
 		      "and nothing is added when there is no sound to add");

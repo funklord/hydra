@@ -24,6 +24,11 @@ const known_player k_known[] = {
 	{ "vlc",      "VLC",       true  },
 	{ "smplayer", "SMPlayer",  true  },
 	{ "ffplay",   "ffplay",    true  },
+	// **snurra**, this workspace's own player (2026-11-13): mplayer's command
+	// line, URLs straight to FFmpeg. Whether that FFmpeg plays a manifest
+	// through the local proxy is unmeasured, so a stream is assembled for it
+	// as for mplayer.
+	{ "snurra",   "snurra",    false },
 	{ "mplayer2", "mplayer2",  false },
 	{ "mplayer",  "mplayer",   false },
 };
@@ -269,6 +274,11 @@ QStringList player_launcher::arguments(const QString &id, const QString &custom,
 	} else if (id == "ffplay") {
 		args << "-autoexit" << target;
 	} else if (id == "smplayer") {
+		args << target;
+	} else if (id == "snurra") {
+		// The URL alone. Its parser is QCommandLineParser, which stops on an
+		// option it does not know, so none of mplayer's -cache or
+		// -audiofile; a stream whose sound comes apart is muxed first.
 		args << target;
 	} else {   // mplayer / mplayer2
 		args << "-cache" << "8192";
