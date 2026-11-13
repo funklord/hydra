@@ -41932,10 +41932,13 @@ not run in a terminal. Offered when `snurra` is on PATH, greyed otherwise.
 `test_settings` checks its arguments. snurra's own binary, handed a proxy-shaped
 URL, took it and was still playing when killed at 12 s.
 
-Two things are not Hydra's. **snurra does not read chapters or a cue sheet yet**,
-so a saved mix plays in it as one track; Hydra's mixes carry Matroska/MP4
-chapters, a `.cue` and an `.m3u`, which went to snurra's inbox as a signal
-(20261113). **Embedding snurra's library** in place of the external handoff --
+**snurra reads a saved mix's tracklist since the same day**, from the signal
+sent to its inbox (20261113T1442Z): the chapters inside the file (its
+`f9f629d`: marked on the waveform, the playing one's title shown, mplayer's `!`
+and `@` stepping between them), a `.cue` beside a file that has none
+(`4f9bd2c`), and Hydra's `.m3u` -- the mix once per track -- opened as the one
+file (`67b8d76`); it does not honour VLC's start-time and stop-time itself.
+Reported by snurra's session, not measured from here. **Embedding snurra's library** in place of the external handoff --
 `snurra/embed.h` plays bytes still arriving, which is what Hydra has while it
 assembles -- is a change of direction and waits on the holder, and on that
 library settling with its first consumers.
