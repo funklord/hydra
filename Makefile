@@ -363,8 +363,42 @@ SOURCE_LIST = $(BUILD_DIR)/sources.list
 
 # First, because a bare `make` builds the first target in the file: with the
 # stamp's rule above this one, `make` built only the stamp and said nothing.
-all: $(BUILD_DIR)/Makefile
+all: $(BUILD_DIR)/qt.source $(BUILD_DIR)/Makefile
 	@$(MAKE) --no-print-directory -C $(BUILD_DIR) -j$(JOBS)
+
+# **Which Qt this build was compiled against**, and a clean when it changes.
+# An apt upgrade of Qt keeps each file's date from the archive, so every
+# object built before it is "newer" than the header that replaced the one
+# it was compiled against, and make links it to the new library -- the
+# desktop half of what beerssh met when ~/Qt/6.12.0 changed in place
+# (2026-11-13; the makefile-hazards skill). Rerunning qmake would not help:
+# its objects depend on their sources, not on the Makefile. So: the version
+# qmake reports and QtCore's path, size and date, kept beside the build; on
+# a change the build's own `make clean` removes the objects it names, once.
+# Written only when it changes, so a second `make` writes nothing. Checked
+# every run, because a library changing is not a file here changing.
+$(BUILD_DIR)/qt.source: FORCE
+	@case "$(BUILD_DIR)" in \
+		''|/*|..|../*|*/..|*/../*) \
+			echo "build: BUILD_DIR '$(BUILD_DIR)' must be a relative path inside the tree" >&2; \
+			exit 1 ;; \
+	esac; \
+	libs=$$($(QMAKE) -query QT_INSTALL_LIBS 2>/dev/null) || exit 1; \
+	core="$$libs/libQt6Core.so.6"; \
+	[ -f "$$core" ] || core="$$libs/libQt6Core.so"; \
+	if [ ! -f "$$core" ]; then \
+		echo "build: no QtCore under '$$libs', so cannot tell which Qt this is; cleaning nothing" >&2; \
+		exit 0; \
+	fi; \
+	want="$$($(QMAKE) -query QT_VERSION) $$(readlink -f "$$core") $$(stat -L -c '%s %Y' "$$core")"; \
+	have=$$(cat '$@' 2>/dev/null); \
+	[ "$$have" = "$$want" ] && exit 0; \
+	mkdir -p '$(BUILD_DIR)' || exit 1; \
+	if [ -f '$(BUILD_DIR)/Makefile' ]; then \
+		echo "build: $(BUILD_DIR) was not recorded as compiled against this Qt; cleaning its objects"; \
+		make -C '$(BUILD_DIR)' clean >/dev/null || exit 1; \
+	fi; \
+	printf '%s\n' "$$want" > '$@'
 
 $(BUILD_DIR)/Makefile: hydra.pro $(SOURCE_LIST)
 	@cd $(BUILD_DIR) && $(QMAKE) $(CURDIR)/hydra.pro CONFIG+="$(QMAKE_CONFIG)"
@@ -954,6 +988,16 @@ android-build: android-fresh android-check android-gradle-check
 		echo "no JDK at $(JAVA_HOME): no bin/javac there." >&2; \
 		echo "  Either the path is wrong or it is a JRE; Gradle needs a JDK." >&2; \
 		exit 2; }
+	@# **Which Qt kit this directory was built with** (tool/android.mk,
+	@# ANDROID_KIT_SOURCE): on a kit changed in place it cleans the objects
+	@# and the staged libraries, which otherwise link stale and package the
+	@# old QtCore and FFmpeg -- an APK that dies at start (beerssh,
+	@# 2026-11-13, when ~/Qt/6.12.0 went from pre-release to release). A
+	@# sub-make, not a prerequisite: a prerequisite is expanded as the file
+	@# is read, before android-aab's ANDROID_EDITION=play, and would check
+	@# the full edition's directory for a Play build.
+	@$(MAKE) --no-print-directory ANDROID_ABI=$(ANDROID_ABI) \
+	   ANDROID_EDITION=$(ANDROID_EDITION) $(ANDROID_KIT_SOURCE)
 	@mkdir -p $(ANDROID_BUILD_DIR)
 	cd $(ANDROID_BUILD_DIR) && \
 	  ANDROID_SDK_ROOT=$(ANDROID_SDK_ROOT) ANDROID_NDK_ROOT=$(ANDROID_NDK_ROOT) \

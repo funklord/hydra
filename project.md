@@ -41915,6 +41915,30 @@ terminal that writes down its arguments.
 - The settings round trip.
 - The whole path through `play()`.
 
+## A build remembers which Qt it was made against
+
+**~/Qt/6.12.0 was updated in place on 2026-11-13**, from the July pre-release to
+the release (FFmpeg 7.1 to 9.0). A library updated in place keeps its archive's
+dates, so make treats every old object as newer than the headers that replaced
+it, links it to the new libraries, and androiddeployqt keeps the old staged ones
+-- beerssh's APK died at start on `av_freep`. Reported by the guidelines session,
+with `tool/android.mk`'s `ANDROID_KIT_SOURCE` as the remedy.
+
+- **Android**: `android-build` asks for `$(ANDROID_KIT_SOURCE)` first, through a
+  sub-make carrying the ABI and the edition. Not as a prerequisite: those are
+  expanded as the file is read, before `android-aab`'s `ANDROID_EDITION=play`,
+  and the Play build would have checked the full edition's directory. Measured:
+  both arm64 and x86_64 said "was not built with this Qt kit; cleaning its
+  objects" and "removing ... android-build/libs", and the rebuilt full x86_64
+  APK started and passed 105 of 110 emulator checks; the five were the
+  clipboard copy below, not the kit.
+- **The desktop, the same way** (`$(BUILD_DIR)/qt.source`): the version qmake
+  reports and QtCore's path, size and date, and the build's own `make clean`
+  when they change -- an apt upgrade of Qt has the same exposure. A build with
+  no record yet is cleaned once, as Android's is. Measured: the first `make`
+  cleaned and rebuilt; the second said nothing and left the record's date as
+  it was.
+
 ## snurra is offered as a player
 
 The holder asked 2026-11-13 whether to support snurra, this workspace's own player
