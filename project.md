@@ -41939,6 +41939,14 @@ with `tool/android.mk`'s `ANDROID_KIT_SOURCE` as the remedy.
   cleaned and rebuilt; the second said nothing and left the record's date as
   it was.
 
+**Open, 2026-11-13: the emulator checks' Find on Page wait is unproven.**
+`cb584c5` sends Ctrl+F until the find bar shows instead of after fixed
+sleeps, where once in three runs the count never came. Its only run was at
+load 30-37 from other sessions, which failed sixteen unrelated checks and
+showed an empty screen at times, so it proves nothing. Rerun
+`tool/emulator_checks.py` on the full x86_64 APK when the machine is quiet;
+the two runs at load 9-10 passed all 112.
+
 ## snurra is offered as a player
 
 The holder asked 2026-11-13 whether to support snurra, this workspace's own player
