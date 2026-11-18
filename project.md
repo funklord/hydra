@@ -41922,7 +41922,8 @@ the release (FFmpeg 7.1 to 9.0). A library updated in place keeps its archive's
 dates, so make treats every old object as newer than the headers that replaced
 it, links it to the new libraries, and androiddeployqt keeps the old staged ones
 -- beerssh's APK died at start on `av_freep`. Reported by the guidelines session,
-with `tool/android.mk`'s `ANDROID_KIT_SOURCE` as the remedy.
+with `tool/android.mk`'s `ANDROID_KIT_SOURCE` as the remedy (and in beerssh's own
+words, hydra inbox 20261113T0600Z).
 
 - **Android**: `android-build` asks for `$(ANDROID_KIT_SOURCE)` first, through a
   sub-make carrying the ABI and the edition. Not as a prerequisite: those are
@@ -41970,7 +41971,24 @@ sent to its inbox (20261113T1442Z): the chapters inside the file (its
 and `@` stepping between them), a `.cue` beside a file that has none
 (`4f9bd2c`), and Hydra's `.m3u` -- the mix once per track -- opened as the one
 file (`67b8d76`); it does not honour VLC's start-time and stop-time itself.
-Reported by snurra's session, not measured from here. **Embedding snurra's library** in place of the external handoff --
+Reported by snurra's session, not measured from here.
+
+**Manifests through snurra, measured by snurra (hydra inbox 20261114T0027Z):** as of
+its `5918349`, an HLS manifest given as `snurra <url>` plays across segment joins
+and seeks exactly (a seek used to land a segment early); a DASH manifest plays but
+FFmpeg 7.1's own demuxer drops about 70 ms of sound at a join, the `ffmpeg`
+program alike, so it is upstream's. `player_launcher` keeps one flag for both
+kinds, so snurra stays marked as not playing manifests and hydra assembles them
+for it; splitting the flag to hand it HLS is possible and not yet worth a
+second rule.
+
+**beerssh's player setting follows this one (hydra inbox 20261113T1401Z):** it now
+uses hydra's settings keys (`player/selected`, `player/custom_command`,
+`player/terminal`, `player/custom_in_terminal`), ids, labels, PATH probe,
+arguments and terminal list, from reading `player_launcher`, and asks to be told
+of a change on either side. hydra added `snurra` after it, which was sent back.
+Its "system" opener on the desktop, and whether the two copies should be one
+shared piece, are a cross-project question, not hydra's alone. **Embedding snurra's library** in place of the external handoff --
 `snurra/embed.h` plays bytes still arriving, which is what Hydra has while it
 assembles -- is a change of direction and waits on the holder, and on that
 library settling with its first consumers.
