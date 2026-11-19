@@ -27,6 +27,25 @@ This file is a running log and is long. The fastest orientation is: **What is
 implemented** (the table below), then **What is next**, then the section for
 whatever you are touching.
 
+**Open now (2026-11-19), and where each is written up:**
+
+- **Questions for the holder.** Whether ordinary downloads -- not through
+  yt-dlp -- should get title and source tags too, which costs a full ffmpeg
+  copy of every downloaded file, multi-gigabyte ones included (best guess:
+  no; files saved through yt-dlp carry them, *A saved file says what it is*
+  under the tracklist section). Whether audio-only Opus mixes should be saved
+  as Ogg for exact MPlayer chapter jumps, with hydra writing the chapter
+  comments itself (*Which formats carry a tracklist*). Whether to embed
+  snurra's library instead of handing it streams (*snurra is offered as a
+  player*).
+- **Unproven, waiting on a quiet machine.** The emulator checks' Find on Page
+  wait (`cb584c5`), whose only run was at load 30-37 (*A build remembers which
+  Qt it was made against*, the paragraph after it).
+- **On the holder's desktop, not hydra's.** The Trinity session had lost its
+  message bus, so no Secret Service answered and the KeePassXC pairing could
+  not be kept; a logout and login restores it (*The Passwords menu says
+  whether it is connected*).
+
 The `##` headings past the feature sections group the log rather than order it.
 Sections were inserted wherever the writer happened to be reading, so the file
 is **not in date order** and a heading that implied one would be lying: the
